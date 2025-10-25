@@ -23,3 +23,5 @@ TestResults.xml
 eigen/
 nlohmann/
 tests/
+build/
+bin/
