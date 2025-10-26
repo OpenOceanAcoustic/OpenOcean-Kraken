@@ -19,7 +19,7 @@ void EvaluateSSP(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SS
         cCubic(cP, cS, rho_k, SSP, Medium, N1);
         break;
     case SSP_Mode::MODE_A_Analytic:
-        Analytic(cP, cS, rho_k, Medium, N1);  // 需要实现Analytic函数
+        Analytic(cP, cS, rho_k, Medium, N1); // 需要实现Analytic函数
         break;
     default:
         // 报错
@@ -46,11 +46,12 @@ void n2Linear(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SSP, 
     rho_k.resize(N1);
 
     // 获取介质在SSP中的位置
-    int ILoc = SSP.Loc[Medium - 1]; // Fortran索引转C++索引
-    int NPts = SSP.NPts;            // 介质中的点数
+    int ILoc = SSP.Loc(Medium);  // Fortran索引转C++索引
+    int NPts = SSP.NPts(Medium); // 介质中的点数
 
     // 计算步长
     double h = (SSP.z(ILoc + NPts - 1) - SSP.z(ILoc)) / (N1 - 1);
+    int Lay = 0; // 层索引
 
     // 遍历每个分层点
     for (int iz = 0; iz < N1; iz++)
@@ -64,16 +65,9 @@ void n2Linear(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SSP, 
         }
 
         // 找到当前深度所在的层
-        int Lay = 0; // 层索引，每次重新开始查找
         while (Lay < NPts - 1 && z > SSP.z(ILoc + Lay + 1))
         {
             Lay++;
-        }
-
-        // 确保不会超出范围
-        if (Lay >= NPts - 1)
-        {
-            Lay = NPts - 2;
         }
 
         // 计算插值参数
@@ -160,11 +154,12 @@ void cLinear(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SSP, i
     rho_k.resize(N1);
 
     // 获取介质在SSP中的位置
-    int ILoc = SSP.Loc[Medium - 1]; // Fortran索引转C++索引
-    int NPts = SSP.NPts;            // 介质中的点数
+    int ILoc = SSP.Loc(Medium);  // Fortran索引转C++索引
+    int NPts = SSP.NPts(Medium); // 介质中的点数
 
     // 计算步长
     double h = (SSP.z(ILoc + NPts - 1) - SSP.z(ILoc)) / (N1 - 1);
+    int Lay = 0; // 层索引
 
     // 遍历每个分层点
     for (int iz = 0; iz < N1; iz++)
@@ -178,7 +173,6 @@ void cLinear(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SSP, i
         }
 
         // 找到当前深度所在的层
-        int Lay = 0; // 层索引，每次重新开始查找
         while (Lay < NPts - 1 && z > SSP.z(ILoc + Lay + 1))
         {
             Lay++;
@@ -236,11 +230,12 @@ void cPCHIP(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SSP, in
     rho_k.resize(N1);
 
     // 获取介质在SSP中的位置
-    int ILoc = SSP.Loc[Medium - 1]; // Fortran索引转C++索引
-    int NPts = SSP.NPts;            // 介质中的点数
+    int ILoc = SSP.Loc(Medium);  // Fortran索引转C++索引
+    int NPts = SSP.NPts(Medium); // 介质中的点数
 
     // 计算步长
     double h = (SSP.z(ILoc + NPts - 1) - SSP.z(ILoc)) / (N1 - 1);
+    int Lay = 0; // 层索引
 
     // 遍历每个分层点
     for (int iz = 0; iz < N1; iz++)
@@ -254,7 +249,6 @@ void cPCHIP(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SSP, in
         }
 
         // 找到当前深度所在的层
-        int Lay = 0; // 层索引，每次重新开始查找
         while (Lay < NPts - 1 && z > SSP.z(ILoc + Lay + 1))
         {
             Lay++;
@@ -315,11 +309,12 @@ void cCubic(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SSP, in
     rho_k.resize(N1);
 
     // 获取介质在SSP中的位置
-    int ILoc = SSP.Loc[Medium - 1]; // Fortran索引转C++索引
-    int NPts = SSP.NPts;            // 介质中的点数
+    int ILoc = SSP.Loc(Medium);  // Fortran索引转C++索引
+    int NPts = SSP.NPts(Medium); // 介质中的点数
 
     // 计算步长
     double h = (SSP.z(ILoc + NPts - 1) - SSP.z(ILoc)) / (N1 - 1);
+    int Lay = 0; // 层索引
 
     // 遍历每个分层点
     for (int iz = 0; iz < N1; iz++)
@@ -333,7 +328,6 @@ void cCubic(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SSP, in
         }
 
         // 找到当前深度所在的层
-        int Lay = 0; // 层索引，每次重新开始查找
         while (Lay < NPts - 1 && z > SSP.z(ILoc + Lay + 1))
         {
             Lay++;
@@ -377,17 +371,18 @@ void cCubic(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SSP, in
 
 /**
  * Munk profile
- * 
+ *
  * Returns cS, cP, rho at depths i*h i = 1, N
  * Depths of interfaces
- * 
+ *
  * @param cP Output complex vector for compressional wave speeds
  * @param cS Output complex vector for shear wave speeds
  * @param rho Output vector for densities
  * @param Medium Medium type (1 for ocean, 2 for fluid half-space, 9 for elastic layer)
  * @param N1 Number of points
  */
-void Analytic(VectorXcd& cP, VectorXcd& cS, VectorXd& rho, int Medium, int N1) {
+void Analytic(VectorXcd &cP, VectorXcd &cS, VectorXd &rho, int Medium, int N1)
+{
     int N = N1 - 1;
     int i;
     double h, x, z;
@@ -397,36 +392,60 @@ void Analytic(VectorXcd& cP, VectorXcd& cS, VectorXd& rho, int Medium, int N1) {
     cS.resize(N1);
     rho.resize(N1);
 
-    switch (Medium) {
-        case 1:   // THE OCEAN
-            h = 5000.0 / N;
-            for (i = 0; i < N1; i++) {  // C++ uses 0-based indexing
-                z = i * h;
-                x = 2.0 * (z - 1300.0) / 1300.0;
-                cP(i) = 1500.0 * (1.0 + eps * (x - 1.0 + exp(-x)));
-                cS(i) = 0.0;
-                rho(i) = 1.0;
-            }
-            break;
+    switch (Medium)
+    {
+    case 1: // THE OCEAN
+        h = 5000.0 / N;
+        for (i = 0; i < N1; i++)
+        { // C++ uses 0-based indexing
+            z = i * h;
+            x = 2.0 * (z - 1300.0) / 1300.0;
+            cP(i) = 1500.0 * (1.0 + eps * (x - 1.0 + exp(-x)));
+            cS(i) = 0.0;
+            rho(i) = 1.0;
+        }
+        break;
 
-        case 2:   // THE FLUID HALF-SPACE
-            cP(0) = 1551.91;
-            cS(0) = 0.0;
-            rho(0) = 1.0e20;
-            break;
+    case 2: // THE FLUID HALF-SPACE
+        cP(0) = 1551.91;
+        cS(0) = 0.0;
+        rho(0) = 1.0e20;
+        break;
 
-        case 9:  // AN ELASTIC LAYER
-            h = 1000.0 / N;
-            z = 5000.0;
+    case 9: // AN ELASTIC LAYER
+        h = 1000.0 / N;
+        z = 5000.0;
 
-            for (i = 0; i < N+1; i++) {  // C++ uses 0-based indexing
-                cP(i) = 4700.0 + (z - 5000.0) / 10.0;
-                cS(i) = 2000.0 + (z - 5000.0) / 10.0;
-                cP(i) = 4700.0;
-                cS(i) = 2000.0;
-                rho(i) = 2.0;
-                z = z + h;
-            }
-            break;
+        for (i = 0; i < N + 1; i++)
+        { // C++ uses 0-based indexing
+            cP(i) = 4700.0 + (z - 5000.0) / 10.0;
+            cS(i) = 2000.0 + (z - 5000.0) / 10.0;
+            cP(i) = 4700.0;
+            cS(i) = 2000.0;
+            rho(i) = 2.0;
+            z = z + h;
+        }
+        break;
     }
+}
+
+void UpdateSSPLoss(double freq, double freq0, int Medium, SSPStructure &SSP)
+{
+    for (size_t i = 0; i < SSP.NMedia; i++)
+    {
+        int ILoc = SSP.Loc(Medium); // Fortran索引转C++索引
+        for (size_t issp = 0; issp < SSP.NPts(Medium); issp++)
+        {
+            int iz = SSP.Loc(Medium) + issp;
+            SSP.cP(iz) = CRCI(SSP.z(iz), SSP.alphaR(iz), SSP.alphaI(iz), freq, freq0,
+                              SSP.AttenUnit, SSP.beta(Medium), SSP.ft(Medium));
+            SSP.cP(iz) = CRCI(SSP.z(iz), SSP.alphaR(iz), SSP.alphaI(iz), freq, freq0,
+                              SSP.AttenUnit, SSP.beta(Medium), SSP.ft(Medium));
+            SSP.rho_k(iz) = SSP.rho(iz);
+            SSP.cpSpline(1,iz) = SSP.cP(iz);
+            SSP.csSpline(1,iz) = SSP.cS(iz);
+            SSP.rhoSpline(1,iz) = SSP.rho(iz);
+        }
+    }
+    
 }

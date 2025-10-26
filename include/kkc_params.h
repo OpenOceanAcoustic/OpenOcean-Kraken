@@ -108,10 +108,12 @@ struct rxyz_vector {
 
 // @brief 声速剖面结构体
 struct SSPStructure {
+    // @brief 媒质个数
+    int NMedia;
     // @brief 声速剖面点数
-    int NPts;
+    VectorXi NPts;
     // @brief 介质起始位置数组
-    int Loc[100]; // 假设最多100层介质
+    VectorXi Loc; // 假设最多100层介质
     // @brief 距离点数
     int Nr;
     // @brief x 方向点数
