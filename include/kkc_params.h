@@ -113,7 +113,12 @@ struct SSPStructure {
     // @brief 声速剖面点数
     VectorXi NPts;
     // @brief 介质起始位置数组
-    VectorXi Loc; // 假设最多100层介质
+    VectorXi Loc;
+    // 介质层定义
+    VectorXd beta;
+    VectorXd ft;
+    VectorXd depth;
+
     // @brief 距离点数
     int Nr;
     // @brief x 方向点数
@@ -135,23 +140,25 @@ struct SSPStructure {
     // @brief 折射率平方对z导数
     VectorXcd n2z;
     // @brief 声速三次样条系数矩阵
-    MatrixXcd cSpline;
+    MatrixXcd cspline;
     // @brief PCHIP 系数
     MatrixXcd cCoef;
     // @brief PCHIP 系数
-    MatrixXcd CSWork;
+    MatrixXcd csWork;
+    // @brief PCHIP double 系数
+    MatrixXd csWorkd;
     // @brief P波PCHIP系数 (4 x MaxSSP)
     MatrixXcd cpCoef;
     // @brief S波PCHIP系数 (4 x MaxSSP)
     MatrixXcd csCoef;
     // @brief 密度PCHIP系数 (4 x MaxSSP)
-    MatrixXcd rhoCoef;
+    MatrixXd rhoCoef;
     // @brief P波三次样条系数
     MatrixXcd cpSpline;
     // @brief S波三次样条系数
     MatrixXcd csSpline;
     // @brief 密度三次样条系数
-    MatrixXcd rhoSpline;
+    MatrixXd rhoSpline;
     // @brief 2 维声速矩阵
     MatrixXd cMat;
     // @brief 二维声速对 z 方向导数
@@ -170,9 +177,11 @@ struct SSPStructure {
     // double betaPowerLaw;
     // // @brief ft
     // double ft;
-    VectorXcd cP;
-    VectorXcd cS;
+    VectorXcd cp;
+    VectorXcd cs;
     VectorXd rho_k;
+
+
 
     VectorXd alphaR; //声速，纵波速度
     VectorXd alphaI; //横波速度
@@ -220,10 +229,11 @@ struct HSInfo
     double betaR;
     // @brief 横波吸收系数
     double betaI;
+    double beta, ft;
     // @brief P-wave速度
-    std::complex<double> cP;
+    std::complex<double> cp;
     // @brief S-wave速度
-    std::complex<double> cS;
+    std::complex<double> cs;
     // @brief 密度
     double rho;
     // @brief 深度
@@ -311,9 +321,9 @@ struct HSInfo2
     // @brief 横波吸收系数
     double betaI;
     // @brief P-wave速度
-    std::complex<double> cP;
+    std::complex<double> cp;
     // @brief S-wave速度
-    std::complex<double> cS;
+    std::complex<double> cs;
     // @brief 密度
     double rho;
     // @brief 深度

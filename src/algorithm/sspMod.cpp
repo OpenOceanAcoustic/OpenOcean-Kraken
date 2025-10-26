@@ -1,25 +1,25 @@
 #include "sspMod.h"
 
-void EvaluateSSP(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SSP, int Medium, int N1, double freq, string task)
+void EvaluateSSP(VectorXcd &cp, VectorXcd &cs, VectorXd &rho_k, SSPStructure &SSP, int Medium, int N1, double freq)
 {
     // double cxx, cyy, cxy, cxz, cyz;
 
     switch (SSP.Type)
     {
     case SSP_Mode::MODE_N_n2Linear:
-        n2Linear(cP, cS, rho_k, SSP, Medium, N1);
+        n2Linear(cp, cs, rho_k, SSP, Medium, N1);
         break;
     case SSP_Mode::MODE_C_cLinear:
-        cLinear(cP, cS, rho_k, SSP, Medium, N1);
+        cLinear(cp, cs, rho_k, SSP, Medium, N1);
         break;
     case SSP_Mode::MODE_P_cPCHIP:
-        cPCHIP(cP, cS, rho_k, SSP, Medium, N1);
+        cPCHIP(cp, cs, rho_k, SSP, Medium, N1);
         break;
     case SSP_Mode::MODE_S_cCubic:
-        cCubic(cP, cS, rho_k, SSP, Medium, N1);
+        cCubic(cp, cs, rho_k, SSP, Medium, N1);
         break;
     case SSP_Mode::MODE_A_Analytic:
-        Analytic(cP, cS, rho_k, Medium, N1); // 需要实现Analytic函数
+        Analytic(cp, cs, rho_k, Medium, N1); // 需要实现Analytic函数
         break;
     default:
         // 报错
@@ -31,18 +31,18 @@ void EvaluateSSP(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SS
 /**
  * @brief 根据给定的介质层数Medium和分层个数N1，对声速剖面重新插值，返回cP、cS和rho_k
  *
- * @param cP 输出的纵波速度数组
- * @param cS 输出的横波速度数组
+ * @param cp 输出的纵波速度数组
+ * @param cs 输出的横波速度数组
  * @param rho_k 输出的密度数组
  * @param SSP 声速剖面结构体
  * @param Medium 介质层数
  * @param N1 分层个数
  */
-void n2Linear(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SSP, int Medium, int N1)
+void n2Linear(VectorXcd &cp, VectorXcd &cs, VectorXd &rho_k, SSPStructure &SSP, int Medium, int N1)
 {
     // 调整输出向量的大小
-    cP.resize(N1);
-    cS.resize(N1);
+    cp.resize(N1);
+    cs.resize(N1);
     rho_k.resize(N1);
 
     // 获取介质在SSP中的位置
@@ -101,11 +101,11 @@ void n2Linear(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SSP, 
         // 避免开方错误
         if (real(N2Interp) <= 0.0)
         {
-            cP(iz) = std::complex<double>(1500.0, 0.0); // 默认值
+            cp(iz) = std::complex<double>(1500.0, 0.0); // 默认值
         }
         else
         {
-            cP(iz) = 1.0 / sqrt(N2Interp);
+            cp(iz) = 1.0 / sqrt(N2Interp);
         }
 
         // S波速度计算
@@ -118,16 +118,16 @@ void n2Linear(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SSP, 
             N2Interp = (1.0 - R) * N2Top + R * N2Bot;
             if (real(N2Interp) <= 0.0)
             {
-                cS(iz) = std::complex<double>(0.0, 0.0);
+                cs(iz) = std::complex<double>(0.0, 0.0);
             }
             else
             {
-                cS(iz) = 1.0 / sqrt(N2Interp);
+                cs(iz) = 1.0 / sqrt(N2Interp);
             }
         }
         else
         {
-            cS(iz) = std::complex<double>(0.0, 0.0);
+            cs(iz) = std::complex<double>(0.0, 0.0);
         }
 
         // 密度线性插值
@@ -139,18 +139,18 @@ void n2Linear(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SSP, 
  * @brief 根据给定的介质层数Medium和分层个数N1，对声速剖面重新插值，返回cP、cS和rho_k
  * Uses c-linear segments for P and S-wave speeds, rho-linear segments for density
  *
- * @param cP 输出的纵波速度数组
- * @param cS 输出的横波速度数组
+ * @param cp 输出的纵波速度数组
+ * @param cs 输出的横波速度数组
  * @param rho_k 输出的密度数组
  * @param SSP 声速剖面结构体
  * @param Medium 介质层数
  * @param N1 分层个数
  */
-void cLinear(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SSP, int Medium, int N1)
+void cLinear(VectorXcd &cp, VectorXcd &cs, VectorXd &rho_k, SSPStructure &SSP, int Medium, int N1)
 {
     // 调整输出向量的大小
-    cP.resize(N1);
-    cS.resize(N1);
+    cp.resize(N1);
+    cs.resize(N1);
     rho_k.resize(N1);
 
     // 获取介质在SSP中的位置
@@ -201,10 +201,10 @@ void cLinear(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SSP, i
             R = 1.0;
 
         // P波速度计算 (c线性插值)
-        cP(iz) = (1.0 - R) * SSP.cP(iSSP) + R * SSP.cP(iSSP + 1);
+        cp(iz) = (1.0 - R) * SSP.cp(iSSP) + R * SSP.cp(iSSP + 1);
 
         // S波速度计算 (c线性插值)
-        cS(iz) = (1.0 - R) * SSP.cS(iSSP) + R * SSP.cS(iSSP + 1);
+        cs(iz) = (1.0 - R) * SSP.cs(iSSP) + R * SSP.cs(iSSP + 1);
 
         // 密度线性插值
         rho_k(iz) = (1.0 - R) * SSP.rho(iSSP) + R * SSP.rho(iSSP + 1);
@@ -215,18 +215,18 @@ void cLinear(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SSP, i
  * @brief 根据给定的介质层数Medium和分层个数N1，对声速剖面重新插值，返回cP、cS和rho_k
  * Uses PCHIP segments for P, S-wave speeds and density rho
  *
- * @param cP 输出的纵波速度数组
- * @param cS 输出的横波速度数组
+ * @param cp 输出的纵波速度数组
+ * @param cs 输出的横波速度数组
  * @param rho_k 输出的密度数组
  * @param SSP 声速剖面结构体
  * @param Medium 介质层数
  * @param N1 分层个数
  */
-void cPCHIP(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SSP, int Medium, int N1)
+void cPCHIP(VectorXcd &cp, VectorXcd &cs, VectorXd &rho_k, SSPStructure &SSP, int Medium, int N1)
 {
     // 调整输出向量的大小
-    cP.resize(N1);
-    cS.resize(N1);
+    cp.resize(N1);
+    cs.resize(N1);
     rho_k.resize(N1);
 
     // 获取介质在SSP中的位置
@@ -265,7 +265,7 @@ void cPCHIP(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SSP, in
         double xt = z - SSP.z(iSSP);
 
         // P波速度计算 (PCHIP插值)
-        cP(iz) = SSP.cpCoef(0, iSSP) +
+        cp(iz) = SSP.cpCoef(0, iSSP) +
                  (SSP.cpCoef(1, iSSP) +
                   (SSP.cpCoef(2, iSSP) +
                    SSP.cpCoef(3, iSSP) * xt) *
@@ -273,7 +273,7 @@ void cPCHIP(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SSP, in
                      xt;
 
         // S波速度计算 (PCHIP插值)
-        cS(iz) = SSP.csCoef(0, iSSP) +
+        cs(iz) = SSP.csCoef(0, iSSP) +
                  (SSP.csCoef(1, iSSP) +
                   (SSP.csCoef(2, iSSP) +
                    SSP.csCoef(3, iSSP) * xt) *
@@ -294,18 +294,18 @@ void cPCHIP(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SSP, in
  * @brief 根据给定的介质层数Medium和分层个数N1，对声速剖面重新插值，返回cP、cS和rho_k
  * Uses cubic spline for P, S-wave speeds and density rho
  *
- * @param cP 输出的纵波速度数组
- * @param cS 输出的横波速度数组
+ * @param cp 输出的纵波速度数组
+ * @param cs 输出的横波速度数组
  * @param rho_k 输出的密度数组
  * @param SSP 声速剖面结构体
  * @param Medium 介质层数
  * @param N1 分层个数
  */
-void cCubic(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SSP, int Medium, int N1)
+void cCubic(VectorXcd &cp, VectorXcd &cs, VectorXd &rho_k, SSPStructure &SSP, int Medium, int N1)
 {
     // 调整输出向量的大小
-    cP.resize(N1);
-    cS.resize(N1);
+    cp.resize(N1);
+    cs.resize(N1);
     rho_k.resize(N1);
 
     // 获取介质在SSP中的位置
@@ -344,7 +344,7 @@ void cCubic(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SSP, in
         double xt = z - SSP.z(iSSP);
 
         // P波速度计算 (三次样条插值)
-        cP(iz) = SSP.cpSpline(0, iSSP) +
+        cp(iz) = SSP.cpSpline(0, iSSP) +
                  (SSP.cpSpline(1, iSSP) +
                   (SSP.cpSpline(2, iSSP) +
                    SSP.cpSpline(3, iSSP) * xt) *
@@ -352,7 +352,7 @@ void cCubic(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SSP, in
                      xt;
 
         // S波速度计算 (三次样条插值)
-        cS(iz) = SSP.csSpline(0, iSSP) +
+        cs(iz) = SSP.csSpline(0, iSSP) +
                  (SSP.csSpline(1, iSSP) +
                   (SSP.csSpline(2, iSSP) +
                    SSP.csSpline(3, iSSP) * xt) *
@@ -372,24 +372,24 @@ void cCubic(VectorXcd &cP, VectorXcd &cS, VectorXd &rho_k, SSPStructure &SSP, in
 /**
  * Munk profile
  *
- * Returns cS, cP, rho at depths i*h i = 1, N
+ * Returns cs, cp, rho at depths i*h i = 1, N
  * Depths of interfaces
  *
- * @param cP Output complex vector for compressional wave speeds
- * @param cS Output complex vector for shear wave speeds
+ * @param cp Output complex vector for compressional wave speeds
+ * @param cs Output complex vector for shear wave speeds
  * @param rho Output vector for densities
  * @param Medium Medium type (1 for ocean, 2 for fluid half-space, 9 for elastic layer)
  * @param N1 Number of points
  */
-void Analytic(VectorXcd &cP, VectorXcd &cS, VectorXd &rho, int Medium, int N1)
+void Analytic(VectorXcd &cp, VectorXcd &cs, VectorXd &rho, int Medium, int N1)
 {
     int N = N1 - 1;
     int i;
     double h, x, z;
 
     // Resize vectors to appropriate size
-    cP.resize(N1);
-    cS.resize(N1);
+    cp.resize(N1);
+    cs.resize(N1);
     rho.resize(N1);
 
     switch (Medium)
@@ -400,15 +400,15 @@ void Analytic(VectorXcd &cP, VectorXcd &cS, VectorXd &rho, int Medium, int N1)
         { // C++ uses 0-based indexing
             z = i * h;
             x = 2.0 * (z - 1300.0) / 1300.0;
-            cP(i) = 1500.0 * (1.0 + eps * (x - 1.0 + exp(-x)));
-            cS(i) = 0.0;
+            cp(i) = 1500.0 * (1.0 + eps * (x - 1.0 + exp(-x)));
+            cs(i) = 0.0;
             rho(i) = 1.0;
         }
         break;
 
     case 2: // THE FLUID HALF-SPACE
-        cP(0) = 1551.91;
-        cS(0) = 0.0;
+        cp(0) = 1551.91;
+        cs(0) = 0.0;
         rho(0) = 1.0e20;
         break;
 
@@ -418,10 +418,10 @@ void Analytic(VectorXcd &cP, VectorXcd &cS, VectorXd &rho, int Medium, int N1)
 
         for (i = 0; i < N + 1; i++)
         { // C++ uses 0-based indexing
-            cP(i) = 4700.0 + (z - 5000.0) / 10.0;
-            cS(i) = 2000.0 + (z - 5000.0) / 10.0;
-            cP(i) = 4700.0;
-            cS(i) = 2000.0;
+            cp(i) = 4700.0 + (z - 5000.0) / 10.0;
+            cs(i) = 2000.0 + (z - 5000.0) / 10.0;
+            cp(i) = 4700.0;
+            cs(i) = 2000.0;
             rho(i) = 2.0;
             z = z + h;
         }
@@ -434,18 +434,42 @@ void UpdateSSPLoss(double freq, double freq0, int Medium, SSPStructure &SSP)
     for (size_t i = 0; i < SSP.NMedia; i++)
     {
         int ILoc = SSP.Loc(Medium); // Fortran索引转C++索引
+        int LocLen = SSP.NPts(Medium);
         for (size_t issp = 0; issp < SSP.NPts(Medium); issp++)
         {
             int iz = SSP.Loc(Medium) + issp;
-            SSP.cP(iz) = CRCI(SSP.z(iz), SSP.alphaR(iz), SSP.alphaI(iz), freq, freq0,
+            SSP.cp(iz) = CRCI(SSP.z(iz), SSP.alphaR(iz), SSP.alphaI(iz), freq, freq0,
                               SSP.AttenUnit, SSP.beta(Medium), SSP.ft(Medium));
-            SSP.cP(iz) = CRCI(SSP.z(iz), SSP.alphaR(iz), SSP.alphaI(iz), freq, freq0,
+            SSP.cp(iz) = CRCI(SSP.z(iz), SSP.alphaR(iz), SSP.alphaI(iz), freq, freq0,
                               SSP.AttenUnit, SSP.beta(Medium), SSP.ft(Medium));
             SSP.rho_k(iz) = SSP.rho(iz);
-            SSP.cpSpline(1,iz) = SSP.cP(iz);
-            SSP.csSpline(1,iz) = SSP.cS(iz);
-            SSP.rhoSpline(1,iz) = SSP.rho(iz);
+            SSP.cpSpline(1, iz) = SSP.cp(iz);
+            SSP.csSpline(1, iz) = SSP.cs(iz);
+            SSP.rhoSpline(1, iz) = SSP.rho(iz);
+        }
+        if (SSP.Type == SSP_Mode::MODE_P_cPCHIP)
+        {
+            PCHIP(SSP.z, SSP.cp, SSP.cpCoef, SSP.csWork, ILoc, LocLen);
+            PCHIP(SSP.z, SSP.cs, SSP.csCoef, SSP.csWork, ILoc, LocLen);
+            PCHIP(SSP.z, SSP.rho_k, SSP.rhoCoef, SSP.csWorkd, ILoc, LocLen);
+        }
+        if (SSP.Type == SSP_Mode::MODE_S_cCubic)
+        {
+            int IBCBeg = 0, IBCEnd = 0;
+            CSpline(SSP.z, SSP.cpSpline, LocLen, IBCBeg, IBCEnd, LocLen, ILoc);
+            CSpline(SSP.z, SSP.csSpline, LocLen, IBCBeg, IBCEnd, LocLen, ILoc);
+            CSpline(SSP.z, SSP.rhoSpline, LocLen, IBCBeg, IBCEnd, LocLen, ILoc);
         }
     }
-    
+}
+
+void UpdateHSLoss(double freq, double freq0, int Medium, SSPStructure &SSP, HSInfo &HS)
+{
+    if (HS.BC == BC_Mode::MODE_A_Half_space)
+    {
+        HS.cp = CRCI(HUGE, HS.alphaR, HS.alphaI, freq, freq0,
+                     SSP.AttenUnit, HS.beta, HS.ft);
+        HS.cp = CRCI(HUGE, HS.betaR, HS.betaI, freq, freq0,
+                     SSP.AttenUnit, HS.beta, HS.ft);
+    }
 }
