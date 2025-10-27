@@ -24,6 +24,7 @@ using namespace Eigen;
 class kkc_Log; // 前向声明
 
 // @brief 定义了一些常量
+const double eps = 0.00737;
 constexpr double pi = 3.14159265358979323846;
 constexpr bool ThreeD = false;
 constexpr double RadDeg = 180 / pi;
@@ -52,6 +53,7 @@ enum class Atten_Mode
     MODE_F_dB_per_m_kHz,   // 衰减单位采用(dB/m)kHz；
     MODE_L_params_lose,    // 衰减单位采用参数损失；
     MODE_M_dB_per_m,       // 衰减单位采用 dB/m；
+    MODE_m_dB_per_m,       // 衰减单位采用 dB/m；
     MODE_N_Nepers_per_m,   // 衰减单位采用 Nepers/m；
     MODE_Q_Quality_Factor, // 衰减单位采用 Q 因子；
     MODE_W_db_per_lambda,  // 衰减单位采用 dB/λ(波长) ——默认
@@ -60,6 +62,7 @@ enum class Atten_Mode
     MODE_FT_dB_per_m_kHz,   // 衰减单位采用(dB/m)kHz；
     MODE_LT_params_lose,    // 衰减单位采用参数损失；
     MODE_MT_dB_per_m,       // 衰减单位采用 dB/m；
+    MODE_mT_dB_per_m,       // 衰减单位采用 dB/m；
     MODE_NT_Nepers_per_m,   // 衰减单位采用 Nepers/m；
     MODE_QT_Quality_Factor, // 衰减单位采用 Q 因子；
     MODE_WT_db_per_lambda,  // 衰减单位采用 dB/λ(波长)
@@ -68,6 +71,7 @@ enum class Atten_Mode
     MODE_FF_dB_per_m_kHz,   // 衰减单位采用(dB/m)kHz；
     MODE_LF_params_lose,    // 衰减单位采用参数损失；
     MODE_MF_dB_per_m,       // 衰减单位采用 dB/m；
+    MODE_mF_dB_per_m,       // 衰减单位采用 dB/m；
     MODE_NF_Nepers_per_m,   // 衰减单位采用 Nepers/m；
     MODE_QF_Quality_Factor, // 衰减单位采用 Q 因子；
     MODE_WF_db_per_lambda,  // 衰减单位采用 dB/λ(波长)
@@ -109,85 +113,52 @@ struct rxyz_vector {
 struct SSPStructure {
     // @brief 声速剖面点数
     int NPts;
-    // @brief 距离点数
-    int Nr;
-    // @brief x 方向点数
-    int Nx;
-    // @brief y 方向点数
-    int Ny;
-    // @brief z 方向点数
-    int Nz;
+    // @brief 声速剖面细分点数
+    int N;
+    // 层厚度
+    int depth;
+    // 介质层定义
+    double beta;
+    double ft;
+
     // @brief 深度向量
     VectorXd z;
-    // @brief 密度向量
-    VectorXd rho;
-    // @brief 声速向量
-    VectorXcd c;
-    // @brief 声速对z方向导数
-    VectorXcd cz;
-    // @brief 折射率平方向量
-    VectorXcd n2;
-    // @brief 折射率平方对z导数
-    VectorXcd n2z;
-    // @brief 声速三次样条系数矩阵
-    MatrixXcd cSpline;
-    // @brief PCHIP 系数
-    MatrixXcd cCoef;
-    // @brief PCHIP 系数
-    MatrixXcd CSWork;
-    // @brief 2 维声速矩阵
-    MatrixXd cMat;
-    // @brief 二维声速对 z 方向导数
-    MatrixXd czMat;
-    // @brief 三维声速矩阵
-    std::vector<MatrixXd> cMat3;
-    // @brief 三维声速对 z 方向导数
-    std::vector<MatrixXd> czMat3;
-    // @brief 将rxyz_vector实例化为Seg结构体（片段Segment）
-    rxyz_vector Seg;
-    // @brief 声速剖面类型
-    SSP_Mode Type;
-    // @brief 吸收单位
-    Atten_Mode AttenUnit;
-    // // @brief betaPowerLaw
-    // double betaPowerLaw;
-    // // @brief ft
-    // double ft;
 
     VectorXd alphaR; //声速，纵波速度
     VectorXd alphaI; //横波速度
     VectorXd betaR;//纵波衰减
     VectorXd betaI;//横波衰减
-    bool is_2D = false; //是否是1D声速剖面 
-};
-
-
-// 输入的SSP
-struct SSP_1D
-{
-    VectorXd z;
+    // @brief 密度向量
     VectorXd rho;
-    VectorXd alphaR;
-    VectorXd alphaI;
-    VectorXd betaR;
-    VectorXd betaI;
+
+    // @brief 声速向量
+    VectorXcd cp;
+    VectorXcd cs;
+    VectorXcd cp_int;
+    VectorXcd cs_int;
+    VectorXd rho_int;
+
+    // @brief 声速三次样条系数矩阵
+    MatrixXcd cspline;
+    // @brief PCHIP 系数
+    MatrixXcd cCoef;
+    // @brief PCHIP 系数
+    MatrixXcd csWork;
+    // @brief P波PCHIP系数 (4 x MaxSSP)
+    MatrixXcd cpCoef;
+    // @brief S波PCHIP系数 (4 x MaxSSP)
+    MatrixXcd csCoef;
+    // @brief 密度PCHIP系数 (4 x MaxSSP)
+    MatrixXcd rhoCoef;
+    // @brief P波三次样条系数
+    MatrixXcd cpSpline;
+    // @brief S波三次样条系数
+    MatrixXcd csSpline;
+    // @brief 密度三次样条系数
+    MatrixXcd rhoSpline;
+
 };
 
-struct SSP_2D
-{
-    MatrixXd cMat;
-    VectorXd z;
-    VectorXd rList;
-};
-
-// 插值完的输出
-struct SSPOutput
-{
-    double crr, crz, czz;
-    Vector2d gradc;
-    double rho;
-    std::complex<double> c;
-};
 
 // @brief 半空间属性结构体
 struct HSInfo
@@ -200,10 +171,11 @@ struct HSInfo
     double betaR;
     // @brief 横波吸收系数
     double betaI;
+    double beta, ft;
     // @brief P-wave速度
-    std::complex<double> cP;
+    std::complex<double> cp;
     // @brief S-wave速度
-    std::complex<double> cS;
+    std::complex<double> cs;
     // @brief 密度
     double rho;
     // @brief 深度
@@ -291,9 +263,9 @@ struct HSInfo2
     // @brief 横波吸收系数
     double betaI;
     // @brief P-wave速度
-    std::complex<double> cP;
+    std::complex<double> cp;
     // @brief S-wave速度
-    std::complex<double> cS;
+    std::complex<double> cs;
     // @brief 密度
     double rho;
     // @brief 深度
@@ -431,6 +403,11 @@ struct parameters
 
     // @brief 媒质数
     int NMedia;
+
+    // @brief 声速剖面类型
+    SSP_Mode SSPType;
+    // @brief 吸收单位
+    Atten_Mode AttenUnit;
 
     // @brief 声源位置
     Position *Pos;
