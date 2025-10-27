@@ -53,6 +53,7 @@ enum class Atten_Mode
     MODE_F_dB_per_m_kHz,   // 衰减单位采用(dB/m)kHz；
     MODE_L_params_lose,    // 衰减单位采用参数损失；
     MODE_M_dB_per_m,       // 衰减单位采用 dB/m；
+    MODE_m_dB_per_m,       // 衰减单位采用 dB/m；
     MODE_N_Nepers_per_m,   // 衰减单位采用 Nepers/m；
     MODE_Q_Quality_Factor, // 衰减单位采用 Q 因子；
     MODE_W_db_per_lambda,  // 衰减单位采用 dB/λ(波长) ——默认
@@ -61,6 +62,7 @@ enum class Atten_Mode
     MODE_FT_dB_per_m_kHz,   // 衰减单位采用(dB/m)kHz；
     MODE_LT_params_lose,    // 衰减单位采用参数损失；
     MODE_MT_dB_per_m,       // 衰减单位采用 dB/m；
+    MODE_mT_dB_per_m,       // 衰减单位采用 dB/m；
     MODE_NT_Nepers_per_m,   // 衰减单位采用 Nepers/m；
     MODE_QT_Quality_Factor, // 衰减单位采用 Q 因子；
     MODE_WT_db_per_lambda,  // 衰减单位采用 dB/λ(波长)
@@ -69,6 +71,7 @@ enum class Atten_Mode
     MODE_FF_dB_per_m_kHz,   // 衰减单位采用(dB/m)kHz；
     MODE_LF_params_lose,    // 衰减单位采用参数损失；
     MODE_MF_dB_per_m,       // 衰减单位采用 dB/m；
+    MODE_mF_dB_per_m,       // 衰减单位采用 dB/m；
     MODE_NF_Nepers_per_m,   // 衰减单位采用 Nepers/m；
     MODE_QF_Quality_Factor, // 衰减单位采用 Q 因子；
     MODE_WF_db_per_lambda,  // 衰减单位采用 dB/λ(波长)
@@ -114,31 +117,34 @@ struct SSPStructure {
     VectorXi NPts;
     // @brief 介质起始位置数组
     VectorXi Loc;
+    // @brief 声速剖面细分点数
+    VectorXi N;
+    // @brief 声速剖面起始位置数组
+    VectorXi L;
     // 介质层定义
     VectorXd beta;
     VectorXd ft;
     VectorXd depth;
 
-    // @brief 距离点数
-    int Nr;
-    // @brief x 方向点数
-    int Nx;
-    // @brief y 方向点数
-    int Ny;
     // @brief z 方向点数
     int Nz;
     // @brief 深度向量
     VectorXd z;
+
+    VectorXd alphaR; //声速，纵波速度
+    VectorXd alphaI; //横波速度
+    VectorXd betaR;//纵波衰减
+    VectorXd betaI;//横波衰减
     // @brief 密度向量
     VectorXd rho;
+
     // @brief 声速向量
-    VectorXcd c;
-    // @brief 声速对z方向导数
-    VectorXcd cz;
-    // @brief 折射率平方向量
-    VectorXcd n2;
-    // @brief 折射率平方对z导数
-    VectorXcd n2z;
+    VectorXcd cp;
+    VectorXcd cs;
+    VectorXcd cp_int;
+    VectorXcd cs_int;
+    VectorXd rho_int;
+
     // @brief 声速三次样条系数矩阵
     MatrixXcd cspline;
     // @brief PCHIP 系数
@@ -159,16 +165,6 @@ struct SSPStructure {
     MatrixXcd csSpline;
     // @brief 密度三次样条系数
     MatrixXd rhoSpline;
-    // @brief 2 维声速矩阵
-    MatrixXd cMat;
-    // @brief 二维声速对 z 方向导数
-    MatrixXd czMat;
-    // @brief 三维声速矩阵
-    std::vector<MatrixXd> cMat3;
-    // @brief 三维声速对 z 方向导数
-    std::vector<MatrixXd> czMat3;
-    // @brief 将rxyz_vector实例化为Seg结构体（片段Segment）
-    rxyz_vector Seg;
     // @brief 声速剖面类型
     SSP_Mode Type;
     // @brief 吸收单位
@@ -177,16 +173,6 @@ struct SSPStructure {
     // double betaPowerLaw;
     // // @brief ft
     // double ft;
-    VectorXcd cp;
-    VectorXcd cs;
-    VectorXd rho_k;
-
-
-
-    VectorXd alphaR; //声速，纵波速度
-    VectorXd alphaI; //横波速度
-    VectorXd betaR;//纵波衰减
-    VectorXd betaI;//横波衰减
     bool is_2D = false; //是否是1D声速剖面 
 };
 
