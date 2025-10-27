@@ -20,3 +20,10 @@ rad.json
 *.flf
 #Test results file
 TestResults.xml
+eigen/
+build/
+*.f90
+nlohmann/
+tests/
+build/
+bin/
