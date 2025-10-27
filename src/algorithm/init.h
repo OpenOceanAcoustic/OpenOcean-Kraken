@@ -2,8 +2,8 @@
 #define INIT_H
 
 #include "kkc_params.h"
+#include "sspMod.h"
 
-void EvaluateSSP(SSPStructure &SSP, SSP_Mode &ssptype);
-void Initialize();
+void Initialize(parameters& params, KrakenMatrix& kramtrx);
 
 #endif // INIT_H
