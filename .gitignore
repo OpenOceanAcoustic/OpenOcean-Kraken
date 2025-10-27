@@ -23,3 +23,7 @@ TestResults.xml
 eigen/
 build/
 *.f90
+nlohmann/
+tests/
+build/
+bin/
