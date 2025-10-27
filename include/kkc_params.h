@@ -111,23 +111,16 @@ struct rxyz_vector {
 
 // @brief 声速剖面结构体
 struct SSPStructure {
-    // @brief 媒质个数
-    int NMedia;
     // @brief 声速剖面点数
-    VectorXi NPts;
-    // @brief 介质起始位置数组
-    VectorXi Loc;
+    int NPts;
     // @brief 声速剖面细分点数
-    VectorXi N;
-    // @brief 声速剖面起始位置数组
-    VectorXi L;
+    int N;
+    // 层厚度
+    int depth;
     // 介质层定义
-    VectorXd beta;
-    VectorXd ft;
-    VectorXd depth;
+    double beta;
+    double ft;
 
-    // @brief z 方向点数
-    int Nz;
     // @brief 深度向量
     VectorXd z;
 
@@ -151,58 +144,21 @@ struct SSPStructure {
     MatrixXcd cCoef;
     // @brief PCHIP 系数
     MatrixXcd csWork;
-    // @brief PCHIP double 系数
-    MatrixXd csWorkd;
     // @brief P波PCHIP系数 (4 x MaxSSP)
     MatrixXcd cpCoef;
     // @brief S波PCHIP系数 (4 x MaxSSP)
     MatrixXcd csCoef;
     // @brief 密度PCHIP系数 (4 x MaxSSP)
-    MatrixXd rhoCoef;
+    MatrixXcd rhoCoef;
     // @brief P波三次样条系数
     MatrixXcd cpSpline;
     // @brief S波三次样条系数
     MatrixXcd csSpline;
     // @brief 密度三次样条系数
-    MatrixXd rhoSpline;
-    // @brief 声速剖面类型
-    SSP_Mode Type;
-    // @brief 吸收单位
-    Atten_Mode AttenUnit;
-    // // @brief betaPowerLaw
-    // double betaPowerLaw;
-    // // @brief ft
-    // double ft;
-    bool is_2D = false; //是否是1D声速剖面 
+    MatrixXcd rhoSpline;
+
 };
 
-
-// 输入的SSP
-struct SSP_1D
-{
-    VectorXd z;
-    VectorXd rho;
-    VectorXd alphaR;
-    VectorXd alphaI;
-    VectorXd betaR;
-    VectorXd betaI;
-};
-
-struct SSP_2D
-{
-    MatrixXd cMat;
-    VectorXd z;
-    VectorXd rList;
-};
-
-// 插值完的输出
-struct SSPOutput
-{
-    double crr, crz, czz;
-    Vector2d gradc;
-    double rho;
-    std::complex<double> c;
-};
 
 // @brief 半空间属性结构体
 struct HSInfo
@@ -447,6 +403,11 @@ struct parameters
 
     // @brief 媒质数
     int NMedia;
+
+    // @brief 声速剖面类型
+    SSP_Mode SSPType;
+    // @brief 吸收单位
+    Atten_Mode AttenUnit;
 
     // @brief 声源位置
     Position *Pos;
