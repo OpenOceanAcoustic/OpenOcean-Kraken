@@ -43,6 +43,9 @@ void n2Linear(SSPStructure &SSP)
     // 计算步长
     double h = (SSP.z(SSP.z.size() - 1) - SSP.z(0)) / (SSP.N - 1);
     int Lay = 0; // 层索引
+    SSP.cp_int.resize(SSP.N);
+    SSP.cs_int.resize(SSP.N);
+    SSP.rho_int.resize(SSP.N);
 
     // 遍历每个分层点
     for (int iz = 0; iz < SSP.N; iz++)

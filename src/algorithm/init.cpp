@@ -1,31 +1,24 @@
 #include "init.h"
 
-
-
-// EvaluateSSP函数声明（需要根据实际实现调整）
-void EvaluateSSP(std::complex<double>* cP, std::complex<double>* cS, double* rho, 
-                int Medium, int N1, double freq, const std::string& Task);
-
 // 初始化有限差分方程
 void Initialize(parameters& params, KrakenMatrix& kramtrx) {
     bool ElasticFlag = false;
     int IAllocStat = 0;
-    int Medium, NPoints, N1;
+    int NPoints = 0, N1;
 
     double Two_h;
     double cp2, cs2;
-    double omega2 = SQ(params.freqinfo->freq);
-    std::string Task = "TAB";
+    double omega2 = SQ(2 * pi * params.freqinfo->freq);
     
     // 初始化变量
     double& Clow = params.Clow;
     double cMin = 1e8;
     double& cHigh = params.Chigh;
     kramtrx.FirstAcoustic = 0;
+    kramtrx.Loc.resize(params.NMedia);
     kramtrx.Loc[0] = 0; // C++使用0-based索引
     
     // 计算总网格点数
-    NPoints = 0;
     kramtrx.N.resize(params.NMedia);
     for (int i = 0; i < params.NMedia; ++i) {
         NPoints += params.SSP[i].N;
@@ -40,10 +33,7 @@ void Initialize(parameters& params, KrakenMatrix& kramtrx) {
     kramtrx.B3.resize(NPoints);
     kramtrx.B4.resize(NPoints);
     kramtrx.rho.resize(NPoints);
-    
-    // 创建临时向量存储cP和cS
-    std::vector<std::complex<double>> cp(NPoints);
-    std::vector<std::complex<double>> cs(NPoints);
+    kramtrx.h.resize(params.NMedia);
     
     // 处理每个介质层
     for (size_t im = 0; im < params.NMedia; ++im) { // C++使用0-based索引
@@ -52,35 +42,37 @@ void Initialize(parameters& params, KrakenMatrix& kramtrx) {
             kramtrx.Loc[im] = kramtrx.Loc[im - 1] + kramtrx.N[im - 1] + 1;
         }
         
-        N1 = kramtrx.N[im] + 1; // 这一层媒质的差分网格点个数
+        N1 = kramtrx.N[im]; // 这一层媒质的差分网格点个数
         int ii = kramtrx.Loc[im]; // C++使用0-based索引，不需要+1
         
         // 调用EvaluateSSP函数
         SSPStructure& SSP = params.SSP[im];
+        kramtrx.h(im) = SSP.h;
+
         EvaluateSSP(SSP, params.SSPType);
         
         // 加载有限差分方程的对角线
-        if (std::real(SSP.cs[ii]) == 0.0) { // 声学介质情况
+        if (std::real(SSP.cs[0]) == 0.0) { // 声学介质情况
             SSP.Material = Media_Mode::MODE_A_Acoustic;
             if (kramtrx.FirstAcoustic == 0) {
-                kramtrx.FirstAcoustic = Medium + 1; // 保持1-based编号
+                kramtrx.FirstAcoustic = im + 1; // 保持1-based编号
             }
-            kramtrx.LastAcoustic = Medium + 1; // 保持1-based编号
+            kramtrx.LastAcoustic = im + 1; // 保持1-based编号
             
             // 计算当前层的最小声速
-            double min_cP = 1e8;
+            double min_cp = 1e8;
             for (int j = 0; j < SSP.N; ++j) {
-                min_cP = std::min(min_cP, std::real(SSP.cp_int[j]));
+                min_cp = std::min(min_cp, std::real(SSP.cp_int[j]));
             }
-            cMin = std::min(cMin, min_cP);
+            cMin = std::min(cMin, min_cp);
             
             // 计算B1和B1C
             double h2 = SQ(SSP.h);
             for (int j = 0; j < SSP.N; ++j) {
                 cp2 = real(SQ(SSP.cp_int(j)));
                 double val = omega2 / cp2;
-                kramtrx.B1[j] = -2.0 + h2 * std::real(val);
-                kramtrx.B1C[j] = std::imag(val);
+                kramtrx.B1[ii+j] = -2.0 + h2 * std::real(val);
+                kramtrx.B1C[ii+j] = std::imag(val);
             }
         } else { // 弹性介质情况
             SSP.Material = Media_Mode::MODE_E_Elastic;
@@ -93,11 +85,11 @@ void Initialize(parameters& params, KrakenMatrix& kramtrx) {
                 cp2 = SQ(std::real(SSP.cp_int(j)));
                 cs2 = SQ(std::real(SSP.cs_int(j)));
                 
-                kramtrx.B1(j) = Two_h / (SSP.rho_int(j) * cs2);
-                kramtrx.B2(j) = Two_h / (SSP.rho_int(j) * cp2);
-                kramtrx.B3(j) = 4.0 * Two_h * kramtrx.rho[j] * cs2 * (cp2 - cs2) / cp2;
-                kramtrx.B4(j) = Two_h * (cp2 - 2.0 * cs2) / cp2;
-                kramtrx.rho(j) = Two_h * std::real(omega2) * kramtrx.rho[j];
+                kramtrx.B1(ii+j) = Two_h / (SSP.rho_int(j) * cs2);
+                kramtrx.B2(ii+j) = Two_h / (SSP.rho_int(j) * cp2);
+                kramtrx.B3(ii+j) = 4.0 * Two_h * SSP.rho_int(j) * cs2 * (cp2 - cs2) / cp2;
+                kramtrx.B4(ii+j) = Two_h * (cp2 - 2.0 * cs2) / cp2;
+                kramtrx.rho(ii+j) = Two_h * std::real(omega2) * SSP.rho_int(j);
             }
         }
     }

@@ -1,4 +1,4 @@
-#include <pchipMod.h>
+#include "pchipMod.h"
 
 
 void PCHIP(VectorXd& x, VectorXcd& y, int N, MatrixXcd &PolyCoef,MatrixXcd &csWork)
