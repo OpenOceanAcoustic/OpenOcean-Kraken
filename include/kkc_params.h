@@ -54,6 +54,13 @@ enum class SSP_Mode
     MODE_Q_Quad, // 声速场二次逼近；要输入ssp矩阵
 };
 
+// ssp类型
+enum class Media_Mode
+{
+    MODE_A_Acoustic, // 声学层（没有横波）
+    MODE_E_Elastic, //
+};
+
 // 衰减选项
 enum class Atten_Mode
 {
@@ -139,6 +146,7 @@ struct rxyz_vector {
 
 // @brief 声速剖面结构体
 struct SSPStructure {
+    Media_Mode Material;
     // @brief 声速剖面点数
     int NPts;
     // @brief 声速剖面细分点数
