@@ -1,8 +1,7 @@
 #include "init.h"
 
 // 初始化有限差分方程
-void Initialize(parameters& params, KrakenMatrix& kramtrx, int iset) {
-    int ntimes = iset + 1;
+void Initialize(parameters& params, KrakenMatrix& kramtrx, int ntimes) {
     bool ElasticFlag = false;
     int NPoints = 0;
 

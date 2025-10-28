@@ -42,7 +42,6 @@ const int BCIiPowerF = -50;
 const double BCIRoof = 1.0e+50;
 const double BCIFloor = 1.0e-50;
 
-
 // 选项的枚举
 
 // ssp类型
