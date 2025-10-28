@@ -4,6 +4,6 @@
 #include "kkc_params.h"
 #include "sspMod.h"
 
-void Initialize(parameters& params, KrakenMatrix& kramtrx);
+void Initialize(parameters& params, KrakenMatrix& kramtrx, int iset);
 
 #endif // INIT_H

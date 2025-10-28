@@ -23,7 +23,8 @@ void EvaluateSSP(SSPStructure &SSP, SSP_Mode &ssptype)
     //     break;
     default:
         // 报错
-        std::cerr << "Unknown SSP type in EvaluateSSP" << std::endl;
+        std::cerr << "Unknown SSP type in EvaluateSSP, use default type *cLinear*" << std::endl;
+        cLinear(SSP);
         break;
     }
 }
@@ -41,19 +42,19 @@ void EvaluateSSP(SSPStructure &SSP, SSP_Mode &ssptype)
 void n2Linear(SSPStructure &SSP)
 {
     // 计算步长
-    double h = (SSP.z(SSP.z.size() - 1) - SSP.z(0)) / (SSP.N - 1);
+    double h = (SSP.z(SSP.z.size() - 1) - SSP.z(0)) / SSP.N;
     int Lay = 0; // 层索引
-    SSP.cp_int.resize(SSP.N);
-    SSP.cs_int.resize(SSP.N);
-    SSP.rho_int.resize(SSP.N);
+    SSP.cp_int.resize(SSP.N + 1);
+    SSP.cs_int.resize(SSP.N + 1);
+    SSP.rho_int.resize(SSP.N + 1);
 
     // 遍历每个分层点
-    for (int iz = 0; iz < SSP.N; iz++)
+    for (int iz = 0; iz < SSP.N + 1; iz++)
     {
         // 计算当前深度
         double z = SSP.z(0) + iz * h;
         // 确保最后一个点的深度准确
-        if (iz == SSP.N - 1)
+        if (iz == SSP.N + 1 - 1)
         {
             z = SSP.z(SSP.z.size() - 1);
         }
@@ -142,16 +143,19 @@ void n2Linear(SSPStructure &SSP)
 void cLinear(SSPStructure &SSP)
 {
     // 计算步长
-    double h = (SSP.z(SSP.z.size() - 1) - SSP.z(0)) / (SSP.N - 1);
+    double h = (SSP.z(SSP.z.size() - 1) - SSP.z(0)) / SSP.N;
     int Lay = 0; // 层索引
+    SSP.cp_int.resize(SSP.N + 1);
+    SSP.cs_int.resize(SSP.N + 1 + 1);
+    SSP.rho_int.resize(SSP.N + 1);
 
     // 遍历每个分层点
-    for (int iz = 0; iz < SSP.N; iz++)
+    for (int iz = 0; iz < SSP.N + 1; iz++)
     {
         // 计算当前深度
         double z = SSP.z(0) + iz * h;
         // 确保最后一个点的深度准确
-        if (iz == SSP.N - 1)
+        if (iz == SSP.N + 1 - 1)
         {
             z = SSP.z(SSP.z.size() - 1);
         }
@@ -208,16 +212,19 @@ void cLinear(SSPStructure &SSP)
 void cPCHIP(SSPStructure &SSP)
 {
     // 计算步长
-    double h = (SSP.z(SSP.z.size() - 1) - SSP.z(0)) / (SSP.N - 1);
+    double h = (SSP.z(SSP.z.size() - 1) - SSP.z(0)) / SSP.N;
     int Lay = 0; // 层索引
+    SSP.cp_int.resize(SSP.N + 1);
+    SSP.cs_int.resize(SSP.N + 1);
+    SSP.rho_int.resize(SSP.N + 1);
 
     // 遍历每个分层点
-    for (int iz = 0; iz < SSP.N; iz++)
+    for (int iz = 0; iz < SSP.N + 1; iz++)
     {
         // 计算当前深度
         double z = SSP.z(0) + iz * h;
         // 确保最后一个点的深度准确
-        if (iz == SSP.N - 1)
+        if (iz == SSP.N + 1 - 1)
         {
             z = SSP.z(SSP.z.size() - 1);
         }
@@ -277,17 +284,20 @@ void cPCHIP(SSPStructure &SSP)
 void cCubic(SSPStructure &SSP)
 {
     // 计算步长
-    double h = (SSP.z(SSP.z.size() - 1) - SSP.z(0)) / (SSP.N - 1);
+    double h = (SSP.z(SSP.z.size() - 1) - SSP.z(0)) / SSP.N;
     int Lay = 0; // 层索引
     std::complex<double> cp_cmplx, cs_cmplx, rho_cmplx, cpz_cmplx, cpzz_cmplx;
+    SSP.cp_int.resize(SSP.N + 1);
+    SSP.cs_int.resize(SSP.N + 1);
+    SSP.rho_int.resize(SSP.N + 1);
 
     // 遍历每个分层点
-    for (int iz = 0; iz < SSP.N; iz++)
+    for (int iz = 0; iz < SSP.N + 1; iz++)
     {
         // 计算当前深度
         double z = SSP.z(0) + iz * h;
         // 确保最后一个点的深度准确
-        if (iz == SSP.N - 1)
+        if (iz == SSP.N + 1 - 1)
         {
             z = SSP.z(SSP.z.size() - 1);
         }
@@ -419,14 +429,14 @@ void UpdateHSLoss(double &freq, double &freq0, int &Medium, Atten_Mode &AttenUni
     {
         HSTop.cp = CRCI(huge, HSTop.alphaR, HSTop.alphaI, freq, freq0,
                         AttenUnit, HSTop.beta, HSTop.ft);
-        HSTop.cp = CRCI(huge, HSTop.betaR, HSTop.betaI, freq, freq0,
+        HSTop.cs = CRCI(huge, HSTop.betaR, HSTop.betaI, freq, freq0,
                         AttenUnit, HSTop.beta, HSTop.ft);
     }
     if (HSBot.BC == BC_Mode::MODE_A_Half_space)
     {
         HSBot.cp = CRCI(huge, HSBot.alphaR, HSBot.alphaI, freq, freq0,
                         AttenUnit, HSBot.beta, HSBot.ft);
-        HSBot.cp = CRCI(huge, HSBot.betaR, HSBot.betaI, freq, freq0,
+        HSBot.cs = CRCI(huge, HSBot.betaR, HSBot.betaI, freq, freq0,
                         AttenUnit, HSBot.beta, HSBot.ft);
     }
 }
