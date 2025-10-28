@@ -1,10 +1,10 @@
 #include "init.h"
 
 // 初始化有限差分方程
-void Initialize(parameters& params, KrakenMatrix& kramtrx) {
+void Initialize(parameters& params, KrakenMatrix& kramtrx, int iset) {
+    int ntimes = iset + 1;
     bool ElasticFlag = false;
-    int IAllocStat = 0;
-    int NPoints = 0, N1;
+    int NPoints = 0;
 
     double Two_h;
     double cp2, cs2;
@@ -20,9 +20,11 @@ void Initialize(parameters& params, KrakenMatrix& kramtrx) {
     
     // 计算总网格点数
     kramtrx.N.resize(params.NMedia);
+    kramtrx.h.resize(params.NMedia);
     for (int i = 0; i < params.NMedia; ++i) {
-        NPoints += params.SSP[i].N;
-        kramtrx.N(i) = params.SSP[i].N;
+        kramtrx.N(i) = params.SSP[i].N*ntimes;
+        kramtrx.h(i) = params.SSP[i].depth / kramtrx.N(i);
+        NPoints += kramtrx.N(i);
     }
     NPoints += params.NMedia;
     
@@ -36,18 +38,16 @@ void Initialize(parameters& params, KrakenMatrix& kramtrx) {
     kramtrx.h.resize(params.NMedia);
     
     // 处理每个介质层
-    for (size_t im = 0; im < params.NMedia; ++im) { // C++使用0-based索引
+    for (int im = 0; im < params.NMedia; ++im) { // C++使用0-based索引
         // 计算当前层的起始位置
         if (im != 0) {
-            kramtrx.Loc[im] = kramtrx.Loc[im - 1] + kramtrx.N[im - 1] + 1;
+            kramtrx.Loc(im) = kramtrx.Loc(im - 1) + kramtrx.N(im - 1) + 1;
         }
         
-        N1 = kramtrx.N[im]; // 这一层媒质的差分网格点个数
         int ii = kramtrx.Loc[im]; // C++使用0-based索引，不需要+1
         
         // 调用EvaluateSSP函数
         SSPStructure& SSP = params.SSP[im];
-        kramtrx.h(im) = SSP.h;
 
         EvaluateSSP(SSP, params.SSPType);
         
@@ -61,25 +61,25 @@ void Initialize(parameters& params, KrakenMatrix& kramtrx) {
             
             // 计算当前层的最小声速
             double min_cp = 1e8;
-            for (int j = 0; j < SSP.N; ++j) {
-                min_cp = std::min(min_cp, std::real(SSP.cp_int[j]));
+            for (int j = 0; j < SSP.N + 1; ++j) {
+                min_cp = std::min(min_cp, std::real(SSP.cp_int(j)));
             }
             cMin = std::min(cMin, min_cp);
             
             // 计算B1和B1C
-            double h2 = SQ(SSP.h);
-            for (int j = 0; j < SSP.N; ++j) {
+            double h2 = SQ(kramtrx.h(im));
+            for (int j = 0; j < SSP.N + 1; ++j) {
                 cp2 = real(SQ(SSP.cp_int(j)));
                 double val = omega2 / cp2;
-                kramtrx.B1[ii+j] = -2.0 + h2 * std::real(val);
-                kramtrx.B1C[ii+j] = std::imag(val);
+                kramtrx.B1(ii+j) = -2.0 + h2 * std::real(val);
+                kramtrx.B1C(ii+j) = std::imag(val);
             }
         } else { // 弹性介质情况
             SSP.Material = Media_Mode::MODE_E_Elastic;
             ElasticFlag = true;
             Two_h = 2.0 * kramtrx.h[im];
             
-            for (int j = 0; j < SSP.N; ++j) {
+            for (int j = 0; j < SSP.N + 1; ++j) {
                 cMin = std::min(std::real(SSP.cs_int[j]), cMin);
                 
                 cp2 = SQ(std::real(SSP.cp_int(j)));

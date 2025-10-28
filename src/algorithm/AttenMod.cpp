@@ -76,7 +76,6 @@ std::complex<double> CRCI(double &z, double &c, double &alpha, double &freq, dou
     // }
 
     return std::complex<double>(c, alphaT);
-    ;
 }
 
 double Franc_Garr(double f)

@@ -35,6 +35,8 @@ constexpr int MaxSSP = 1001;
 constexpr std::complex<float> I1(0, 1);
 constexpr std::complex<double> I1D(0.0, 1.0);
 
+// 外推系数
+const int NSet = 5;
 const int BCIiPowerR = 50;
 const int BCIiPowerF = -50;
 const double BCIRoof = 1.0e+50;
@@ -152,7 +154,7 @@ struct SSPStructure {
     // @brief 声速剖面细分点数
     int N;
     // 层厚度
-    int depth;
+    double depth;
     // 细分步长
     double h;
     // 介质层定义
