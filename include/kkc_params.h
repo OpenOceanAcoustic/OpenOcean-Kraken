@@ -32,6 +32,7 @@ constexpr double DegRad = pi / 180;
 constexpr double c0 = 1500;
 constexpr double HUGE1 = 1.0e8;
 constexpr int MaxSSP = 1001;
+const int MaxBisections = 50;
 constexpr std::complex<float> I1(0, 1);
 constexpr std::complex<double> I1D(0.0, 1.0);
 
@@ -59,7 +60,7 @@ enum class SSP_Mode
 enum class Media_Mode
 {
     MODE_A_Acoustic, // 声学层（没有横波）
-    MODE_E_Elastic, //
+    MODE_E_Elastic,  //
 };
 
 // 衰减选项
@@ -95,11 +96,11 @@ enum class Atten_Mode
 // 边界条件类型
 enum class BC_Mode
 {
-    MODE_R_Rigid,      // 刚性边界条件
-    MODE_V_Vacuum,     // 真空                       ——默认
-    MODE_F_File,       // 从文件读取边界条件
-    MODE_A_Half_space, // 半空间边界条件
-    MODE_G_Grain,      // 粒子边界条件
+    MODE_R_Rigid,       // 刚性边界条件
+    MODE_V_Vacuum,      // 真空                       ——默认
+    MODE_F_File,        // 从文件读取边界条件
+    MODE_A_Half_space,  // 半空间边界条件
+    MODE_G_Grain,       // 粒子边界条件
     MODE_P_Precomputed, // 预计算反射系数
 };
 
@@ -116,7 +117,6 @@ enum class Grid_Mode
     MODE_R_Rectangular, // 矩形网格    ——默认
     MODE_I_Irregular,   // 不规则网格
 };
-
 
 // kraken 计算矩阵
 struct KrakenMatrix
@@ -135,18 +135,17 @@ struct KrakenMatrix
     int modeCount;
 };
 
-
-
-struct rxyz_vector {
+struct rxyz_vector
+{
     VectorXd r;
     VectorXd x;
     VectorXd y;
     VectorXd z;
 };
 
-
 // @brief 声速剖面结构体
-struct SSPStructure {
+struct SSPStructure
+{
     Media_Mode Material;
     // @brief 声速剖面点数
     int NPts;
@@ -163,10 +162,10 @@ struct SSPStructure {
     // @brief 深度向量
     VectorXd z;
 
-    VectorXd alphaR; //声速，纵波速度
-    VectorXd alphaI; //横波速度
-    VectorXd betaR;//纵波衰减
-    VectorXd betaI;//横波衰减
+    VectorXd alphaR; // 声速，纵波速度
+    VectorXd alphaI; // 横波速度
+    VectorXd betaR;  // 纵波衰减
+    VectorXd betaI;  // 横波衰减
     // @brief 密度向量
     VectorXd rho;
 
@@ -195,9 +194,7 @@ struct SSPStructure {
     MatrixXcd csSpline;
     // @brief 密度三次样条系数
     MatrixXcd rhoSpline;
-
 };
-
 
 // @brief 半空间属性结构体
 struct HSInfo
