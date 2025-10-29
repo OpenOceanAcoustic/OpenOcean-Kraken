@@ -397,8 +397,8 @@ struct MeshParams
 struct EigenParams
 {
     int M;             // 模式数量
-    MatrixXd EVMat;    // 本征值矩阵
-    MatrixXd Extrap;   // 外推矩阵
+    VectorXd EVMat;    // 本征值矩阵(一维向量化)
+    VectorXd Extrap;   // 外推矩阵
     VectorXd k;        // 波数向量
     VectorXd VG;       // 群速度向量
     int LRecordLength; // 记录长度

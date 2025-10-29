@@ -13,8 +13,8 @@ void Initialize(parameters& params, KrakenMatrix& kramtrx, int ntimes) {
     double& Clow = params.Clow;
     double cMin = 1e8;
     double& cHigh = params.Chigh;
-    kramtrx.FirstAcoustic = 0;
-    kramtrx.Loc.resize(params.NMedia);
+    kramtrx.FirstAcoustic = -1;
+    kramtrx.Loc.resize(params.NMedia+1);
     kramtrx.Loc[0] = 0; // C++使用0-based索引
     
     // 计算总网格点数
@@ -43,20 +43,21 @@ void Initialize(parameters& params, KrakenMatrix& kramtrx, int ntimes) {
             kramtrx.Loc(im) = kramtrx.Loc(im - 1) + kramtrx.N(im - 1) + 1;
         }
         
-        int ii = kramtrx.Loc[im]; // C++使用0-based索引，不需要+1
+        int ii = kramtrx.Loc(im); // C++使用0-based索引，不需要+1
         
         // 调用EvaluateSSP函数
-        SSPStructure& SSP = params.SSP[im];
+        SSPStructure SSP = params.SSP[im];
+        SSP.N = kramtrx.N(im);
 
         EvaluateSSP(SSP, params.SSPType);
         
         // 加载有限差分方程的对角线
         if (std::real(SSP.cs[0]) == 0.0) { // 声学介质情况
             SSP.Material = Media_Mode::MODE_A_Acoustic;
-            if (kramtrx.FirstAcoustic == 0) {
-                kramtrx.FirstAcoustic = im + 1; // 保持1-based编号
+            if (kramtrx.FirstAcoustic == -1) {
+                kramtrx.FirstAcoustic = im;
             }
-            kramtrx.LastAcoustic = im + 1; // 保持1-based编号
+            kramtrx.LastAcoustic = im;
             
             // 计算当前层的最小声速
             double min_cp = 1e8;
