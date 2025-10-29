@@ -35,11 +35,12 @@ constexpr int MaxSSP = 1001;
 constexpr std::complex<float> I1(0, 1);
 constexpr std::complex<double> I1D(0.0, 1.0);
 
+// 外推系数
+const int NSet = 5;
 const int BCIiPowerR = 50;
 const int BCIiPowerF = -50;
 const double BCIRoof = 1.0e+50;
 const double BCIFloor = 1.0e-50;
-
 
 // 选项的枚举
 
@@ -52,6 +53,13 @@ enum class SSP_Mode
     MODE_S_cCubic,   // 三次样条插值；
     MODE_A_Analytic,
     MODE_Q_Quad, // 声速场二次逼近；要输入ssp矩阵
+};
+
+// ssp类型
+enum class Media_Mode
+{
+    MODE_A_Acoustic, // 声学层（没有横波）
+    MODE_E_Elastic, //
 };
 
 // 衰减选项
@@ -119,6 +127,7 @@ struct KrakenMatrix
     VectorXi N;
     VectorXi Loc;
     VectorXd B1;
+    VectorXd B1C;
     VectorXd B2;
     VectorXd B3;
     VectorXd B4;
@@ -138,12 +147,13 @@ struct rxyz_vector {
 
 // @brief 声速剖面结构体
 struct SSPStructure {
+    Media_Mode Material;
     // @brief 声速剖面点数
     int NPts;
     // @brief 声速剖面细分点数
     int N;
     // 层厚度
-    int depth;
+    double depth;
     // 细分步长
     double h;
     // 介质层定义
@@ -387,8 +397,8 @@ struct MeshParams
 struct EigenParams
 {
     int M;             // 模式数量
-    MatrixXd EVMat;    // 本征值矩阵
-    MatrixXd Extrap;   // 外推矩阵
+    VectorXd EVMat;    // 本征值矩阵(一维向量化)
+    VectorXd Extrap;   // 外推矩阵
     VectorXd k;        // 波数向量
     VectorXd VG;       // 群速度向量
     int LRecordLength; // 记录长度
