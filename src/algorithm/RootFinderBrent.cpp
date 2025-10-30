@@ -1,9 +1,10 @@
 #include "RootFinderBrent.h"
-#include <cmath>
 
-namespace RootFinderBrent {
 
-void ZBRENTX(double &x, double &a, double &b, const double t, std::string &errorMessage, FunctType funct) {
+void ZBRENTX(double &x, double &a, double &b, const double t, 
+        int& iset, int &mode, double &Delta, int &iPower, KrakenMatrix &kramtrx,
+           parameters& params, VectorXd &EVMat, bool coutmodes, int &modeCount,
+    std::string &errorMessage, FunctType funct) {
     int iExpA, iExpB, iExpC;
     const double MACHEP = 1.0E-16;
     const double TEN = 10.0;
@@ -13,8 +14,8 @@ void ZBRENTX(double &x, double &a, double &b, const double t, std::string &error
     errorMessage = "";
     
     // 计算区间端点的函数值
-    funct(a, fa, iExpA);
-    funct(b, fb, iExpB);
+    funct(iset, mode, a, fa, iExpA, kramtrx, params, EVMat, false, modeCount);
+    funct(iset, mode, b, fb, iExpB, kramtrx, params, EVMat, false, modeCount);
     
     // 检查区间端点函数值是否异号
     if ((fa > 0.0 && fb > 0.0) || (fa < 0.0 && fb < 0.0)) {
@@ -131,7 +132,7 @@ void ZBRENTX(double &x, double &a, double &b, const double t, std::string &error
         }
         
         // 计算新的b点函数值
-        funct(b, fb, iExpB);
+        funct(iset, mode, b, fb, iExpB, kramtrx, params, EVMat, false, modeCount);
         
         // 更新c点
         if ((fb > 0.0) == (fc > 0.0)) {
@@ -155,5 +156,3 @@ void ZBRENTX(double &x, double &a, double &b, const double t, std::string &error
     // 返回找到的零点
     x = b;
 }
-
-} // namespace RootFinderBrent

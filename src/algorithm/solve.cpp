@@ -4,18 +4,19 @@
 std::string FileRoot, Title;
 int MODFile, PRTFile, IRecProfile, LRecordLength, Nfreq, NSets;
 
-// 调用ZBRENTX函数声明（假设在其他文件中定义）
-void ZBRENTX(double &x, double x1, double x2, double Eps, std::string &ErrorMessage,
-             void (*Funct)(double, double &, int &));
 
 // ERROUT函数声明（假设在其他文件中定义）
-void ERROUT(const std::string &routine, const std::string &message);
+void ERROUT(const std::string &routine, const std::string &message)
+{
+
+};
 
 // Solve1函数：使用Sturm序列分离本征值以及用Brent求根法求得本征值
 void Solve1(int& iset, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &params)
 {
     int iPower = 0, NTotal, NzTab = 0, mode = 0;
     double x, x1, x2, xMin, xMax, Eps, Delta;
+    bool iscountm = true;
     std::string ErrorMessage;
     VectorXd xL, xR;
     double omega2 = SQ(2 * pi * params.freqinfo->freq);
@@ -25,7 +26,7 @@ void Solve1(int& iset, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &pa
     // 确定模态数量
     xMin = 1.00001 * omega2 / SQ(params.Chigh);
 
-    FUNCT(iset, mode, xMin, Delta, iPower, kramtrx, params, eigen.EVMat, false, modeCount);
+    FUNCT(iset, mode, xMin, Delta, iPower, kramtrx, params, eigen.EVMat, iscountm, modeCount);
     int M = modeCount;
     kramtrx.modeCount = M;
 
@@ -44,7 +45,7 @@ void Solve1(int& iset, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &pa
     }
 
     xMax = omega2 / SQ(params.Clow); // 最大波数的平方
-    FUNCT(iset, mode, xMax, Delta, iPower, kramtrx, params, eigen.EVMat, false, modeCount);
+    FUNCT(iset, mode, xMax, Delta, iPower, kramtrx, params, eigen.EVMat, iscountm, modeCount);
 
     M = M - modeCount;
 
@@ -75,14 +76,15 @@ void Solve1(int& iset, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &pa
     Bisection(iset, mode, xMin, xMax, xL, xR, kramtrx, params, eigen); // 初始化上下边界
 
     // 使用ZBRENT精化每个本征值
-    modeCount = 0; // 对应Fortran的.FALSE.
+    iscountm = false;
 
     for (int modeIdx = 0; modeIdx < M; ++modeIdx)
     {
         x1 = xL(modeIdx);
         x2 = xR(modeIdx);
         Eps = std::abs(x2) * std::pow(10.0, 2.0 - std::numeric_limits<double>::digits10);
-        ZBRENTX(x, x1, x2, Eps, ErrorMessage, FUNCT); // Brent求根法
+        ZBRENTX(x, x1, x2, Eps, iset, mode, Delta, iPower, kramtrx, params, eigen.EVMat, false, modeCount, 
+            ErrorMessage,FUNCT); // Brent求根法
 
         if (!ErrorMessage.empty())
         {
@@ -94,8 +96,8 @@ void Solve1(int& iset, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &pa
 }
 
 // FUNCT函数：计算色散关系
-void FUNCT(int& iset, int &mode, double x, double &Delta, int &iPower, KrakenMatrix &kramtrx,
-           parameters params, VectorXd &EVMat, bool coutmodes, int &modeCount)
+void FUNCT(int& iset, int &mode, double& x, double &Delta, int &iPower, KrakenMatrix &kramtrx,
+           parameters& params, VectorXd &EVMat, bool coutmodes, int &modeCount)
 {
     int iPowerBot;
     double f, g;

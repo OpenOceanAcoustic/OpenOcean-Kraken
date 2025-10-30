@@ -8,7 +8,7 @@ void BCImpedance(const double x,  bool isTop, const HSInfo &HS,
                  Matrix<ReflectionCoef, 1, Dynamic> &RTop, Matrix<ReflectionCoef, 1, Dynamic> &RBot)
 {
     int iTop = 0, iBot = 0, Medium;
-    VectorXd yV(5, 0.0);
+    VectorXd yV = VectorXd::Zero(5);
     double mu;
     double rhoInside = 1.0;
     std::complex<double> gammaS, gammaP, gammaS2, gammaP2;
