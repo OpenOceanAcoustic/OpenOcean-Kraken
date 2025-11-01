@@ -20,9 +20,6 @@ typedef void (*FunctType)(int& iset, int &mode, double& x, double &Delta, int &i
  *              函数形式：void funct(double x, double &g, int &ipow)，其中g * 10^ipow给出函数值
  */
 
-typedef void (*FunctType)(int& iset, int &mode, double& x, double &Delta, int &iPower, KrakenMatrix &kramtrx,
-           parameters& params, VectorXd &EVMat, bool coutmodes, int &modeCount);
-
     
 void ZBRENTX(double &x, double &a, double &b, const double t, 
         int& iset, int &mode, double &Delta, int &iPower, KrakenMatrix &kramtrx,

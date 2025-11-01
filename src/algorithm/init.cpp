@@ -1,7 +1,7 @@
 #include "init.h"
 
 // 初始化有限差分方程
-void Initialize(parameters& params, KrakenMatrix& kramtrx, int ntimes) {
+void Initialize(int& iset, parameters& params, KrakenMatrix& kramtrx, int ntimes) {
     bool ElasticFlag = false;
     int NPoints = 0;
 
@@ -24,6 +24,10 @@ void Initialize(parameters& params, KrakenMatrix& kramtrx, int ntimes) {
         kramtrx.N(i) = params.SSP[i].N*ntimes;
         kramtrx.h(i) = params.SSP[i].depth / kramtrx.N(i);
         NPoints += kramtrx.N(i);
+        if (i == 0)
+        {
+            kramtrx.hV(iset) = kramtrx.h(i);
+        }
     }
     NPoints += params.NMedia;
     

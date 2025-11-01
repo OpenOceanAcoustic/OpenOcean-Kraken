@@ -1,13 +1,12 @@
 #include "solve.h"
 
 // ERROUT函数声明（假设在其他文件中定义）
-void ERROUT(const std::string &routine, const std::string &message)
-{
+void ERROUT(const std::string &routine, const std::string &message) {
 
 };
 
 // Solve1函数：使用Sturm序列分离本征值以及用Brent求根法求得本征值
-void Solve1(int& iset, const int& NSets, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &params)
+void Solve1(int &iset, const int &NSets, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &params)
 {
     int iPower = 0, NTotal, NzTab = 0, mode = 0;
     double x, x1, x2, xMin, xMax, Eps, Delta;
@@ -16,7 +15,7 @@ void Solve1(int& iset, const int& NSets, EigenParams &eigen, KrakenMatrix &kramt
     VectorXd xL, xR;
     double omega2 = SQ(2 * pi * params.freqinfo->freq);
 
-    int modeCount = 0; // 对应Fortran的.TRUE.
+    int modeCount = 0;
 
     // 确定模态数量
     xMin = 1.00001 * omega2 / SQ(params.Chigh);
@@ -79,8 +78,8 @@ void Solve1(int& iset, const int& NSets, EigenParams &eigen, KrakenMatrix &kramt
         x1 = xL(modeIdx);
         x2 = xR(modeIdx);
         Eps = std::abs(x2) * std::pow(10.0, 2.0 - std::numeric_limits<double>::digits10);
-        ZBRENTX(x, x1, x2, Eps, iset, mode, Delta, iPower, kramtrx, params, eigen.EVMat, false, modeCount, 
-            ErrorMessage, FUNCT); // Brent求根法
+        ZBRENTX(x, x1, x2, Eps, iset, mode, Delta, iPower, kramtrx, params, eigen.EVMat, iscountm, modeCount,
+                ErrorMessage, FUNCT); // Brent求根法
 
         if (!ErrorMessage.empty())
         {
@@ -91,9 +90,52 @@ void Solve1(int& iset, const int& NSets, EigenParams &eigen, KrakenMatrix &kramt
     }
 }
 
+void Solve2(int &iset, const int &NSets, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &params)
+{
+    double omega2 = SQ(2 * pi * params.freqinfo->freq), x1, x2, Tolerance, Delta;
+    double x = omega2 / SQ(params.Clow);
+    int Iteration, MaxIteration = 2000, iPower = 0, modeCount = 0;
+    string ErrorMessage;
+
+    bool iscountm = false;
+
+    VectorXd P;
+    P.resize(10);
+
+    for (int mode = 0; mode < eigen.M; mode++)
+    {
+        x = 1.0001 * x;
+        if (iset >= 1)
+        {
+            for (int i = 0; i < iset; i++)
+            {
+                P(i) = eigen.EVMat(iset * eigen.M + mode);
+            }
+            if (iset >= 2)
+            {
+                for (int ii = 0; ii < iset - 1; ii++)
+                {
+                    for (int j = 0; j < iset - ii - 1; j++)
+                    {
+                        x1 = SQ(kramtrx.hV(j));
+                        x2 = SQ(kramtrx.hV(j + ii));
+                        P(j) = ((SQ(kramtrx.hV(iset)) - x2) * P(j) -
+                                (SQ(kramtrx.hV(iset)) - x1) * P(j + 1)) /
+                               (x1 - x2);
+                    }
+                }
+                x = P(1);
+            }
+        }
+        Tolerance = abs( x ) * kramtrx.B1.size() * pow(10.0, ( 1.0 - std::numeric_limits<double>::digits10));
+        ZSecantX( x, Tolerance, Iteration, MaxIteration, iset, mode, Delta, iPower, kramtrx, params
+            , eigen.EVMat, iscountm, modeCount, ErrorMessage, FUNCT );
+    }
+}
+
 // FUNCT函数：计算色散关系
-void FUNCT(int& iset, int &mode, double& x, double &Delta, int &iPower, KrakenMatrix &kramtrx,
-           parameters& params, VectorXd &EVMat, bool coutmodes, int &modeCount)
+void FUNCT(int &iset, int &mode, double &x, double &Delta, int &iPower, KrakenMatrix &kramtrx,
+           parameters &params, VectorXd &EVMat, bool coutmodes, int &modeCount)
 {
     int iPowerBot;
     double f, g;
@@ -203,12 +245,11 @@ void AcousticLayers(double x, double &f, double &g, int &iPower, KrakenMatrix &k
 }
 
 // Bisection函数：返回每个本征值的隔离区间
-void Bisection(int& iset, int& mode, double xMin, double xMax, VectorXd &xL, VectorXd &xR,
+void Bisection(int &iset, int &mode, double xMin, double xMax, VectorXd &xL, VectorXd &xR,
                KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen)
 {
     int j, NZeros, NZer1, iPower, modeCount;
     double x, x1, x2, Delta;
-
 
     // 初始化左右边界
     for (int i = 0; i < xL.size(); ++i)
@@ -224,7 +265,7 @@ void Bisection(int& iset, int& mode, double xMin, double xMax, VectorXd &xL, Vec
     }
 
     // 遍历每个本征值
-    for (int modeIdx = 0; modeIdx < kramtrx.modeCount-1; ++modeIdx)
+    for (int modeIdx = 0; modeIdx < kramtrx.modeCount - 1; ++modeIdx)
     {
         if (xL(modeIdx) == xMin)
         {
@@ -232,7 +273,7 @@ void Bisection(int& iset, int& mode, double xMin, double xMax, VectorXd &xL, Vec
 
             // 计算x1的初始值
             x1 = xMin;
-            for (int i = modeIdx; i < kramtrx.modeCount ; ++i)
+            for (int i = modeIdx; i < kramtrx.modeCount; ++i)
             {
                 if (xL(i) > x1)
                 {

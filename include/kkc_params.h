@@ -123,6 +123,7 @@ struct KrakenMatrix
 {
     int FirstAcoustic;
     int LastAcoustic;
+    VectorXd hV;
     VectorXd h;
     VectorXi N;
     VectorXi Loc;

@@ -4,6 +4,7 @@
 #include "kkc_params.h"
 #include "BCImpedanceMod.h"
 #include "RootFinderBrent.h"
+#include "RootFinderSecantMod.h"
 
 // 函数声明
 void ERROUT(const std::string &routine, const std::string &message);

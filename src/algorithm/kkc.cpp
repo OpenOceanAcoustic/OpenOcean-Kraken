@@ -15,10 +15,11 @@ void run()
     // TODO 计算本征值和本征函数
     KrakenMatrix kramtrx; 
     EigenParams eigen;
+    kramtrx.hV.resize(NV.size());
     for (int iset = 0; iset < NSet; iset++)
     {
         int ntimes = NV[iset];
-        Initialize(params, kramtrx, ntimes);
+        Initialize(iset, params, kramtrx, ntimes);
         Solve1(iset, NV.size(), eigen, kramtrx, params);
         std::cout << "iset: " << iset << " \n" << eigen.EVMat.segment(iset*eigen.M, eigen.M).transpose() << std::endl;
     }
