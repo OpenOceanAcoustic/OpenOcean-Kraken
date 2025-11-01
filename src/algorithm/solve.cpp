@@ -1,10 +1,5 @@
 #include "solve.h"
 
-// 文件相关变量声明
-std::string FileRoot, Title;
-int MODFile, PRTFile, IRecProfile, LRecordLength, Nfreq, NSets;
-
-
 // ERROUT函数声明（假设在其他文件中定义）
 void ERROUT(const std::string &routine, const std::string &message)
 {
@@ -12,7 +7,7 @@ void ERROUT(const std::string &routine, const std::string &message)
 };
 
 // Solve1函数：使用Sturm序列分离本征值以及用Brent求根法求得本征值
-void Solve1(int& iset, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &params)
+void Solve1(int& iset, const int& NSets, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &params)
 {
     int iPower = 0, NTotal, NzTab = 0, mode = 0;
     double x, x1, x2, xMin, xMax, Eps, Delta;
@@ -48,11 +43,12 @@ void Solve1(int& iset, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &pa
     FUNCT(iset, mode, xMax, Delta, iPower, kramtrx, params, eigen.EVMat, iscountm, modeCount);
 
     M = M - modeCount;
+    eigen.M = M;
 
     if (M == 0)
     {
         // 处理无模态情况
-        LRecordLength = 32; // MOD文件片段长度
+        // LRecordLength = 32; // MOD文件片段长度
 
         // 打开MODFile并写入头部
         // 在C++中需要使用适当的文件I/O
@@ -63,7 +59,7 @@ void Solve1(int& iset, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &pa
 
     // 计算NTotal
     NTotal = 0;
-    for (int i = kramtrx.FirstAcoustic; i < kramtrx.LastAcoustic; ++i)
+    for (int i = kramtrx.FirstAcoustic; i <= kramtrx.LastAcoustic; ++i)
     {
         NTotal += kramtrx.N(i);
     }
@@ -84,7 +80,7 @@ void Solve1(int& iset, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &pa
         x2 = xR(modeIdx);
         Eps = std::abs(x2) * std::pow(10.0, 2.0 - std::numeric_limits<double>::digits10);
         ZBRENTX(x, x1, x2, Eps, iset, mode, Delta, iPower, kramtrx, params, eigen.EVMat, false, modeCount, 
-            ErrorMessage,FUNCT); // Brent求根法
+            ErrorMessage, FUNCT); // Brent求根法
 
         if (!ErrorMessage.empty())
         {
@@ -109,7 +105,7 @@ void FUNCT(int& iset, int &mode, double& x, double &Delta, int &iPower, KrakenMa
     BCImpedance(x, false, params.HSBot,
                 fTop, gTop, iPower, false, params.NMedia,
                 params.freqinfo->freq, kramtrx,
-                params.ReflectionCoef.RTop, params.ReflectionCoef.RBot);
+                params.ReflectionCoef.RTop, params.ReflectionCoef.RBot, modeCount);
 
     f = std::real(fTop);
     g = std::real(gTop);
@@ -119,9 +115,9 @@ void FUNCT(int& iset, int &mode, double& x, double &Delta, int &iPower, KrakenMa
 
     // 调用BCImpedance计算顶部阻抗
     BCImpedance(x, true, params.HSTop,
-                fTop, gTop, iPowerBot, false, params.NMedia,
+                fBot, gBot, iPowerBot, false, params.NMedia,
                 params.freqinfo->freq, kramtrx,
-                params.ReflectionCoef.RTop, params.ReflectionCoef.RBot);
+                params.ReflectionCoef.RTop, params.ReflectionCoef.RBot, modeCount);
 
     Delta = std::real(f * std::real(gBot) - g * std::real(fBot));
     iPower = iPower + iPowerBot;
@@ -159,7 +155,7 @@ void AcousticLayers(double x, double &f, double &g, int &iPower, KrakenMatrix &k
 {
     double p0 = 0.0, p1, p2, h2k2;
 
-    if (kramtrx.FirstAcoustic == 0)
+    if (kramtrx.FirstAcoustic == -1)
     {
         return;
     }

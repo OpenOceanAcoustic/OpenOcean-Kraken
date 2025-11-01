@@ -5,7 +5,8 @@ void BCImpedance(const double x,  bool isTop, const HSInfo &HS,
                  std::complex<double> &f, std::complex<double> &g,
                  int &iPower, const bool ComplexFlag, int &NMedia, 
                  double &freq, KrakenMatrix &kramtrx,
-                 Matrix<ReflectionCoef, 1, Dynamic> &RTop, Matrix<ReflectionCoef, 1, Dynamic> &RBot)
+                 Matrix<ReflectionCoef, 1, Dynamic> &RTop, Matrix<ReflectionCoef, 1, Dynamic> &RBot,
+                 int& modeCount)
 {
     int iTop = 0, iBot = 0, Medium;
     VectorXd yV = VectorXd::Zero(5);
@@ -24,7 +25,7 @@ void BCImpedance(const double x,  bool isTop, const HSInfo &HS,
     // 获取边界内部的密度和声速
     if (isTop)
     {
-        if (kramtrx.FirstAcoustic > 0)
+        if (kramtrx.FirstAcoustic > -1)
         {
             iTop      = kramtrx.Loc( kramtrx.FirstAcoustic ) + kramtrx.N( kramtrx.FirstAcoustic );
             rhoInside = kramtrx.rho(iTop);
@@ -34,12 +35,12 @@ void BCImpedance(const double x,  bool isTop, const HSInfo &HS,
     }
     else
     {
-        if (kramtrx.LastAcoustic > 0)
+        if (kramtrx.LastAcoustic > -1)
         {
             iBot      = kramtrx.Loc( kramtrx.LastAcoustic ) + kramtrx.N( kramtrx.LastAcoustic );
             rhoInside = kramtrx.rho(iBot);
-            cInside = std::sqrt(omega2 * hFirstAcoustic2) /
-                      (2.0 + kramtrx.B1(kramtrx.B1.size() - 1));
+            cInside = std::sqrt(omega2 * hFirstAcoustic2 /
+                      (2.0 + kramtrx.B1(kramtrx.B1.size() - 1)));
         }
     }
 
@@ -84,12 +85,12 @@ void BCImpedance(const double x,  bool isTop, const HSInfo &HS,
             g = yV(1);
             if (std::real(g) > 0.0)
             {
-                kramtrx.modeCount += 1;
+                modeCount += 1;
             }
         }
         else
         {
-            gammaP = std::sqrt(x - omega2 / (real(HS.cp) * real(HS.cp)));
+            gammaP = std::sqrt(std::complex<double>(x - omega2 / SQ(HS.cp)));
             f = gammaP;
             g = HS.rho;
             if (!ComplexFlag)
@@ -161,7 +162,7 @@ void BCImpedance(const double x,  bool isTop, const HSInfo &HS,
     }
     else
     {
-        if (kramtrx.LastAcoustic < NMedia)
+        if (kramtrx.LastAcoustic < NMedia-1)
         { // 从底部向上传播
             for (size_t im = NMedia - 1; im > kramtrx.LastAcoustic; --im)
             {

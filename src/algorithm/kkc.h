@@ -5,6 +5,7 @@
 #include "src/set_pekeris.h"
 #include "src/algorithm/init.h"
 #include "src/algorithm/sspMod.h"
+#include "src/algorithm/solve.h"
 
 void run();
 

@@ -44,12 +44,17 @@ void Initialize(parameters& params, KrakenMatrix& kramtrx, int ntimes) {
         }
         
         int ii = kramtrx.Loc(im); // C++使用0-based索引，不需要+1
+        Two_h = 2.0 * kramtrx.h[im];
         
         // 调用EvaluateSSP函数
         SSPStructure SSP = params.SSP[im];
         SSP.N = kramtrx.N(im);
 
         EvaluateSSP(SSP, params.SSPType);
+
+        // 打印rho_int
+        // std::cout << "RHO INT" << SSP.rho_int.transpose() << std::endl;
+
         
         // 加载有限差分方程的对角线
         if (std::real(SSP.cs[0]) == 0.0) { // 声学介质情况
@@ -73,7 +78,16 @@ void Initialize(parameters& params, KrakenMatrix& kramtrx, int ntimes) {
                 double val = omega2 / cp2;
                 kramtrx.B1(ii+j) = -2.0 + h2 * std::real(val);
                 kramtrx.B1C(ii+j) = std::imag(val);
+                kramtrx.rho(ii+j) = SSP.rho_int(j);
             }
+            // // 打印kramtrx内部参数
+            // std::cout << "B1" << kramtrx.B1.size() << kramtrx.B1.transpose() << std::endl;
+
+            // std::cout << "B1C" << kramtrx.B1C.size() << kramtrx.B1C.transpose() << std::endl;
+
+            // std::cout << "rho" << kramtrx.rho.size() << kramtrx.rho.transpose() << std::endl;
+
+
         } else { // 弹性介质情况
             SSP.Material = Media_Mode::MODE_E_Elastic;
             ElasticFlag = true;
@@ -94,6 +108,7 @@ void Initialize(parameters& params, KrakenMatrix& kramtrx, int ntimes) {
         }
     }
     
+
     // 处理底部半空间属性
     if (params.HSBot.BC == BC_Mode::MODE_A_Half_space) {
         if (std::real(params.HSBot.cs) > 0.0) { // 弹性底部半空间

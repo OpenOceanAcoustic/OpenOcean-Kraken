@@ -41,7 +41,7 @@ void ZBRENTX(double &x, double &a, double &b, const double t,
     while (true) {
 
         
-        while (std::abs(F1) < std::abs(F2)) {
+        if (std::abs(F1) < std::abs(F2)) {
             // 交换a, b, c和相应的函数值
             a = b;
             b = C;
