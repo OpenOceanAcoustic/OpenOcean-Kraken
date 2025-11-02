@@ -1,4 +1,4 @@
-#include "src/algorithm/kkc.h"
+#include "src/algorithm/run.h"
 
 int main()
 {

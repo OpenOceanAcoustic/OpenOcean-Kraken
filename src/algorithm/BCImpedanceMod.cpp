@@ -1,11 +1,8 @@
 #include "BCImpedanceMod.h"
 
 // 计算边界条件阻抗
-void BCImpedance(const double x,  bool isTop, const HSInfo &HS,
-                 std::complex<double> &f, std::complex<double> &g,
-                 int &iPower, const bool ComplexFlag, int &NMedia, 
-                 double &freq, KrakenMatrix &kramtrx,
-                 Matrix<ReflectionCoef, 1, Dynamic> &RTop, Matrix<ReflectionCoef, 1, Dynamic> &RBot,
+void BCImpedance(const double& x,  bool& isTop, complex<double> &f, complex<double> &g,
+                 int &iPower, const bool& isComplex, KrakenMatrix &kramtrx, parameters& params, 
                  int& modeCount)
 {
     int iTop = 0, iBot = 0, Medium;
@@ -15,19 +12,21 @@ void BCImpedance(const double x,  bool isTop, const HSInfo &HS,
     std::complex<double> gammaS, gammaP, gammaS2, gammaP2;
     std::complex<double> kx, kz, RCmplx, cInside(1500.0, 0.0);
     ReflectionCoef RInt;
-    double omega = 2 * pi * freq;
-    double omega2 = SQ(2 * pi * freq);
-    double hFirstAcoustic = kramtrx.h(0);
+    double omega = 2 * pi * params.freqinfo->freq;
+    double omega2 = SQ(omega);
+    double hFirstAcoustic = params.mesh.h(0);
     double hFirstAcoustic2 = SQ(hFirstAcoustic);
+    HSInfo& HS = params.HSTop;
 
     iPower = 0;
 
     // 获取边界内部的密度和声速
     if (isTop)
     {
-        if (kramtrx.FirstAcoustic > -1)
+
+        if (params.FirstAcoustic > -1)
         {
-            iTop      = kramtrx.Loc( kramtrx.FirstAcoustic ) + kramtrx.N( kramtrx.FirstAcoustic );
+            iTop      = params.mesh.Loc( params.FirstAcoustic ) + params.mesh.N( params.FirstAcoustic );
             rhoInside = kramtrx.rho(iTop);
             cInside = std::sqrt(omega2 * hFirstAcoustic2) /
                       (2.0 + kramtrx.B1(0));
@@ -35,13 +34,14 @@ void BCImpedance(const double x,  bool isTop, const HSInfo &HS,
     }
     else
     {
-        if (kramtrx.LastAcoustic > -1)
+        if (params.LastAcoustic > -1)
         {
-            iBot      = kramtrx.Loc( kramtrx.LastAcoustic ) + kramtrx.N( kramtrx.LastAcoustic );
+            iBot      = params.mesh.Loc( params.LastAcoustic ) + params.mesh.N( params.LastAcoustic );
             rhoInside = kramtrx.rho(iBot);
             cInside = std::sqrt(omega2 * hFirstAcoustic2 /
                       (2.0 + kramtrx.B1(kramtrx.B1.size() - 1)));
         }
+        HS = params.HSBot;
     }
 
     // 根据边界条件类型返回阻抗
@@ -93,7 +93,7 @@ void BCImpedance(const double x,  bool isTop, const HSInfo &HS,
             gammaP = std::sqrt(std::complex<double>(x - omega2 / SQ(HS.cp)));
             f = gammaP;
             g = HS.rho;
-            if (!ComplexFlag)
+            if (!isComplex)
             {
                 f = std::real(f);
                 g = std::real(g);
@@ -110,11 +110,11 @@ void BCImpedance(const double x,  bool isTop, const HSInfo &HS,
         // 计算R(ThetaInt)
         if (isTop)
         {
-            InterpolateReflectionCoefficient(RInt, RTop);
+            InterpolateReflectionCoefficient(RInt, params.ReflectionCoef.RTop);
         }
         else
         {
-            InterpolateReflectionCoefficient(RInt, RBot);
+            InterpolateReflectionCoefficient(RInt, params.ReflectionCoef.RBot);
         }
 
         // 将R(theta)转换为Robin边界条件中的(f,g)
@@ -122,7 +122,7 @@ void BCImpedance(const double x,  bool isTop, const HSInfo &HS,
         f = I1D * kz * (1.0 - RCmplx) / (rhoInside * (1.0 + RCmplx));
         g = 1.0;
 
-        if (!ComplexFlag)
+        if (!isComplex)
         {
             f = 0.0;
             g = 1.0;
@@ -132,7 +132,7 @@ void BCImpedance(const double x,  bool isTop, const HSInfo &HS,
     { // 预计算反射系数
         // TODO InterpolateIRC
 
-        if (!ComplexFlag)
+        if (!isComplex)
         {
             f = 0.0;
             g = 1.0;
@@ -149,11 +149,11 @@ void BCImpedance(const double x,  bool isTop, const HSInfo &HS,
     // 穿过弹性层传播
     if (isTop)
     {
-        if (kramtrx.FirstAcoustic > 1)
+        if (params.FirstAcoustic > 1)
         { // 从顶部向下传播
-            for (size_t im = 0; im < kramtrx.FirstAcoustic; ++im)
+            for (size_t im = 0; im < params.FirstAcoustic; ++im)
             {
-                ElasticDN(x, yV, iPower, im, kramtrx);
+                ElasticDN(x, yV, iPower, im, kramtrx, params);
             }
 
             f = omega2 * yV(3);
@@ -162,11 +162,11 @@ void BCImpedance(const double x,  bool isTop, const HSInfo &HS,
     }
     else
     {
-        if (kramtrx.LastAcoustic < NMedia-1)
+        if (params.LastAcoustic < params.NMedia-1)
         { // 从底部向上传播
-            for (size_t im = NMedia - 1; im > kramtrx.LastAcoustic; --im)
+            for (size_t im = params.NMedia - 1; im > params.LastAcoustic; --im)
             {
-                ElasticUP(x, yV, iPower, im, kramtrx);
+                ElasticUP(x, yV, iPower, im, kramtrx, params);
             }
 
             f = omega2 * yV(3);
@@ -176,16 +176,16 @@ void BCImpedance(const double x,  bool isTop, const HSInfo &HS,
 }
 
 // 向上传播通过弹性层
-void ElasticUP(const double x, VectorXd &yV, int &iPower, const int Medium, KrakenMatrix &kramtrx)
+void ElasticUP(const double& x, VectorXd &yV, int &iPower, const int& Medium, KrakenMatrix &kramtrx, parameters& params)
 {
     VectorXd xV(5), zV(5);
 
-    double h = kramtrx.h(Medium);
+    double h = params.mesh.h(Medium);
     // 第一步使用欧拉法
     double two_x = 2.0 * x;
     double two_h = 2.0 * h;
     double four_h_x = 4.0 * h * x;
-    int j = kramtrx.Loc(Medium) + kramtrx.N(Medium); // C++是0-based
+    int j = params.mesh.Loc(Medium) + params.mesh.N(Medium); // C++是0-based
     double xB3 = x * kramtrx.B3(j) - kramtrx.B1(j);
 
     zV(0) = yV(0) - 0.5 * (kramtrx.B1(j) * yV(3) - kramtrx.B2(j) * yV(4));
@@ -195,7 +195,7 @@ void ElasticUP(const double x, VectorXd &yV, int &iPower, const int Medium, Krak
     zV(4) = yV(4) - 0.5 * (kramtrx.rho(j) * yV(0) - kramtrx.B1(j) * yV(1) - four_h_x * yV(2));
 
     // 改进的中点法
-    for (size_t ii = kramtrx.N(Medium) - 1; ii >= 0; --ii)
+    for (size_t ii = params.mesh.N(Medium) - 1; ii >= 0; --ii)
     {
         j--;
 
@@ -252,15 +252,15 @@ void ElasticUP(const double x, VectorXd &yV, int &iPower, const int Medium, Krak
 }
 
 // 向下传播通过弹性层
-void ElasticDN(const double x, VectorXd &yV, int &iPower, const int Medium, KrakenMatrix &kramtrx)
+void ElasticDN(const double x, VectorXd &yV, int &iPower, const int& Medium, KrakenMatrix &kramtrx, parameters& params)
 {
     VectorXd xV(5), zV(5);
 
     // 第一步使用欧拉法
     double two_x = 2.0 * x;
-    double two_h = 2.0 * kramtrx.h(Medium);
-    double four_h_x = 4.0 * kramtrx.h(Medium) * x;
-    int j = kramtrx.Loc(Medium); // C++是0-based
+    double two_h = 2.0 * params.mesh.h(Medium);
+    double four_h_x = 4.0 * params.mesh.h(Medium) * x;
+    int j = params.mesh.Loc(Medium); // C++是0-based
     double xB3 = x * kramtrx.B3(j) - kramtrx.B1(j);
 
     zV(0) = yV(0) + 0.5 * (kramtrx.B1(j) * yV(3) - kramtrx.B2(j) * yV(4));
@@ -270,7 +270,7 @@ void ElasticDN(const double x, VectorXd &yV, int &iPower, const int Medium, Krak
     zV(4) = yV(4) + 0.5 * (kramtrx.rho(j) * yV(0) - kramtrx.B1(j) * yV(1) - four_h_x * yV(2));
 
     // 改进的中点法
-    for (size_t ii = 0; ii < kramtrx.N(Medium); ++ii)
+    for (size_t ii = 0; ii < params.mesh.N(Medium); ++ii)
     {
         j++;
 
@@ -295,7 +295,7 @@ void ElasticDN(const double x, VectorXd &yV, int &iPower, const int Medium, Krak
         zV(4) = xV(4) + (kramtrx.rho(j) * yV(0) - kramtrx.B1(j) * yV(1) - four_h_x * yV(2));
 
         // 必要时进行缩放
-        if (ii != kramtrx.N(Medium) - 1)
+        if (ii != params.mesh.N(Medium) - 1)
         {
             if (std::abs(zV(1)) < BCIFloor)
             {

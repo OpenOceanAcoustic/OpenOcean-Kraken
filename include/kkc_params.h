@@ -118,23 +118,6 @@ enum class Grid_Mode
     MODE_I_Irregular,   // 不规则网格
 };
 
-// kraken 计算矩阵
-struct KrakenMatrix
-{
-    int FirstAcoustic;
-    int LastAcoustic;
-    VectorXd hV;
-    VectorXd h;
-    VectorXi N;
-    VectorXi Loc;
-    VectorXd B1;
-    VectorXd B1C;
-    VectorXd B2;
-    VectorXd B3;
-    VectorXd B4;
-    VectorXd rho;
-    int modeCount;
-};
 
 struct rxyz_vector
 {
@@ -381,11 +364,25 @@ struct ReflectionCoefInfo
     bool isDeg = false; // @brief 是否是角度制
 };
 
+// kraken 计算矩阵
+struct KrakenMatrix
+{
+    VectorXd B1;
+    VectorXd B1C;
+    VectorXd B2;
+    VectorXd B3;
+    VectorXd B4;
+    VectorXd rho;
+    int modeCount;
+};
+
+
 // 有限差分网格参数
 struct MeshParams
 {
-    int NSets;   // 网格集数量
-    int NV[5];   // Richardson外推系数数组
+    VectorXi Loc;
+    int NSets = 5;   // 网格集数量
+    int NV[5] = {1, 2, 4, 8, 16};   // Richardson外推系数数组
     VectorXi N;  // 各层的网格点数
     VectorXd h;  // 各层的网格步长
     VectorXd hV; // 网格步长向量
@@ -448,6 +445,9 @@ struct parameters
 
     // @brief 声源位置
     Position *Pos;
+
+    int FirstAcoustic;
+    int LastAcoustic;
 
     // @brief 声速剖面参数
     SSPStructure *SSP;

@@ -1,4 +1,4 @@
-#include "kkc.h"
+#include "run.h"
 
 void run()
 {
@@ -11,16 +11,16 @@ void run()
     UpdateHSLoss(params.freqinfo->freq, params.freqinfo->freq, params.NMedia, 
         params.AttenUnit, params.HSTop, params.HSBot);
     
-    vector<int> NV{1, 2, 4, 8, 16};
     // TODO 计算本征值和本征函数
     KrakenMatrix kramtrx; 
     EigenParams eigen;
-    kramtrx.hV.resize(NV.size());
+    int NVsize = sizeof(params.mesh.NV)/sizeof(params.mesh.NV[0]);
+    params.mesh.hV.resize(NVsize);
     for (int iset = 0; iset < NSet; iset++)
     {
-        int ntimes = NV[iset];
+        int ntimes = params.mesh.NV[iset];
         Initialize(iset, params, kramtrx, ntimes);
-        Solve1(iset, NV.size(), eigen, kramtrx, params);
+        Solve1(iset, NVsize, eigen, kramtrx, params);
         std::cout << "iset: " << iset << " \n" << eigen.EVMat.segment(iset*eigen.M, eigen.M).transpose() << std::endl;
     }
 }

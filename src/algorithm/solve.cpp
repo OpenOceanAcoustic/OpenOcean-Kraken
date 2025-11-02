@@ -5,6 +5,92 @@ void ERROUT(const std::string &routine, const std::string &message) {
 
 };
 
+void Solve(int &iset, const int &NSets, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &params, double &Error)
+{
+    double omega2 = SQ(2 * pi * params.freqinfo->freq);
+    int iprof = 0;
+    if (iprof > 0 && iset < 2 && params.modeType == ModeType::Couple)
+    {
+        Solve3(iset, NSets, eigen, kramtrx, params);
+    }
+    else if ((iset < 2) && (params.NMedia <= params.LastAcoustic - params.FirstAcoustic + 1))
+    {
+        Solve1(iset, NSets, eigen, kramtrx, params);
+    }
+    else
+    {
+        Solve2(iset, NSets, eigen, kramtrx, params);
+    }
+    eigen.Extrap.resize(NSets * eigen.M);
+    int start_idx = (iset - 1) * eigen.M;
+    int end_idx = start_idx + eigen.M - 1;
+    eigen.Extrap.segment(start_idx, eigen.M) = eigen.EVMat.segment(start_idx, eigen.M);
+
+    // 查找满足条件的最小位置
+    // Extrap(1, 1:M)对应索引为0到M-1
+    int Min_Loc = -1;
+    double threshold = omega2 / SQ(params.Chigh);
+    for (int mode = 0; mode < eigen.M; ++mode)
+    {
+        if (eigen.Extrap(mode) > threshold)
+        {                       // Extrap(1, mode+1)对应索引mode
+            Min_Loc = mode + 1; // Fortran是1基索引
+            break;
+        }
+    }
+    if (Min_Loc != -1)
+    {
+        eigen.M = Min_Loc;
+    }
+
+    // 计算NTotal：N(FirstAcoustic : LastAcoustic)的和
+    int NTotal = 0;
+    for (int i = params.FirstAcoustic; i <= params.LastAcoustic; ++i)
+    {
+        NTotal += params.mesh.N(i);
+    }
+    int NTotal1 = NTotal + 1;
+
+    // 如果是第一个网格，计算特征向量
+    if (iset == 0)
+    {
+        Vector(NTotal, NTotal1);
+    }
+
+    // 初始化误差和KEY
+    Error = 1.0e10;
+    int KEY = 2 * eigen.M / 3;
+
+    if (iset > 0)
+    {
+        // T1 = Extrap(1, KEY)，对应索引KEY-1
+        double T1 = eigen.Extrap(KEY);
+
+        // 理查森外推改善精度
+        for (int j = iset - 1; j >= 0; --j)
+        {
+            for (int mode = 0; mode < eigen.M; ++mode)
+            {
+                // 计算当前(j, mode)和(j+1, mode)在向量中的索引
+                int idx_j = j * eigen.M + mode;
+                int idx_j1 = (j + 1) * eigen.M + mode;
+
+                double x1 = SQ(params.mesh.NV[j]); // NV是0基存储
+                double x2 = SQ(params.mesh.NV[iset]);
+                double F1 = eigen.Extrap(idx_j);
+                double F2 = eigen.Extrap(idx_j1);
+
+                // 理查森外推公式
+                eigen.Extrap(idx_j) = F2 - (F1 - F2) / (x2 / x1 - 1.0);
+            }
+        }
+
+        // 计算误差
+        double T2 = eigen.Extrap(KEY);
+        Error = abs(T2 - T1);
+    }
+}
+
 // Solve1函数：使用Sturm序列分离本征值以及用Brent求根法求得本征值
 void Solve1(int &iset, const int &NSets, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &params)
 {
@@ -22,7 +108,7 @@ void Solve1(int &iset, const int &NSets, EigenParams &eigen, KrakenMatrix &kramt
 
     FUNCT(iset, mode, xMin, Delta, iPower, kramtrx, params, eigen.EVMat, iscountm, modeCount);
     int M = modeCount;
-    kramtrx.modeCount = M;
+    eigen.M = M;
 
     // 分配xL和xR的内存
     xL.resize(M + 1);
@@ -58,9 +144,9 @@ void Solve1(int &iset, const int &NSets, EigenParams &eigen, KrakenMatrix &kramt
 
     // 计算NTotal
     NTotal = 0;
-    for (int i = kramtrx.FirstAcoustic; i <= kramtrx.LastAcoustic; ++i)
+    for (int i = params.FirstAcoustic; i <= params.LastAcoustic; ++i)
     {
-        NTotal += kramtrx.N(i);
+        NTotal += params.mesh.N(i);
     }
 
     if (M > NTotal / 5)
@@ -117,20 +203,23 @@ void Solve2(int &iset, const int &NSets, EigenParams &eigen, KrakenMatrix &kramt
                 {
                     for (int j = 0; j < iset - ii - 1; j++)
                     {
-                        x1 = SQ(kramtrx.hV(j));
-                        x2 = SQ(kramtrx.hV(j + ii));
-                        P(j) = ((SQ(kramtrx.hV(iset)) - x2) * P(j) -
-                                (SQ(kramtrx.hV(iset)) - x1) * P(j + 1)) /
+                        x1 = SQ(params.mesh.hV(j));
+                        x2 = SQ(params.mesh.hV(j + ii));
+                        P(j) = ((SQ(params.mesh.hV(iset)) - x2) * P(j) -
+                                (SQ(params.mesh.hV(iset)) - x1) * P(j + 1)) /
                                (x1 - x2);
                     }
                 }
                 x = P(1);
             }
         }
-        Tolerance = abs( x ) * kramtrx.B1.size() * pow(10.0, ( 1.0 - std::numeric_limits<double>::digits10));
-        ZSecantX( x, Tolerance, Iteration, MaxIteration, iset, mode, Delta, iPower, kramtrx, params
-            , eigen.EVMat, iscountm, modeCount, ErrorMessage, FUNCT );
+        Tolerance = abs(x) * kramtrx.B1.size() * pow(10.0, (1.0 - std::numeric_limits<double>::digits10));
+        ZSecantX(x, Tolerance, Iteration, MaxIteration, iset, mode, Delta, iPower, kramtrx, params, eigen.EVMat, iscountm, modeCount, ErrorMessage, FUNCT);
     }
+}
+
+void Solve3(int &iset, const int &NSets, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &params)
+{
 }
 
 // FUNCT函数：计算色散关系
@@ -140,26 +229,24 @@ void FUNCT(int &iset, int &mode, double &x, double &Delta, int &iPower, KrakenMa
     int iPowerBot;
     double f, g;
     std::complex<double> fTop, gTop, fBot, gBot;
+    bool isTop = false, isComplex = false;
 
     modeCount = 0;
 
     // 调用BCImpedance计算底部阻抗
-    BCImpedance(x, false, params.HSBot,
-                fTop, gTop, iPower, false, params.NMedia,
-                params.freqinfo->freq, kramtrx,
-                params.ReflectionCoef.RTop, params.ReflectionCoef.RBot, modeCount);
+    BCImpedance(x, isTop, fTop, gTop, iPower, isComplex, kramtrx,
+                params, modeCount);
 
     f = std::real(fTop);
     g = std::real(gTop);
 
     // 穿过声学层
-    AcousticLayers(x, f, g, iPower, kramtrx, coutmodes, modeCount);
+    AcousticLayers(x, f, g, iPower, kramtrx, params, coutmodes, modeCount);
 
+    isTop = true;
     // 调用BCImpedance计算顶部阻抗
-    BCImpedance(x, true, params.HSTop,
-                fBot, gBot, iPowerBot, false, params.NMedia,
-                params.freqinfo->freq, kramtrx,
-                params.ReflectionCoef.RTop, params.ReflectionCoef.RBot, modeCount);
+    BCImpedance(x, isTop, fBot, gBot, iPowerBot, isComplex, kramtrx,
+                params, modeCount);
 
     Delta = std::real(f * std::real(gBot) - g * std::real(fBot));
     iPower = iPower + iPowerBot;
@@ -170,7 +257,7 @@ void FUNCT(int &iset, int &mode, double &x, double &Delta, int &iPower, KrakenMa
     }
 
     // 减去之前的根
-    if (mode > 0 && params.NMedia > kramtrx.LastAcoustic - kramtrx.FirstAcoustic + 1)
+    if (mode > 0 && params.NMedia > params.LastAcoustic - params.FirstAcoustic + 1)
     {
         for (int j = 0; j < mode; ++j)
         {
@@ -193,27 +280,27 @@ void FUNCT(int &iset, int &mode, double &x, double &Delta, int &iPower, KrakenMa
 }
 
 // AcousticLayers函数：穿过声学层
-void AcousticLayers(double x, double &f, double &g, int &iPower, KrakenMatrix &kramtrx, bool &coutmodes, int &modeCount)
+void AcousticLayers(double x, double &f, double &g, int &iPower, KrakenMatrix &kramtrx, parameters &params, bool &coutmodes, int &modeCount)
 {
     double p0 = 0.0, p1, p2, h2k2;
 
-    if (kramtrx.FirstAcoustic == -1)
+    if (params.FirstAcoustic == -1)
     {
         return;
     }
 
     // 遍历声学层
-    for (int im = kramtrx.LastAcoustic; im >= kramtrx.FirstAcoustic; --im)
+    for (int im = params.LastAcoustic; im >= params.FirstAcoustic; --im)
     {
-        h2k2 = SQ(kramtrx.h(im)) * x;
-        int ii = kramtrx.Loc(im) + kramtrx.N(im);
-        double rhoMedium = kramtrx.rho(kramtrx.Loc(im)); // 使用每层顶部的密度值
+        h2k2 = SQ(params.mesh.h(im)) * x;
+        int ii = params.mesh.Loc(im) + params.mesh.N(im);
+        double rhoMedium = kramtrx.rho(params.mesh.Loc(im)); // 使用每层顶部的密度值
 
         p1 = -2.0 * g;
-        p2 = (kramtrx.B1(ii) - h2k2) * g - 2.0 * kramtrx.h(im) * f * rhoMedium;
+        p2 = (kramtrx.B1(ii) - h2k2) * g - 2.0 * params.mesh.h(im) * f * rhoMedium;
 
         // 向上穿过单层介质
-        for (ii = kramtrx.Loc(im) + kramtrx.N(im) - 1; ii >= kramtrx.Loc(im); --ii)
+        for (ii = params.mesh.Loc(im) + params.mesh.N(im) - 1; ii >= params.mesh.Loc(im); --ii)
         {
             p0 = p1;
             p1 = p2;
@@ -238,8 +325,8 @@ void AcousticLayers(double x, double &f, double &g, int &iPower, KrakenMatrix &k
         }
 
         // 计算f和g
-        rhoMedium = kramtrx.rho(kramtrx.Loc(im));
-        f = -(p2 - p0) / (2.0 * kramtrx.h(im)) / rhoMedium;
+        rhoMedium = kramtrx.rho(params.mesh.Loc(im));
+        f = -(p2 - p0) / (2.0 * params.mesh.h(im)) / rhoMedium;
         g = -p1;
     }
 }
@@ -259,13 +346,13 @@ void Bisection(int &iset, int &mode, double xMin, double xMax, VectorXd &xL, Vec
     }
     FUNCT(iset, mode, xMax, Delta, iPower, kramtrx, params, eigen.EVMat, true, NZer1);
 
-    if (kramtrx.modeCount == 1)
+    if (eigen.M == 1)
     {
         return; // 如果只寻找一个模态，快速退出
     }
 
     // 遍历每个本征值
-    for (int modeIdx = 0; modeIdx < kramtrx.modeCount - 1; ++modeIdx)
+    for (int modeIdx = 0; modeIdx < eigen.M - 1; ++modeIdx)
     {
         if (xL(modeIdx) == xMin)
         {
@@ -273,7 +360,7 @@ void Bisection(int &iset, int &mode, double xMin, double xMax, VectorXd &xL, Vec
 
             // 计算x1的初始值
             x1 = xMin;
-            for (int i = modeIdx; i < kramtrx.modeCount; ++i)
+            for (int i = modeIdx; i < eigen.M; ++i)
             {
                 if (xL(i) > x1)
                 {
@@ -317,4 +404,28 @@ void Bisection(int &iset, int &mode, double xMin, double xMax, VectorXd &xL, Vec
             }
         }
     }
+}
+
+void Vector(int &iset, int &mode, double xMin, double xMax, VectorXd &xL, VectorXd &xR,
+            KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen,
+            int &NTotal, int &NTotal1)
+{
+    int j = 0;
+    double h_rho;
+    VectorXd z(NTotal1), Phi(NTotal1), d(NTotal1), e(NTotal1+1), zTab;
+    z(0) = params.SSP->z(params.FirstAcoustic);
+    for (int im = params.FirstAcoustic; im < params.LastAcoustic; im++)
+    {
+        h_rho = params.mesh.h(im) * kramtrx.rho(params.mesh.Loc(im));
+        for (int ii = 1; j <= params.mesh.N(im); j++)
+        {
+            e(j + ii) = 1.0 / h_rho;
+            z(j + ii) = z(j) + params.mesh.h(im) * ii;
+            j = j + params.mesh.N(im);
+        }
+    }
+    e(NTotal1) = 1.0 / h_rho;
+    MergeVectors(params.Pos->Sz, params.Pos->Rz, zTab);
+    // TODO
+
 }
