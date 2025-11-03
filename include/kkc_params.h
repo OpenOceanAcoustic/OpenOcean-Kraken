@@ -35,6 +35,8 @@ constexpr int MaxSSP = 1001;
 const int MaxBisections = 50;
 constexpr std::complex<float> I1(0, 1);
 constexpr std::complex<double> I1D(0.0, 1.0);
+// 定义最大迭代次数
+const int MAXIT = 1;
 
 // 外推系数
 const int NSet = 5;
@@ -131,6 +133,7 @@ struct rxyz_vector
 struct SSPStructure
 {
     Media_Mode Material;
+    double sigma;
     // @brief 声速剖面点数
     int NPts;
     // @brief 声速剖面细分点数

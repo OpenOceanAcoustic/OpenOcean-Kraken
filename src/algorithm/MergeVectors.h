@@ -3,6 +3,9 @@
 
 #include "kkc_params.h"
 
-void MergeVectors(const Eigen::VectorXd& x, const Eigen::VectorXd& y, Eigen::VectorXd& z);
+void MergeVectors(VectorXd& x, VectorXd& y, VectorXd& z, int& NzTab);
+void Weight_dble(VectorXd& x, int Nx, 
+                 VectorXd& xTab, int NxTab, 
+                 VectorXd& w, VectorXi& Ix);
 
 #endif // MERGEVECTORS_H

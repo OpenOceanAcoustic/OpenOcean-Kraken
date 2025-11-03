@@ -1,7 +1,7 @@
 
 #include "MergeVectors.h"
 
-void MergeVectors(VectorXd& x, VectorXd& y, VectorXd& z) {
+void MergeVectors(VectorXd& x, VectorXd& y, VectorXd& z, int& NzTab) {
     int ix = 0, iy = 0, iz = 0;       // x的索引（0基）
     int Nx = x.size();  // x的长度
     int Ny = y.size();  // y的长度
@@ -39,6 +39,41 @@ void MergeVectors(VectorXd& x, VectorXd& y, VectorXd& z) {
 
         temp(iz++) = current;           // 添加元素
     }
+    NzTab = iz;
     z.resize(iz);
     z = temp.head(iz);  // 赋值给输出向量
+}
+
+
+void Weight_dble(VectorXd& x, int Nx, 
+                 VectorXd& xTab, int NxTab, 
+                 VectorXd& w, VectorXi& Ix) {
+    // 快速返回：如果插值点只有一个
+    if (Nx == 1) {
+        w(0) = 0.0;
+        Ix(0) = 0;  // 0-based索引
+        return;
+    }
+
+    int L = 0;  // 初始索引（0-based）
+
+    // 为每个需要计算权重的点循环
+    for (int IxTab = 0; IxTab < NxTab; ++IxTab) {
+        // 搜索满足[x(L), x(L+1)]包含xTab(IxTab)的索引L
+        // 循环条件：当前点大于右邻点，且未到达倒数第二个点（避免L+1越界）
+        while (xTab(IxTab) > x(L + 1) && L < Nx - 2) {
+            L++;
+        }
+
+        // 记录0-based索引和插值权重
+        Ix(IxTab) = L;
+        // 权重计算：(目标点 - 左端点) / (右端点 - 左端点)
+        w(IxTab) = (xTab(IxTab) - x(L)) / (x(L + 1) - x(L));
+
+        // 原注释中的特殊处理代码（底跟踪接收器）
+        // if (w(IxTab) != 0.0) {
+        //     Ix(IxTab) = std::min(1, NxTab - 1);  // 0-based的第二个元素索引为1
+        //     w(IxTab) = 0.0;
+        // }
+    }
 }

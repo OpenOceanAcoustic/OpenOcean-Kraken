@@ -6,21 +6,45 @@ void run()
     set_pekeris(params);
 
     // 初始化cp cs
-    UpdateSSPLoss(params.freqinfo->freq, params.freqinfo->freq, params.NMedia, 
-        params.SSPType, params.AttenUnit, params.SSP);
-    UpdateHSLoss(params.freqinfo->freq, params.freqinfo->freq, params.NMedia, 
-        params.AttenUnit, params.HSTop, params.HSBot);
-    
+    UpdateSSPLoss(params.freqinfo->freq, params.freqinfo->freq, params.NMedia,
+                  params.SSPType, params.AttenUnit, params.SSP);
+    UpdateHSLoss(params.freqinfo->freq, params.freqinfo->freq, params.NMedia,
+                 params.AttenUnit, params.HSTop, params.HSBot);
+
     // TODO 计算本征值和本征函数
-    KrakenMatrix kramtrx; 
+    KrakenMatrix kramtrx;
     EigenParams eigen;
-    int NVsize = sizeof(params.mesh.NV)/sizeof(params.mesh.NV[0]);
-    params.mesh.hV.resize(NVsize);
-    for (int iset = 0; iset < NSet; iset++)
+    EigenFunction eigenfun;
+    double error;
+    params.mesh.hV.resize(params.mesh.NSets);
+    for (int iset = 0; iset < params.mesh.NSets; iset++)
     {
         int ntimes = params.mesh.NV[iset];
         Initialize(iset, params, kramtrx, ntimes);
-        Solve1(iset, NVsize, eigen, kramtrx, params);
-        std::cout << "iset: " << iset << " \n" << eigen.EVMat.segment(iset*eigen.M, eigen.M).transpose() << std::endl;
+        SolveEp(iset, params.mesh.NSets, eigen, eigenfun, kramtrx, params, error);
+        if (error * 1000.0 * params.Rmax < 1.0)
+        {
+            break;
+        }
+        else
+        {
+            if (iset == params.mesh.NSets - 1)
+                cout << "Warning in KRAKEN : Too many meshes needed: check convergence" << endl;
+        }
+        std::cout << "iset: " << iset << " \n"
+                  << eigen.EVMat.segment(iset * eigen.M, eigen.M).transpose() << std::endl;
     }
+
+    int M=0;
+
+    while (eigen.Extrap(M) <= SQ(2 * pi * params.freqinfo->freq / params.Chigh))
+    {
+        M++;
+    }
+    M--;
+    eigen.k.resize(M);
+    for (int i=0; i<M; i++)
+    {
+        eigen.k(i) = sqrt(eigen.Extrap(i) + eigen.k(i));
+    } 
 }
