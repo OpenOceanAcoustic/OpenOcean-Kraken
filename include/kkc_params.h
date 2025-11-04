@@ -403,7 +403,8 @@ struct EigenParams
 // 本征函数结构体
 struct EigenFunction
 {
-    MatrixXcd phi;  // 本征函数值
+    MatrixXcd phiR;  // 本征函数值
+    MatrixXcd phiS;  // 本征函数值
     VectorXi modes; // 模式索引
     VectorXd depth; // 深度向量
 };
