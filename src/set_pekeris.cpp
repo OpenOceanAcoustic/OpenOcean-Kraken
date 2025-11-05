@@ -41,16 +41,23 @@ void set_pekeris(parameters& params)
         params.Pos->Rr(i) = 100 * (i + 1);
     }
     params.Pos->NRz = 201;
+    params.Pos->NRz_per_range = params.Pos->NRz;
     params.Pos->Rz.resize(params.Pos->NRz);
+    params.Pos->Ro.resize(params.Pos->NRz);
     for(size_t i = 0; i < params.Pos->NRz; ++i){
         params.Pos->Rz(i) = i;
+        params.Pos->Ro(i) = 0;
     }
+    params.Pos->GridType = Grid_Mode::MODE_R_Rectangular;
 
     // 最大距离
     params.Rmax = 200000;
 
     // 计算模式，本征值和声场
     params.runMode = Run_Mode::MODE_B_Both;
+
+    // 相干和非相干
+    params.coherenceType = CoherenceType::Coherent;
 
     // 点声源
     params.SourceType = Source_Mode::MODE_R_Point;

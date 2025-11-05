@@ -436,8 +436,8 @@ void VectorSolve(KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen, 
     }
     e(NTotal1) = 1.0 / h_rho;
     MergeVectors(params.Pos->Sz, params.Pos->Rz, zTab, NzTab, Ix, Iy);
-    eigenfun.phiS.resize(params.Pos->Sz.size(), eigen.M);
-    eigenfun.phiR.resize(params.Pos->Rz.size(), eigen.M);
+    eigenfun.phiS.resize(eigen.M, params.Pos->Sz.size());
+    eigenfun.phiR.resize(eigen.M, params.Pos->Rz.size());
 
     WTS.resize(NzTab);
     IzTab.resize(NzTab);
@@ -511,12 +511,12 @@ void VectorSolve(KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen, 
         for (int isz = 0; isz < Ix.size(); isz++)
         {
             int index = IzTab(Ix(isz));
-            eigenfun.phiS(isz, mode) = complex<double>(Phi(index)) + WTS(index) * complex<double>(Phi(index + 1) - Phi(index));
+            eigenfun.phiS(mode, isz) = complex<double>(Phi(index)) + WTS(index) * complex<double>(Phi(index + 1) - Phi(index));
         }
         for (int irz = 0; irz < Iy.size(); irz++)
         {
             int index = IzTab(Iy(irz));
-            eigenfun.phiR(irz, mode) = complex<double>(Phi(index)) + WTS(index) * complex<double>(Phi(index + 1) - Phi(index));
+            eigenfun.phiR(mode, irz) = complex<double>(Phi(index)) + WTS(index) * complex<double>(Phi(index + 1) - Phi(index));
         }
         std::cout << "mode:" << mode << std::endl;
         std::cout << "Phi: \n" << Phi << std::endl;

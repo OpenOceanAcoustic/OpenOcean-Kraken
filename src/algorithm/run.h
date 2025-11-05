@@ -6,6 +6,7 @@
 #include "src/algorithm/init.h"
 #include "src/algorithm/sspMod.h"
 #include "src/algorithm/solve.h"
+#include "src/algorithm/field.h"
 
 void run();
 

@@ -263,6 +263,8 @@ struct Position
     VectorXd Rr;
     // @brief 接收器z坐标
     VectorXd Rz;
+    // @brief 阵列水平倾斜距离
+    VectorXd Ro;
     // // @brief 用于插值的权重ws
     // VectorXd ws;
     // // @brief 用于插值的权重wr
@@ -422,6 +424,13 @@ enum class Run_Mode
     MODE_B_Both   // 同时计算模式和声场
 };
 
+// 相干和非相干
+enum class CoherenceType
+{
+    Coherent, // 相干
+    Incoherent // 非相干
+};
+
 // ModeType
 enum class ModeType
 {
@@ -512,6 +521,9 @@ struct parameters
 
     // 运行模式
     Run_Mode runMode; // Kraken运行模式
+
+    // 相干和非相干
+    CoherenceType coherenceType; // 相干和非相干
 
     // 模式类型
     ModeType modeType; // 模式类型

@@ -31,20 +31,29 @@ void run()
             if (iset == params.mesh.NSets - 1)
                 cout << "Warning in KRAKEN : Too many meshes needed: check convergence" << endl;
         }
-        
     }
 
-    int M=0;
+    int M = 0;
     VectorXd Ex1 = eigen.Extrap.segment(0, eigen.M);
-    cout<< "Ex1: \n" << Ex1 << endl;
+    cout << "Ex1: \n"
+         << Ex1 << endl;
     while (M < eigen.M && Ex1(M) > SQ(2 * pi * params.freqinfo->freq / params.Chigh))
     {
         M++;
     }
     eigen.M = M;
     eigen.k.resize(M);
-    for (int i=0; i<M; i++)
+    for (int i = 0; i < M; i++)
     {
         eigen.k(i) = sqrt(eigen.Extrap(i) + eigen.k(i));
-    } 
+    }
+    size_t N = (size_t)params.Pos->NSz * (size_t)params.Pos->NRz_per_range * (size_t)params.Pos->NRr;
+    std::complex<float> *u_AllSources;
+    u_AllSources = new std::complex<float>[N];
+    for (int isz = 0; isz < params.Pos->NSz; isz++)
+    {
+        field(eigenfun, eigen, params, u_AllSources, isz);
+    }
+    string filename = "test";
+    export_shd(filename, params, u_AllSources);
 }
