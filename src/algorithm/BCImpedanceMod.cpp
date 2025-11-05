@@ -16,7 +16,7 @@ void BCImpedance(const double& x,  bool& isTop, complex<double> &f, complex<doub
     double omega2 = SQ(omega);
     double hFirstAcoustic = params.mesh.h(0);
     double hFirstAcoustic2 = SQ(hFirstAcoustic);
-    HSInfo& HS = params.HSTop;
+    HSInfo HS = params.HSTop;
 
     iPower = 0;
 
@@ -151,7 +151,7 @@ void BCImpedance(const double& x,  bool& isTop, complex<double> &f, complex<doub
     {
         if (params.FirstAcoustic > 1)
         { // 从顶部向下传播
-            for (size_t im = 0; im < params.FirstAcoustic; ++im)
+            for (int im = 0; im < params.FirstAcoustic; ++im)
             {
                 ElasticDN(x, yV, iPower, im, kramtrx, params);
             }
@@ -164,7 +164,7 @@ void BCImpedance(const double& x,  bool& isTop, complex<double> &f, complex<doub
     {
         if (params.LastAcoustic < params.NMedia-1)
         { // 从底部向上传播
-            for (size_t im = params.NMedia - 1; im > params.LastAcoustic; --im)
+            for (int im = params.NMedia - 1; im > params.LastAcoustic; --im)
             {
                 ElasticUP(x, yV, iPower, im, kramtrx, params);
             }

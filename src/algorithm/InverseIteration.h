@@ -7,6 +7,6 @@ void InverseIterationD(int N,
                        VectorXd& D, 
                        VectorXd& E, 
                        int& IERR, 
-                       VectorXd& EigenVector);
+                       VectorXd& PhiVector);
                        
 #endif

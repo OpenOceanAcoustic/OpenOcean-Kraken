@@ -6,7 +6,7 @@ void InverseIterationD(int N,
                        VectorXd& D, 
                        VectorXd& E, 
                        int& IERR, 
-                       VectorXd& EigenVector) {
+                       VectorXd& PhiVector) {
     IERR = 0;
 
     // 计算矩阵的无穷范数
@@ -55,7 +55,7 @@ void InverseIterationD(int N,
     RV3(N-1) = 0.0;
 
     // 初始化特征向量
-    EigenVector.setConstant(uk);
+    PhiVector.setConstant(uk);
 
     // 反迭代主循环
     for (int iter = 0; iter < MAXIT; ++iter) {
@@ -63,32 +63,32 @@ void InverseIterationD(int N,
         u = 0.0;
         v = 0.0;
         for (int i = N-1; i >= 0; --i) {  // 从最后一个元素向前
-            double temp = EigenVector(i) - u * RV2(i) - v * RV3(i);
-            EigenVector(i) = temp / RV1(i);
+            double temp = PhiVector(i) - u * RV2(i) - v * RV3(i);
+            PhiVector(i) = temp / RV1(i);
             v = u;
-            u = EigenVector(i);
+            u = PhiVector(i);
         }
 
         // 计算向量范数并检查收敛
-        norm = EigenVector.array().abs().sum();
+        norm = PhiVector.array().abs().sum();
         if (norm >= 1.0) {
             return;  // 收敛，返回结果
         }
 
-        // 缩放向量
+        // 缩放向量         
         xu = eps4 / norm;
-        EigenVector *= xu;
+        PhiVector *= xu;
 
         // 前向消去
         for (int i = 1; i < N; ++i) {  // i对应Fortran的2~N
-            double u_val = EigenVector(i);
+            double u_val = PhiVector(i);
 
             // 检查是否在三角化过程中交换过行
             if (RV1(i-1) == E(i)) {
-                u_val = EigenVector(i-1);
-                EigenVector(i-1) = EigenVector(i);
+                u_val = PhiVector(i-1);
+                PhiVector(i-1) = PhiVector(i);
             }
-            EigenVector(i) = u_val - RV4(i) * EigenVector(i-1);
+            PhiVector(i) = u_val - RV4(i) * PhiVector(i-1);
         }
     }
 

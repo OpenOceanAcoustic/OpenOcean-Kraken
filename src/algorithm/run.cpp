@@ -22,7 +22,7 @@ void run()
         int ntimes = params.mesh.NV[iset];
         Initialize(iset, params, kramtrx, ntimes);
         SolveEp(iset, params.mesh.NSets, eigen, eigenfun, kramtrx, params, error);
-        if (error * 1000.0 * params.Rmax < 1.0)
+        if (error * params.Rmax < 1.0)
         {
             break;
         }
@@ -31,17 +31,17 @@ void run()
             if (iset == params.mesh.NSets - 1)
                 cout << "Warning in KRAKEN : Too many meshes needed: check convergence" << endl;
         }
-        std::cout << "iset: " << iset << " \n"
-                  << eigen.EVMat.segment(iset * eigen.M, eigen.M).transpose() << std::endl;
+        
     }
 
     int M=0;
-
-    while (eigen.Extrap(M) <= SQ(2 * pi * params.freqinfo->freq / params.Chigh))
+    VectorXd Ex1 = eigen.Extrap.segment(0, eigen.M);
+    cout<< "Ex1: \n" << Ex1 << endl;
+    while (M < eigen.M && Ex1(M) > SQ(2 * pi * params.freqinfo->freq / params.Chigh))
     {
         M++;
     }
-    M--;
+    eigen.M = M;
     eigen.k.resize(M);
     for (int i=0; i<M; i++)
     {

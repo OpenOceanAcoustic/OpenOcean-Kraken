@@ -206,6 +206,8 @@ struct HSInfo
     // @brief 边界条件类型
     BC_Mode BC;
     double Mz; // 设置Grain size才需要
+    // @brief 界面粗糙度
+    double sigma;
 };
 
 struct BdryPt2
@@ -397,7 +399,7 @@ struct EigenParams
     int M;             // 模式数量
     VectorXd EVMat;    // 本征值矩阵(一维向量化)
     VectorXd Extrap;   // 外推矩阵
-    VectorXd k;        // 波数向量
+    VectorXcd k;        // 波数向量
     VectorXd VG;       // 群速度向量
     int LRecordLength; // 记录长度
     int IRecProfile;   // 记录指针
