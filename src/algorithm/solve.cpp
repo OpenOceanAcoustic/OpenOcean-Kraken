@@ -419,7 +419,7 @@ void VectorSolve(KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen, 
     int j = 0, NzTab, iPower, modeCount = 0, L, ITP, IErr;
     double h_rho, x, xh2;
     VectorXd z(NTotal1), Phi(NTotal1), d(NTotal1), e(NTotal1 + 1), zTab, WTS;
-    VectorXi IzTab;
+    VectorXi IzTab, Ix, Iy;
     VectorXcd PhiTab;
     complex<double> fTop, gTop, fBot, gBot;
     bool isTop = true, isComplex = false;
@@ -435,8 +435,9 @@ void VectorSolve(KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen, 
         j = j + params.mesh.N(im);
     }
     e(NTotal1) = 1.0 / h_rho;
-    MergeVectors(params.Pos->Sz, params.Pos->Rz, zTab, NzTab);
-    eigenfun.phi.resize(NzTab, eigen.M);
+    MergeVectors(params.Pos->Sz, params.Pos->Rz, zTab, NzTab, Ix, Iy);
+    eigenfun.phiS.resize(params.Pos->Sz.size(), eigen.M);
+    eigenfun.phiR.resize(params.Pos->Rz.size(), eigen.M);
 
     WTS.resize(NzTab);
     IzTab.resize(NzTab);
@@ -506,11 +507,16 @@ void VectorSolve(KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen, 
         {
             Normalize(mode, Phi, ITP, NTotal1, x, kramtrx, params, eigen);
         }
-        for (int izt = 0; izt < IzTab.size(); izt++)
+
+        for (int isz = 0; isz < Ix.size(); isz++)
         {
-            int index = IzTab(izt);
-            PhiTab(izt) = complex<double>(Phi(index)) + WTS(index) * complex<double>(Phi(index + 1) - Phi(index));
-            eigenfun.phi(izt, mode) = PhiTab(izt);
+            int index = IzTab(Ix(isz));
+            eigenfun.phiS(isz, mode) = complex<double>(Phi(index)) + WTS(index) * complex<double>(Phi(index + 1) - Phi(index));
+        }
+        for (int irz = 0; irz < Iy.size(); irz++)
+        {
+            int index = IzTab(Iy(irz));
+            eigenfun.phiR(irz, mode) = complex<double>(Phi(index)) + WTS(index) * complex<double>(Phi(index + 1) - Phi(index));
         }
         std::cout << "mode:" << mode << std::endl;
         std::cout << "Phi: \n" << Phi << std::endl;
