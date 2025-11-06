@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # 添加debug选项
-option(BUILD_DEBUG "Build with debug information" ON)
+option(BUILD_DEBUG "Build with debug information" OFF)
 
 if(BUILD_DEBUG)
     message(STATUS "Building in debug mode")
@@ -29,13 +29,14 @@ include_directories(include)
 
 # 查找Eigen库
 include_directories(
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm
     ${CMAKE_CURRENT_SOURCE_DIR}/eigen
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 # 添加源文件
-file(GLOB SOURCES "src/*.cpp" "main.cpp")
+file(GLOB SOURCES "src/*.cpp" "src/algorithm/*.cpp" "main.cpp")
 
 # 创建可执行文件
 add_executable(${PROJECT_NAME} ${SOURCES})
