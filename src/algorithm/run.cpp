@@ -35,8 +35,8 @@ void run()
 
     int M = 0;
     VectorXd Ex1 = eigen.Extrap.segment(0, eigen.M);
-    cout << "Ex1: \n"
-         << Ex1 << endl;
+    // cout << "Ex1: \n"
+    //      << Ex1 << endl;
     while (M < eigen.M && Ex1(M) > SQ(2 * pi * params.freqinfo->freq / params.Chigh))
     {
         M++;
@@ -52,7 +52,7 @@ void run()
     u_AllSources = new std::complex<float>[N];
     for (int isz = 0; isz < params.Pos->NSz; isz++)
     {
-        field(eigenfun, eigen, params, u_AllSources, isz);
+        Evaluate(eigenfun, eigen, params, u_AllSources, isz);
     }
     string filename = "test";
     export_shd(filename, params, u_AllSources);

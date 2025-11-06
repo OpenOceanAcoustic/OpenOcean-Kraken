@@ -40,12 +40,12 @@ void set_pekeris(parameters& params)
     for(size_t i = 0; i < params.Pos->NRr; ++i){
         params.Pos->Rr(i) = 100 * (i + 1);
     }
-    params.Pos->NRz = 201;
+    params.Pos->NRz = 200;
     params.Pos->NRz_per_range = params.Pos->NRz;
     params.Pos->Rz.resize(params.Pos->NRz);
     params.Pos->Ro.resize(params.Pos->NRz);
     for(size_t i = 0; i < params.Pos->NRz; ++i){
-        params.Pos->Rz(i) = i;
+        params.Pos->Rz(i) = i+1;
         params.Pos->Ro(i) = 0;
     }
     params.Pos->GridType = Grid_Mode::MODE_R_Rectangular;

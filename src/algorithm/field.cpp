@@ -25,6 +25,7 @@ void Evaluate(EigenFunction &eigenfun, EigenParams &eigen, parameters &params, s
 
     VectorXcd col_vec;
     col_vec = eigenfun.phiS.col(isz);
+    // cout<< "col_vec:\n" << col_vec.real()<<endl;
 
     // 初始化因子和常数向量
     std::complex<double> factor = I1D * std::sqrt(2.0 * pi) * std::exp(I1D * pi / 4.0);

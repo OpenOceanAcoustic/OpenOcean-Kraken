@@ -25,8 +25,8 @@ void SolveEp(int &iset, const int &NSets, EigenParams &eigen, EigenFunction &eig
     int start_idx = iset * eigen.M;
     eigen.Extrap.segment(start_idx, eigen.M) = eigen.EVMat.segment(start_idx, eigen.M);
 
-    std::cout << "iset: " << iset << " \n"
-              << eigen.EVMat.segment(start_idx, eigen.M) << std::endl;
+    // std::cout << "iset: " << iset << " \n"
+    //           << eigen.EVMat.segment(start_idx, eigen.M) << std::endl;
 
     // 查找满足条件的最小位置
     // Extrap(1, 1:M)对应索引为0到M-1
@@ -418,8 +418,8 @@ void VectorSolve(KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen, 
 {
     int j = 0, NzTab, iPower, modeCount = 0, L, ITP, IErr;
     double h_rho, x, xh2;
-    VectorXd z(NTotal1), Phi(NTotal1), d(NTotal1), e(NTotal1 + 1), zTab, WTS;
-    VectorXi IzTab, Ix, Iy;
+    VectorXd z(NTotal1), Phi(NTotal1), d(NTotal1), e(NTotal1 + 1), zTab, WTS, WTR;
+    VectorXi ISzTab, IRzTab, Ix, Iy;
     VectorXcd PhiTab;
     complex<double> fTop, gTop, fBot, gBot;
     bool isTop = true, isComplex = false;
@@ -435,14 +435,23 @@ void VectorSolve(KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen, 
         j = j + params.mesh.N(im);
     }
     e(NTotal1) = 1.0 / h_rho;
-    MergeVectors(params.Pos->Sz, params.Pos->Rz, zTab, NzTab, Ix, Iy);
+    // MergeVectors(params.Pos->Sz, params.Pos->Rz, zTab, NzTab, Ix, Iy);
+    // 对声源深度和接收深度分别进行处理，不在需要合并
+
     eigenfun.phiS.resize(eigen.M, params.Pos->Sz.size());
     eigenfun.phiR.resize(eigen.M, params.Pos->Rz.size());
 
-    WTS.resize(NzTab);
-    IzTab.resize(NzTab);
-    PhiTab.resize(NzTab);
-    Weight_dble(z, NTotal1, zTab, NzTab, WTS, IzTab);
+    WTS.resize(params.Pos->NSz);
+    WTR.resize(params.Pos->NRz);
+    ISzTab.resize(params.Pos->NSz);
+    IRzTab.resize(params.Pos->NRz);
+
+    Weight_dble(z, NTotal1, params.Pos->Sz, params.Pos->NSz, WTS, ISzTab);
+    Weight_dble(z, NTotal1, params.Pos->Rz, params.Pos->NRz, WTR, IRzTab);
+
+    // cout << "ISzTab: " << ISzTab.transpose() << endl;
+    // cout << "IRzTab: " << IRzTab.transpose() << endl;
+    // cout << "WTR:" << WTR.transpose() << endl; 
 
     // TODO 写入mod的头
 
@@ -508,18 +517,18 @@ void VectorSolve(KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen, 
             Normalize(mode, Phi, ITP, NTotal1, x, kramtrx, params, eigen);
         }
 
-        for (int isz = 0; isz < Ix.size(); isz++)
+        for (int isz = 0; isz < params.Pos->NSz; isz++)
         {
-            int index = IzTab(Ix(isz));
-            eigenfun.phiS(mode, isz) = complex<double>(Phi(index)) + WTS(index) * complex<double>(Phi(index + 1) - Phi(index));
+            int index = ISzTab(isz);
+            eigenfun.phiS(mode, isz) = complex<double>(Phi(index)) + WTS(isz) * complex<double>(Phi(index + 1) - Phi(index));
         }
-        for (int irz = 0; irz < Iy.size(); irz++)
+        for (int irz = 0; irz < params.Pos->NRz; irz++)
         {
-            int index = IzTab(Iy(irz));
-            eigenfun.phiR(mode, irz) = complex<double>(Phi(index)) + WTS(index) * complex<double>(Phi(index + 1) - Phi(index));
+            int index = IRzTab(irz);
+            eigenfun.phiR(mode, irz) = complex<double>(Phi(index)) + WTR(irz) * complex<double>(Phi(index + 1) - Phi(index));
         }
-        std::cout << "mode:" << mode << std::endl;
-        std::cout << "Phi: \n" << Phi << std::endl;
+        // std::cout << "mode:" << mode << std::endl;
+        // std::cout << "Phi: \n" << Phi << std::endl;
     }
 }
 
