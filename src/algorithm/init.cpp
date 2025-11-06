@@ -1,8 +1,7 @@
 #include "init.h"
 
 // 初始化有限差分方程
-void Initialize(parameters& params, KrakenMatrix& kramtrx, int iset) {
-    int ntimes = iset + 1;
+void Initialize(int& iset, parameters& params, KrakenMatrix& kramtrx, int ntimes) {
     bool ElasticFlag = false;
     int NPoints = 0;
 
@@ -14,17 +13,21 @@ void Initialize(parameters& params, KrakenMatrix& kramtrx, int iset) {
     double& Clow = params.Clow;
     double cMin = 1e8;
     double& cHigh = params.Chigh;
-    kramtrx.FirstAcoustic = 0;
-    kramtrx.Loc.resize(params.NMedia);
-    kramtrx.Loc[0] = 0; // C++使用0-based索引
+    params.FirstAcoustic = -1;
+    params.mesh.Loc.resize(params.NMedia+1);
+    params.mesh.Loc[0] = 0; // C++使用0-based索引
     
     // 计算总网格点数
-    kramtrx.N.resize(params.NMedia);
-    kramtrx.h.resize(params.NMedia);
+    params.mesh.N.resize(params.NMedia);
+    params.mesh.h.resize(params.NMedia);
     for (int i = 0; i < params.NMedia; ++i) {
-        kramtrx.N(i) = params.SSP[i].N*ntimes;
-        kramtrx.h(i) = params.SSP[i].depth / kramtrx.N(i);
-        NPoints += kramtrx.N(i);
+        params.mesh.N(i) = params.SSP[i].N*ntimes;
+        params.mesh.h(i) = params.SSP[i].depth / params.mesh.N(i);
+        NPoints += params.mesh.N(i);
+        if (i == 0)
+        {
+            params.mesh.hV(iset) = params.mesh.h(i);
+        }
     }
     NPoints += params.NMedia;
     
@@ -35,29 +38,35 @@ void Initialize(parameters& params, KrakenMatrix& kramtrx, int iset) {
     kramtrx.B3.resize(NPoints);
     kramtrx.B4.resize(NPoints);
     kramtrx.rho.resize(NPoints);
-    kramtrx.h.resize(params.NMedia);
+    params.mesh.h.resize(params.NMedia);
     
     // 处理每个介质层
     for (int im = 0; im < params.NMedia; ++im) { // C++使用0-based索引
         // 计算当前层的起始位置
         if (im != 0) {
-            kramtrx.Loc(im) = kramtrx.Loc(im - 1) + kramtrx.N(im - 1) + 1;
+            params.mesh.Loc(im) = params.mesh.Loc(im - 1) + params.mesh.N(im - 1) + 1;
         }
         
-        int ii = kramtrx.Loc[im]; // C++使用0-based索引，不需要+1
+        int ii = params.mesh.Loc(im); // C++使用0-based索引，不需要+1
+        Two_h = 2.0 * params.mesh.h[im];
         
         // 调用EvaluateSSP函数
-        SSPStructure& SSP = params.SSP[im];
+        SSPStructure SSP = params.SSP[im];
+        SSP.N = params.mesh.N(im);
 
         EvaluateSSP(SSP, params.SSPType);
+
+        // 打印rho_int
+        // std::cout << "RHO INT" << SSP.rho_int.transpose() << std::endl;
+
         
         // 加载有限差分方程的对角线
         if (std::real(SSP.cs[0]) == 0.0) { // 声学介质情况
             SSP.Material = Media_Mode::MODE_A_Acoustic;
-            if (kramtrx.FirstAcoustic == 0) {
-                kramtrx.FirstAcoustic = im + 1; // 保持1-based编号
+            if (params.FirstAcoustic == -1) {
+                params.FirstAcoustic = im;
             }
-            kramtrx.LastAcoustic = im + 1; // 保持1-based编号
+            params.LastAcoustic = im;
             
             // 计算当前层的最小声速
             double min_cp = 1e8;
@@ -67,17 +76,26 @@ void Initialize(parameters& params, KrakenMatrix& kramtrx, int iset) {
             cMin = std::min(cMin, min_cp);
             
             // 计算B1和B1C
-            double h2 = SQ(kramtrx.h(im));
+            double h2 = SQ(params.mesh.h(im));
             for (int j = 0; j < SSP.N + 1; ++j) {
                 cp2 = real(SQ(SSP.cp_int(j)));
                 double val = omega2 / cp2;
                 kramtrx.B1(ii+j) = -2.0 + h2 * std::real(val);
                 kramtrx.B1C(ii+j) = std::imag(val);
+                kramtrx.rho(ii+j) = SSP.rho_int(j);
             }
+            // // 打印kramtrx内部参数
+            // std::cout << "B1" << kramtrx.B1.size() << kramtrx.B1.transpose() << std::endl;
+
+            // std::cout << "B1C" << kramtrx.B1C.size() << kramtrx.B1C.transpose() << std::endl;
+
+            // std::cout << "rho" << kramtrx.rho.size() << kramtrx.rho.transpose() << std::endl;
+
+
         } else { // 弹性介质情况
             SSP.Material = Media_Mode::MODE_E_Elastic;
             ElasticFlag = true;
-            Two_h = 2.0 * kramtrx.h[im];
+            Two_h = 2.0 * params.mesh.h[im];
             
             for (int j = 0; j < SSP.N + 1; ++j) {
                 cMin = std::min(std::real(SSP.cs_int[j]), cMin);
@@ -94,6 +112,7 @@ void Initialize(parameters& params, KrakenMatrix& kramtrx, int iset) {
         }
     }
     
+
     // 处理底部半空间属性
     if (params.HSBot.BC == BC_Mode::MODE_A_Half_space) {
         if (std::real(params.HSBot.cs) > 0.0) { // 弹性底部半空间

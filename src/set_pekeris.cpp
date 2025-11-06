@@ -22,6 +22,7 @@ void set_pekeris(parameters& params)
     params.HSBot.betaR = 0.0;
     params.HSBot.Depth = 200.0;
     params.HSBot.rho = 1.5;
+    params.HSBot.sigma = 0;
 
     // 相速度范围
     params.Chigh = 20000;
@@ -39,17 +40,24 @@ void set_pekeris(parameters& params)
     for(size_t i = 0; i < params.Pos->NRr; ++i){
         params.Pos->Rr(i) = 100 * (i + 1);
     }
-    params.Pos->NRz = 201;
+    params.Pos->NRz = 200;
+    params.Pos->NRz_per_range = params.Pos->NRz;
     params.Pos->Rz.resize(params.Pos->NRz);
+    params.Pos->Ro.resize(params.Pos->NRz);
     for(size_t i = 0; i < params.Pos->NRz; ++i){
-        params.Pos->Rz(i) = i;
+        params.Pos->Rz(i) = i+1;
+        params.Pos->Ro(i) = 0;
     }
+    params.Pos->GridType = Grid_Mode::MODE_R_Rectangular;
 
     // 最大距离
-    params.Rmax = 0.0;
+    params.Rmax = 200000;
 
     // 计算模式，本征值和声场
     params.runMode = Run_Mode::MODE_B_Both;
+
+    // 相干和非相干
+    params.coherenceType = CoherenceType::Coherent;
 
     // 点声源
     params.SourceType = Source_Mode::MODE_R_Point;
@@ -73,6 +81,7 @@ void set_pekeris(parameters& params)
     params.SSP->N = 200;
     params.SSP->depth = 200;
     params.SSP->h = params.SSP->depth / (params.SSP->N - 1);
+    params.SSP->sigma = 0;
 
 
     // params.SSP[1].NPts = 2;

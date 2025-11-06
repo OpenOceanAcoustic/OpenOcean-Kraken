@@ -32,8 +32,11 @@ constexpr double DegRad = pi / 180;
 constexpr double c0 = 1500;
 constexpr double HUGE1 = 1.0e8;
 constexpr int MaxSSP = 1001;
+const int MaxBisections = 50;
 constexpr std::complex<float> I1(0, 1);
 constexpr std::complex<double> I1D(0.0, 1.0);
+// 定义最大迭代次数
+const int MAXIT = 1;
 
 // 外推系数
 const int NSet = 5;
@@ -41,7 +44,6 @@ const int BCIiPowerR = 50;
 const int BCIiPowerF = -50;
 const double BCIRoof = 1.0e+50;
 const double BCIFloor = 1.0e-50;
-
 
 // 选项的枚举
 
@@ -60,7 +62,7 @@ enum class SSP_Mode
 enum class Media_Mode
 {
     MODE_A_Acoustic, // 声学层（没有横波）
-    MODE_E_Elastic, //
+    MODE_E_Elastic,  //
 };
 
 // 衰减选项
@@ -96,11 +98,11 @@ enum class Atten_Mode
 // 边界条件类型
 enum class BC_Mode
 {
-    MODE_R_Rigid,      // 刚性边界条件
-    MODE_V_Vacuum,     // 真空                       ——默认
-    MODE_F_File,       // 从文件读取边界条件
-    MODE_A_Half_space, // 半空间边界条件
-    MODE_G_Grain,      // 粒子边界条件
+    MODE_R_Rigid,       // 刚性边界条件
+    MODE_V_Vacuum,      // 真空                       ——默认
+    MODE_F_File,        // 从文件读取边界条件
+    MODE_A_Half_space,  // 半空间边界条件
+    MODE_G_Grain,       // 粒子边界条件
     MODE_P_Precomputed, // 预计算反射系数
 };
 
@@ -119,36 +121,19 @@ enum class Grid_Mode
 };
 
 
-// kraken 计算矩阵
-struct KrakenMatrix
+struct rxyz_vector
 {
-    int FirstAcoustic;
-    int LastAcoustic;
-    VectorXd h;
-    VectorXi N;
-    VectorXi Loc;
-    VectorXd B1;
-    VectorXd B1C;
-    VectorXd B2;
-    VectorXd B3;
-    VectorXd B4;
-    VectorXd rho;
-    int modeCount;
-};
-
-
-
-struct rxyz_vector {
     VectorXd r;
     VectorXd x;
     VectorXd y;
     VectorXd z;
 };
 
-
 // @brief 声速剖面结构体
-struct SSPStructure {
+struct SSPStructure
+{
     Media_Mode Material;
+    double sigma;
     // @brief 声速剖面点数
     int NPts;
     // @brief 声速剖面细分点数
@@ -164,10 +149,10 @@ struct SSPStructure {
     // @brief 深度向量
     VectorXd z;
 
-    VectorXd alphaR; //声速，纵波速度
-    VectorXd alphaI; //横波速度
-    VectorXd betaR;//纵波衰减
-    VectorXd betaI;//横波衰减
+    VectorXd alphaR; // 声速，纵波速度
+    VectorXd alphaI; // 横波速度
+    VectorXd betaR;  // 纵波衰减
+    VectorXd betaI;  // 横波衰减
     // @brief 密度向量
     VectorXd rho;
 
@@ -196,9 +181,7 @@ struct SSPStructure {
     MatrixXcd csSpline;
     // @brief 密度三次样条系数
     MatrixXcd rhoSpline;
-
 };
-
 
 // @brief 半空间属性结构体
 struct HSInfo
@@ -223,6 +206,8 @@ struct HSInfo
     // @brief 边界条件类型
     BC_Mode BC;
     double Mz; // 设置Grain size才需要
+    // @brief 界面粗糙度
+    double sigma;
 };
 
 struct BdryPt2
@@ -278,6 +263,8 @@ struct Position
     VectorXd Rr;
     // @brief 接收器z坐标
     VectorXd Rz;
+    // @brief 阵列水平倾斜距离
+    VectorXd Ro;
     // // @brief 用于插值的权重ws
     // VectorXd ws;
     // // @brief 用于插值的权重wr
@@ -384,11 +371,25 @@ struct ReflectionCoefInfo
     bool isDeg = false; // @brief 是否是角度制
 };
 
+// kraken 计算矩阵
+struct KrakenMatrix
+{
+    VectorXd B1;
+    VectorXd B1C;
+    VectorXd B2;
+    VectorXd B3;
+    VectorXd B4;
+    VectorXd rho;
+    int modeCount;
+};
+
+
 // 有限差分网格参数
 struct MeshParams
 {
-    int NSets;   // 网格集数量
-    int NV[5];   // Richardson外推系数数组
+    VectorXi Loc;
+    int NSets = 5;   // 网格集数量
+    int NV[5] = {1, 2, 4, 8, 16};   // Richardson外推系数数组
     VectorXi N;  // 各层的网格点数
     VectorXd h;  // 各层的网格步长
     VectorXd hV; // 网格步长向量
@@ -398,9 +399,9 @@ struct MeshParams
 struct EigenParams
 {
     int M;             // 模式数量
-    MatrixXd EVMat;    // 本征值矩阵
-    MatrixXd Extrap;   // 外推矩阵
-    VectorXd k;        // 波数向量
+    VectorXd EVMat;    // 本征值矩阵(一维向量化)
+    VectorXd Extrap;   // 外推矩阵
+    VectorXcd k;        // 波数向量
     VectorXd VG;       // 群速度向量
     int LRecordLength; // 记录长度
     int IRecProfile;   // 记录指针
@@ -409,7 +410,8 @@ struct EigenParams
 // 本征函数结构体
 struct EigenFunction
 {
-    MatrixXcd phi;  // 本征函数值
+    MatrixXcd phiR;  // 本征函数值
+    MatrixXcd phiS;  // 本征函数值
     VectorXi modes; // 模式索引
     VectorXd depth; // 深度向量
 };
@@ -420,6 +422,13 @@ enum class Run_Mode
     MODE_M_Modes, // 只计算简正波模式
     MODE_F_Field, // 计算声场
     MODE_B_Both   // 同时计算模式和声场
+};
+
+// 相干和非相干
+enum class CoherenceType
+{
+    Coherent, // 相干
+    Incoherent // 非相干
 };
 
 // ModeType
@@ -451,6 +460,9 @@ struct parameters
 
     // @brief 声源位置
     Position *Pos;
+
+    int FirstAcoustic;
+    int LastAcoustic;
 
     // @brief 声速剖面参数
     SSPStructure *SSP;
@@ -509,6 +521,9 @@ struct parameters
 
     // 运行模式
     Run_Mode runMode; // Kraken运行模式
+
+    // 相干和非相干
+    CoherenceType coherenceType; // 相干和非相干
 
     // 模式类型
     ModeType modeType; // 模式类型
