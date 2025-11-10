@@ -225,8 +225,45 @@ void Solve2(int &iset, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &pa
     }
 }
 
-void Solve3()
+void Solve3(int &iset, const int &NSets, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &params)
 {
+    int IT, MaxIT, iPower = 0, mode = 0; // NzTab = 0,
+    double x, xMin, Tolerance, Delta;
+    std::string ErrorMessage;
+
+    bool iscountm = false;
+
+    MaxIT = 500;
+
+    double omega2 = SQ(2 * pi * params.freqinfo->freq);
+
+    int modeCount = 0;
+
+    // 确定模态数量
+    xMin = 1.00001 * omega2 / SQ(params.Chigh);
+
+    FUNCT(iset, mode, xMin, Delta, iPower, kramtrx, params, eigen.EVMat, iscountm, modeCount);  
+    int M = modeCount;
+
+    for (int modeIdx = 0; modeIdx < M; ++modeIdx)
+    {
+        x = eigen.EVMat(iset * M + modeIdx);
+        Tolerance = std::abs(x) * std::pow(10.0, 2.0 - std::numeric_limits<double>::digits10);
+        ZSecantX(x, Tolerance, IT, MaxIT, iset, mode, Delta, iPower, kramtrx, params, eigen.EVMat, iscountm, modeCount, ErrorMessage, FUNCT);
+        
+        if (!ErrorMessage.empty())
+        {
+            // 输出警告信息
+        }
+
+        eigen.EVMat(iset * M + modeIdx) = x;
+
+        if (omega2 / SQ(params.Chigh) > x)
+        {
+            eigen.M = modeIdx;  // 调整为当前索引
+            return;
+        }
+    }
 }
 
 // FUNCT函数：计算色散关系
