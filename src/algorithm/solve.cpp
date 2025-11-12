@@ -11,7 +11,7 @@ void SolveEp(int &iset, const int &NSets, EigenParams &eigen, EigenFunction &eig
     int iprof = 0;
     if (iprof > 0 && iset < 2 && params.modeType == ModeType::Couple)
     {
-        Solve3();
+        Solve3(iset, eigen, kramtrx, params);
     }
     else if ((iset < 2) && (params.NMedia <= params.LastAcoustic - params.FirstAcoustic + 1))
     {
@@ -225,7 +225,7 @@ void Solve2(int &iset, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &pa
     }
 }
 
-void Solve3(int &iset, const int &NSets, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &params)
+void Solve3(int &iset, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &params)
 {
     int IT, MaxIT, iPower = 0, mode = 0; // NzTab = 0,
     double x, xMin, Tolerance, Delta;
@@ -491,7 +491,73 @@ void VectorSolve(KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen, 
     // cout << "WTR:" << WTR.transpose() << endl; 
 
     // TODO 写入mod的头
+    string filename;
+    std::ofstream MODFile(filename + ".mod", std::ios::binary);
+    if (!MODFile.is_open())
+    {
+        std::cerr << "无法打开MOD文件: " << filename << ".mod" << std::endl;
+        return;
+    }
 
+    // NzTab = params.Pos->NSz + params.Pos->NRz;
+    
+    int ifreq = 0, iprof = 0;
+    if (ifreq == 0 && iprof == 0)
+    {
+        eigen.LRecordLength = std::max( 2 * params.freqinfo->Nfreq, std::max( 2 * NzTab, std::max( 32, 3 * ( params.LastAcoustic - params.FirstAcoustic + 1 ) ) ) );
+    }
+    if (ifreq == 0)
+    {   
+        MODFile.seekp(eigen.IRecProfile * 4 * eigen.LRecordLength, std::ios::beg);
+        MODFile.write(reinterpret_cast<char*>(&eigen.LRecordLength), sizeof(int));
+        MODFile.write(params.Title.c_str(), params.Title.size());
+        MODFile.write(reinterpret_cast<char*>(&params.freqinfo->Nfreq), sizeof(int));
+        int numAcoustic = params.LastAcoustic - params.FirstAcoustic + 1;
+        MODFile.write(reinterpret_cast<char*>(&numAcoustic), sizeof(int));
+        MODFile.write(reinterpret_cast<char*>(&NzTab), sizeof(int));
+        MODFile.write(reinterpret_cast<char*>(&NzTab), sizeof(int));
+
+        MODFile.seekp((eigen.IRecProfile + 1) * 4 * eigen.LRecordLength, std::ios::beg);
+        for (int im = params.FirstAcoustic; im <= params.LastAcoustic; im++)
+        {   
+            MODFile.write(reinterpret_cast<char*>(&params.mesh.N(im)), sizeof(int));
+            MODFile.write(reinterpret_cast<char*>(&params.SSP->Material), sizeof(params.SSP->Material));  // fortran是字符串，这里是整数。而且只有一层，应该是params.SSP->Material[im]?
+        }
+        MODFile.seekp((eigen.IRecProfile + 2) * 4 * eigen.LRecordLength, std::ios::beg);
+        for (int im = params.FirstAcoustic; im <= params.LastAcoustic; im++)
+        {   
+            float depth = static_cast<float>(params.SSP->z(im));  // 转换double为float
+            MODFile.write(reinterpret_cast<char*>(&depth), sizeof(float));
+            float rho = kramtrx.rho(params.mesh.Loc(im));  // 转换double为float
+            MODFile.write(reinterpret_cast<char*>(&rho), sizeof(float));
+        }
+        MODFile.seekp((eigen.IRecProfile + 3) * 4 * eigen.LRecordLength, std::ios::beg);
+        MODFile.write(reinterpret_cast<char*>(params.freqinfo->freqvec.data()), params.freqinfo->Nfreq * sizeof(double));
+        MODFile.seekp((eigen.IRecProfile + 4) * 4 * eigen.LRecordLength, std::ios::beg);
+        for (int i = 0; i < NzTab; i++)
+        {
+            MODFile.write(reinterpret_cast<char*>(&zTab(i)), sizeof(double));
+        }
+        eigen.IRecProfile += 5;
+    }
+    MODFile.seekp((eigen.IRecProfile + 1) * 4 * eigen.LRecordLength, std::ios::beg);
+    MODFile.write(reinterpret_cast<char*>(&params.HSTop.BC), sizeof(params.HSTop.BC));  // 这也是整数而不是字符串
+    MODFile.write(reinterpret_cast<char*>(&params.HSTop.cp), sizeof(std::complex<double>));
+    MODFile.write(reinterpret_cast<char*>(&params.HSTop.cs), sizeof(std::complex<double>));
+    float HSToprho = static_cast<float>(params.HSTop.rho);  // 转换double为float
+    MODFile.write(reinterpret_cast<char*>(&HSToprho), sizeof(float));
+    float SSPz0 = static_cast<float>(params.SSP->z(0));  // 转换double为float
+    MODFile.write(reinterpret_cast<char*>(&SSPz0), sizeof(float));
+    MODFile.write(reinterpret_cast<char*>(&params.HSBot.BC), sizeof(params.HSBot.BC));  // 这也是整数而不是字符串
+    MODFile.write(reinterpret_cast<char*>(&params.HSBot.cp), sizeof(std::complex<double>));
+    MODFile.write(reinterpret_cast<char*>(&params.HSBot.cs), sizeof(std::complex<double>));
+    float HSBotrho = static_cast<float>(params.HSBot.rho);  // 转换double为float
+    MODFile.write(reinterpret_cast<char*>(&HSBotrho), sizeof(float));
+    float SSPzn = static_cast<float>(params.SSP->z(params.NMedia));  // 转换double为float
+    MODFile.write(reinterpret_cast<char*>(&SSPzn), sizeof(float));
+    MODFile.close();
+    // std::cout << "MOD文件导出完成: " << filename << std::endl;
+    
     for (int mode = 0; mode < eigen.M; mode++)
     {
         x = eigen.EVMat(mode);
