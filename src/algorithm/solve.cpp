@@ -498,8 +498,7 @@ void VectorSolve(KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen, 
         std::cerr << "无法打开MOD文件: " << filename << ".mod" << std::endl;
         return;
     }
-
-    // NzTab = params.Pos->NSz + params.Pos->NRz;
+    NzTab = params.Pos->NSz + params.Pos->NRz;
     
     int ifreq = 0, iprof = 0;
     if (ifreq == 0 && iprof == 0)
@@ -534,9 +533,13 @@ void VectorSolve(KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen, 
         MODFile.seekp((eigen.IRecProfile + 3) * 4 * eigen.LRecordLength, std::ios::beg);
         MODFile.write(reinterpret_cast<char*>(params.freqinfo->freqvec.data()), params.freqinfo->Nfreq * sizeof(double));
         MODFile.seekp((eigen.IRecProfile + 4) * 4 * eigen.LRecordLength, std::ios::beg);
-        for (int i = 0; i < NzTab; i++)
+        for (int isz = 0; isz < params.Pos->NSz; isz++)
         {
-            MODFile.write(reinterpret_cast<char*>(&zTab(i)), sizeof(double));
+            MODFile.write(reinterpret_cast<char*>(&params.Pos->Sz(isz)), sizeof(double));
+        }
+        for (int irz = 0; irz < params.Pos->NRz; irz++)
+        {
+            MODFile.write(reinterpret_cast<char*>(&params.Pos->Rz(irz)), sizeof(double));
         }
         eigen.IRecProfile += 5;
     }
@@ -555,8 +558,6 @@ void VectorSolve(KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen, 
     MODFile.write(reinterpret_cast<char*>(&HSBotrho), sizeof(float));
     float SSPzn = static_cast<float>(params.SSP->z(params.NMedia));  // 转换double为float
     MODFile.write(reinterpret_cast<char*>(&SSPzn), sizeof(float));
-    MODFile.close();
-    // std::cout << "MOD文件导出完成: " << filename << std::endl;
     
     for (int mode = 0; mode < eigen.M; mode++)
     {
@@ -632,7 +633,21 @@ void VectorSolve(KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen, 
         }
         // std::cout << "mode:" << mode << std::endl;
         // std::cout << "Phi: \n" << Phi << std::endl;
+        // 写入Phi
+        MODFile.seekp((eigen.IRecProfile + 2 + mode) * 4 * eigen.LRecordLength, std::ios::beg);
+        for (int isz = 0; isz < params.Pos->NSz; isz++)
+        {
+            std::complex<float> phiS = static_cast<std::complex<float>>(eigenfun.phiS(mode, isz));  // 转换double为float
+            MODFile.write(reinterpret_cast<char*>(&phiS), sizeof(std::complex<float>));
+        }
+        for (int irz = 0; irz < params.Pos->NRz; irz++)
+        {
+            std::complex<float> phiR = static_cast<std::complex<float>>(eigenfun.phiR(mode, irz));  // 转换double为float
+            MODFile.write(reinterpret_cast<char*>(&phiR), sizeof(std::complex<float>));
+        }
     }
+    MODFile.close();
+    std::cout << "MOD文件导出完成: " << filename << std::endl;
 }
 
 void Normalize(int &mode, VectorXd &Phi, int &ITP, int &NTotal1, double &x, KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen)
