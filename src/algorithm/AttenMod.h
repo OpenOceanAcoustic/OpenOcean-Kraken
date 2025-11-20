@@ -1,7 +1,7 @@
 //沉积层参数计算模块
 #ifndef ATTENMOD_H
 #define ATTENMOD_H
-#include "kkc_params.h"
+#include "../include/kkc_params.h"
 
 #include <cmath>
 std::complex<double> CRCI(double& z, double& c, double& alpha, double& freq, double& freq0, 
