@@ -645,11 +645,11 @@ void VectorSolve(KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen, 
                 }
             }
         }
-        // 打印phi和dphidz
-        std::cout << "mode:" << mode << std::endl;
-        std::cout << "phi:\n" << eigenfun.phi.row(mode).real().transpose() << std::endl;
+        // // 打印phi和dphidz
+        // std::cout << "mode:" << mode << std::endl;
+        // std::cout << "phi:\n" << eigenfun.phi.row(mode).real().transpose() << std::endl;
 
-        std::cout << "dphidz:\n" << eigenfun.dphidz.row(mode).real().transpose() << std::endl;
+        // std::cout << "dphidz:\n" << eigenfun.dphidz.row(mode).real().transpose() << std::endl;
 
         for (int isz = 0; isz < params.Pos->NSz; isz++)
         {
