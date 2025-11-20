@@ -11,7 +11,7 @@ void set_pekeris(parameters& params)
     params.Bdry = new BdryType();
 
     // 频率
-    params.freqinfo->freq = 100;
+    params.freqinfo->freq = 10;
 
     // 海面、海底参数
     params.HSTop.BC = BC_Mode::MODE_V_Vacuum;

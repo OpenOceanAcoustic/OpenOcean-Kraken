@@ -27,3 +27,5 @@ nlohmann/
 tests/
 build/
 bin/
+*.mod
+*.shd

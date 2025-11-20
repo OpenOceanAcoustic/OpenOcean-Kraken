@@ -477,6 +477,8 @@ void VectorSolve(KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen, 
 
     eigenfun.phiS.resize(eigen.M, params.Pos->Sz.size());
     eigenfun.phiR.resize(eigen.M, params.Pos->Rz.size());
+    eigenfun.phi.resize(eigen.M, NTotal1);
+    eigenfun.dphidz.resize(eigen.M, NTotal1);
 
     WTS.resize(params.Pos->NSz);
     WTR.resize(params.Pos->NRz);
@@ -620,6 +622,34 @@ void VectorSolve(KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen, 
         {
             Normalize(mode, Phi, ITP, NTotal1, x, kramtrx, params, eigen);
         }
+
+        for (int im = params.FirstAcoustic; im <= params.LastAcoustic; ++im)
+        {
+            double h = params.mesh.h(im);
+            int Nn = params.mesh.N(im);
+            for (int ii = 0; ii < Nn + 1; ii++)
+            {
+                int index = params.mesh.Loc(im) + ii;
+                eigenfun.phi(mode, index) = Phi(index);
+                if (index == 0)
+                {
+                    eigenfun.dphidz(mode, index) = (Phi(index+1) - Phi(index)) / h;
+                }
+                else if(index == NTotal)
+                {
+                    eigenfun.dphidz(mode, index) = (Phi(index) - Phi(index - 1)) / h;
+                }
+                else
+                {
+                    eigenfun.dphidz(mode, index) = (Phi(index + 1) - Phi(index - 1)) / (2 * h);
+                }
+            }
+        }
+        // 打印phi和dphidz
+        std::cout << "mode:" << mode << std::endl;
+        std::cout << "phi:\n" << eigenfun.phi.row(mode).real().transpose() << std::endl;
+
+        std::cout << "dphidz:\n" << eigenfun.dphidz.row(mode).real().transpose() << std::endl;
 
         for (int isz = 0; isz < params.Pos->NSz; isz++)
         {
