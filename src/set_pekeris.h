@@ -4,5 +4,7 @@
 #include "kkc_params.h"
 
 void set_pekeris(parameters& params);
+void set_Munk(parameters& params);
+
 
 #endif

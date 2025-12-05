@@ -21,7 +21,11 @@ void SolveEp(int &iset, const int &NSets, EigenParams &eigen, EigenFunction &eig
     {
         Solve2(iset, eigen, kramtrx, params);
     }
-    eigen.Extrap.resize(NSets * eigen.M);
+    if (iset == 0)
+    {
+        eigen.Extrap.resize(NSets * eigen.M);
+    }
+    
     int start_idx = iset * eigen.M;
     eigen.Extrap.segment(start_idx, eigen.M) = eigen.EVMat.segment(start_idx, eigen.M);
 

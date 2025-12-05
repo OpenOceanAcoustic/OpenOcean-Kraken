@@ -4,7 +4,7 @@ void run()
 {
     parameters params;
     set_pekeris(params);
-
+    // set_Munk(params);
     // 初始化cp cs
     UpdateSSPLoss(params.freqinfo->freq, params.freqinfo->freq, params.NMedia,
                   params.SSPType, params.AttenUnit, params.SSP);
@@ -50,10 +50,19 @@ void run()
     size_t N = (size_t)params.Pos->NSz * (size_t)params.Pos->NRz_per_range * (size_t)params.Pos->NRr;
     std::complex<float> *u_AllSources;
     u_AllSources = new std::complex<float>[N];
+    std::complex<float> *uAllSources_vr;
+    uAllSources_vr = new std::complex<float>[N];
+    std::complex<float> *uAllSources_vz;
+    uAllSources_vz = new std::complex<float>[N];
     for (int isz = 0; isz < params.Pos->NSz; isz++)
     {
-        Evaluate(eigenfun, eigen, params, u_AllSources, isz);
+        Evaluate(eigenfun, eigen, params, isz, u_AllSources, uAllSources_vr, uAllSources_vz);
     }
-    string filename = "test";
+    string filename = "test_pressure";
+    string filename_vr = "test_vr";
+    string filename_vz = "test_vz";
     export_shd(filename, params, u_AllSources);
+    export_shd(filename_vr, params, uAllSources_vr);
+    export_shd(filename_vz, params, uAllSources_vz);
 }
+
