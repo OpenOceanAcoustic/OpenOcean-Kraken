@@ -15,10 +15,10 @@
 // - Nz, Nr: 深度和距离网格数量
 // - MinExp, TINY: 数值计算参数（根据实际定义补充）
 
-void Evaluate(EigenFunction &eigenfun, EigenParams &eigen, parameters &params,int isz,
-     std::complex<float> *uAllSources,
-     std::complex<float> *uAllSources_vr,
-     std::complex<float> *uAllSources_vz)
+void Evaluate(EigenFunction &eigenfun, EigenParams &eigen, parameters &params, int isz,
+              std::complex<float> *uAllSources,
+              std::complex<float> *uAllSources_vr,
+              std::complex<float> *uAllSources_vz)
 {
     // 如果没有模态，返回零压力场
     if (eigen.M <= 0)
@@ -26,8 +26,12 @@ void Evaluate(EigenFunction &eigenfun, EigenParams &eigen, parameters &params,in
         return;
     }
 
+    MatrixXcd phiR = eigenfun.phiR;
+    MatrixXcd dphidzR = eigenfun.dphidzR;
+    MatrixXcd phiS = eigenfun.phiS;
+
     VectorXcd col_vec;
-    col_vec = eigenfun.phiS.col(isz);
+    col_vec = phiS.col(isz);
     double omega = 2 * pi * params.freqinfo->freq;
     double rho = 1.0; // 假设水的密度为1 g/cm³ （不知道如何导入密度，先在这里设置一个标准值）
     // cout<< "col_vec:\n" << col_vec.real()<<endl;
@@ -43,13 +47,13 @@ void Evaluate(EigenFunction &eigenfun, EigenParams &eigen, parameters &params,in
     {
         constants = factor * col_vec.array() / eigen.k.array();
         constants_vr = factor * col_vec.array() * eigen.k.array() / (omega * rho);
-        constants_vz = factor * col_vec.array() / ( eigen.k.array() * omega * rho * I1D );
+        constants_vz = factor * col_vec.array() / (eigen.k.array() * omega * rho * I1D);
     }
     else
     {
         constants = factor * col_vec.array() / eigen.k.array().sqrt();
         constants_vr = factor * col_vec.array() * eigen.k.array().sqrt() / (omega * rho);
-        constants_vz = factor / I1D * col_vec.array() / eigen.k.array().sqrt() /(omega * rho);
+        constants_vz = factor / I1D * col_vec.array() / eigen.k.array().sqrt() / (omega * rho);
     }
 
     // 计算ik向量（波数相关项）
@@ -67,9 +71,9 @@ void Evaluate(EigenFunction &eigenfun, EigenParams &eigen, parameters &params,in
     {                                                                 // 0-based索引
         Eigen::VectorXcd exp_terms = ik.array() * params.Pos->Ro(iz); // ik * Rz(iz)
         exp_terms = exp_terms.array().exp();                          // e^(ik * Rz(iz))
-        Cmat.col(iz) = constants.array() * eigenfun.phiR.col(iz).array() * exp_terms.array();
-        Cmat_vr.col(iz) = constants_vr.array() * eigenfun.phiR.col(iz).array() * exp_terms.array();
-        Cmat_vz.col(iz) = constants_vz.array() * eigenfun.dphidz.col(iz).array() * exp_terms.array();
+        Cmat.col(iz) = constants.array() * phiR.col(iz).array() * exp_terms.array();
+        Cmat_vr.col(iz) = constants_vr.array() * phiR.col(iz).array() * exp_terms.array();
+        Cmat_vz.col(iz) = constants_vz.array() * dphidzR.col(iz).array() * exp_terms.array();
     }
 
     // 遍历所有距离点计算压力场

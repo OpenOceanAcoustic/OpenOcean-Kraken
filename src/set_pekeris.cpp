@@ -12,6 +12,9 @@ void set_pekeris(parameters& params)
 
     // 频率
     params.freqinfo->freq = 150;
+    params.freqinfo->Nfreq = 1;
+    params.freqinfo->freqvec = VectorXd(1);
+    params.freqinfo->freqvec(0) = params.freqinfo->freq;
 
     // 海面、海底参数
     params.HSTop.BC = BC_Mode::MODE_V_Vacuum;
@@ -25,7 +28,7 @@ void set_pekeris(parameters& params)
     params.HSBot.sigma = 0;
 
     // 相速度范围
-    params.Chigh = 20000000;
+    params.Chigh = 20000;
     params.Clow = 0;
 
     // 绝热模式

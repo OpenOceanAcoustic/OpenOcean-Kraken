@@ -459,8 +459,8 @@ void VectorSolve(KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen, 
 {
     int j = 0, NzTab, iPower, modeCount = 0, L, ITP, IErr;
     double h_rho, x, xh2;
-    VectorXd z(NTotal1), Phi(NTotal1), d(NTotal1), e(NTotal1 + 1), zTab, WTS, WTR;
-    VectorXi ISzTab, IRzTab, Ix, Iy;
+    VectorXd z(NTotal1), Phi(NTotal1), d(NTotal1), e(NTotal1 + 1), zTab, WTS, WTR, WTZ;
+    VectorXi ISzTab, IRzTab, IZzTab, Ix, Iy;
     VectorXcd PhiTab;
     complex<double> fTop, gTop, fBot, gBot;
     bool isTop = true, isComplex = false;
@@ -476,35 +476,43 @@ void VectorSolve(KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen, 
         j = j + params.mesh.N(im);
     }
     e(NTotal1) = 1.0 / h_rho;
-    // MergeVectors(params.Pos->Sz, params.Pos->Rz, zTab, NzTab, Ix, Iy);
-    // 对声源深度和接收深度分别进行处理，不在需要合并
+    // 为了方便输出.mod，这里还是进行合并
+    MergeVectors(params.Pos->Sz, params.Pos->Rz, zTab, NzTab, Ix, Iy);
+    MatrixXcd phiZ(eigen.M, NzTab);
 
+    // 对声源深度和接收深度分别进行处理，不在需要合并
+    
+    eigenfun.phi.resize(eigen.M, NTotal1);
     eigenfun.phiS.resize(eigen.M, params.Pos->Sz.size());
     eigenfun.phiR.resize(eigen.M, params.Pos->Rz.size());
-    eigenfun.phi.resize(eigen.M, NTotal1);
     eigenfun.dphidz.resize(eigen.M, NTotal1);
+    eigenfun.dphidzS.resize(eigen.M, params.Pos->Sz.size());
+    eigenfun.dphidzR.resize(eigen.M, params.Pos->Rz.size());
 
     WTS.resize(params.Pos->NSz);
     WTR.resize(params.Pos->NRz);
+    WTZ.resize(NzTab);
+    
     ISzTab.resize(params.Pos->NSz);
     IRzTab.resize(params.Pos->NRz);
+    IZzTab.resize(NzTab);
 
     Weight_dble(z, NTotal1, params.Pos->Sz, params.Pos->NSz, WTS, ISzTab);
     Weight_dble(z, NTotal1, params.Pos->Rz, params.Pos->NRz, WTR, IRzTab);
+    Weight_dble(z, NTotal1, zTab, NzTab, WTZ, IZzTab);
 
     // cout << "ISzTab: " << ISzTab.transpose() << endl;
     // cout << "IRzTab: " << IRzTab.transpose() << endl;
     // cout << "WTR:" << WTR.transpose() << endl; 
 
     // TODO 写入mod的头
-    string filename;
-    std::ofstream MODFile(filename + ".mod", std::ios::binary);
-    if (!MODFile.is_open())
+    string filename = "test";
+    params.MODFile.open(filename + ".mod", std::ios::binary);
+    if (!params.MODFile.is_open())
     {
         std::cerr << "无法打开MOD文件: " << filename << ".mod" << std::endl;
         return;
     }
-    NzTab = params.Pos->NSz + params.Pos->NRz;
     
     int ifreq = 0, iprof = 0;
     if (ifreq == 0 && iprof == 0)
@@ -513,57 +521,64 @@ void VectorSolve(KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen, 
     }
     if (ifreq == 0)
     {   
-        MODFile.seekp(eigen.IRecProfile * 4 * eigen.LRecordLength, std::ios::beg);
-        MODFile.write(reinterpret_cast<char*>(&eigen.LRecordLength), sizeof(int));
-        MODFile.write(params.Title.c_str(), params.Title.size());
-        MODFile.write(reinterpret_cast<char*>(&params.freqinfo->Nfreq), sizeof(int));
+        eigen.IRecProfile = 0;
+        params.MODFile.seekp(eigen.IRecProfile * 4 * eigen.LRecordLength, std::ios::beg);
+        params.MODFile.write(reinterpret_cast<char*>(&eigen.LRecordLength), sizeof(int));
+        // 固定title为80个char
+        char title[80] = {0};
+        strncpy(title, params.Title.c_str(), params.Title.size());
+        params.MODFile.write(title, sizeof(title));
+        params.MODFile.write(reinterpret_cast<char*>(&params.freqinfo->Nfreq), sizeof(int));
         int numAcoustic = params.LastAcoustic - params.FirstAcoustic + 1;
-        MODFile.write(reinterpret_cast<char*>(&numAcoustic), sizeof(int));
-        MODFile.write(reinterpret_cast<char*>(&NzTab), sizeof(int));
-        MODFile.write(reinterpret_cast<char*>(&NzTab), sizeof(int));
+        params.MODFile.write(reinterpret_cast<char*>(&numAcoustic), sizeof(int));
+        params.MODFile.write(reinterpret_cast<char*>(&NzTab), sizeof(int));
+        params.MODFile.write(reinterpret_cast<char*>(&NzTab), sizeof(int));
 
-        MODFile.seekp((eigen.IRecProfile + 1) * 4 * eigen.LRecordLength, std::ios::beg);
+        params.MODFile.seekp((eigen.IRecProfile + 1) * 4 * eigen.LRecordLength, std::ios::beg);
         for (int im = params.FirstAcoustic; im <= params.LastAcoustic; im++)
         {   
-            MODFile.write(reinterpret_cast<char*>(&params.mesh.N(im)), sizeof(int));
-            MODFile.write(reinterpret_cast<char*>(&params.SSP->Material), sizeof(params.SSP->Material));  // fortran是字符串，这里是整数。而且只有一层，应该是params.SSP->Material[im]?
+            params.MODFile.write(reinterpret_cast<char*>(&params.mesh.N(im)), sizeof(int));
+            params.MODFile.write(reinterpret_cast<char*>(&params.SSP->Material), sizeof(params.SSP->Material));  // fortran是字符串，这里是整数。而且只有一层，应该是params.SSP->Material[im]?
         }
-        MODFile.seekp((eigen.IRecProfile + 2) * 4 * eigen.LRecordLength, std::ios::beg);
+        params.MODFile.seekp((eigen.IRecProfile + 2) * 4 * eigen.LRecordLength, std::ios::beg);
         for (int im = params.FirstAcoustic; im <= params.LastAcoustic; im++)
         {   
-            float depth = static_cast<float>(params.SSP->z(im));  // 转换double为float
-            MODFile.write(reinterpret_cast<char*>(&depth), sizeof(float));
+            float depth = static_cast<float>(params.SSP[im].depth);  // 转换double为float
+            params.MODFile.write(reinterpret_cast<char*>(&depth), sizeof(float));
             float rho = kramtrx.rho(params.mesh.Loc(im));  // 转换double为float
-            MODFile.write(reinterpret_cast<char*>(&rho), sizeof(float));
+            params.MODFile.write(reinterpret_cast<char*>(&rho), sizeof(float));
         }
-        MODFile.seekp((eigen.IRecProfile + 3) * 4 * eigen.LRecordLength, std::ios::beg);
-        MODFile.write(reinterpret_cast<char*>(params.freqinfo->freqvec.data()), params.freqinfo->Nfreq * sizeof(double));
-        MODFile.seekp((eigen.IRecProfile + 4) * 4 * eigen.LRecordLength, std::ios::beg);
-        for (int isz = 0; isz < params.Pos->NSz; isz++)
-        {
-            MODFile.write(reinterpret_cast<char*>(&params.Pos->Sz(isz)), sizeof(double));
-        }
-        for (int irz = 0; irz < params.Pos->NRz; irz++)
-        {
-            MODFile.write(reinterpret_cast<char*>(&params.Pos->Rz(irz)), sizeof(double));
-        }
+        params.MODFile.seekp((eigen.IRecProfile + 3) * 4 * eigen.LRecordLength, std::ios::beg);
+        params.MODFile.write(reinterpret_cast<char*>(params.freqinfo->freqvec.data()), params.freqinfo->Nfreq * sizeof(double));
+        params.MODFile.seekp((eigen.IRecProfile + 4) * 4 * eigen.LRecordLength, std::ios::beg);
+        // zTab转为float输出
+        VectorXf zTabf = zTab.cast<float>();
+        params.MODFile.write(reinterpret_cast<char*>(zTabf.data()), NzTab * sizeof(float));
+        // for (int isz = 0; isz < params.Pos->NSz; isz++)
+        // {
+        //     params.MODFile.write(reinterpret_cast<char*>(&params.Pos->Sz(isz)), sizeof(double));
+        // }
+        // for (int irz = 0; irz < params.Pos->NRz; irz++)
+        // {
+        //     params.MODFile.write(reinterpret_cast<char*>(&params.Pos->Rz(irz)), sizeof(double)); 
+        // }
         eigen.IRecProfile += 5;
     }
-    MODFile.seekp((eigen.IRecProfile + 1) * 4 * eigen.LRecordLength, std::ios::beg);
-    MODFile.write(reinterpret_cast<char*>(&params.HSTop.BC), sizeof(params.HSTop.BC));  // 这也是整数而不是字符串
-    MODFile.write(reinterpret_cast<char*>(&params.HSTop.cp), sizeof(std::complex<double>));
-    MODFile.write(reinterpret_cast<char*>(&params.HSTop.cs), sizeof(std::complex<double>));
+    params.MODFile.seekp((eigen.IRecProfile + 1) * 4 * eigen.LRecordLength, std::ios::beg);
+    params.MODFile.write(reinterpret_cast<char*>(&params.HSTop.BC), sizeof(params.HSTop.BC));  // 这也是整数而不是字符串
+    params.MODFile.write(reinterpret_cast<char*>(&params.HSTop.cp), sizeof(std::complex<double>));
+    params.MODFile.write(reinterpret_cast<char*>(&params.HSTop.cs), sizeof(std::complex<double>));
     float HSToprho = static_cast<float>(params.HSTop.rho);  // 转换double为float
-    MODFile.write(reinterpret_cast<char*>(&HSToprho), sizeof(float));
+    params.MODFile.write(reinterpret_cast<char*>(&HSToprho), sizeof(float));
     float SSPz0 = static_cast<float>(params.SSP->z(0));  // 转换double为float
-    MODFile.write(reinterpret_cast<char*>(&SSPz0), sizeof(float));
-    MODFile.write(reinterpret_cast<char*>(&params.HSBot.BC), sizeof(params.HSBot.BC));  // 这也是整数而不是字符串
-    MODFile.write(reinterpret_cast<char*>(&params.HSBot.cp), sizeof(std::complex<double>));
-    MODFile.write(reinterpret_cast<char*>(&params.HSBot.cs), sizeof(std::complex<double>));
+    params.MODFile.write(reinterpret_cast<char*>(&SSPz0), sizeof(float));
+    params.MODFile.write(reinterpret_cast<char*>(&params.HSBot.BC), sizeof(params.HSBot.BC));  // 这也是整数而不是字符串
+    params.MODFile.write(reinterpret_cast<char*>(&params.HSBot.cp), sizeof(std::complex<double>));
+    params.MODFile.write(reinterpret_cast<char*>(&params.HSBot.cs), sizeof(std::complex<double>));
     float HSBotrho = static_cast<float>(params.HSBot.rho);  // 转换double为float
-    MODFile.write(reinterpret_cast<char*>(&HSBotrho), sizeof(float));
-    float SSPzn = static_cast<float>(params.SSP->z(params.NMedia));  // 转换double为float
-    MODFile.write(reinterpret_cast<char*>(&SSPzn), sizeof(float));
+    params.MODFile.write(reinterpret_cast<char*>(&HSBotrho), sizeof(float));
+    float SSPzn = static_cast<float>(params.SSP[params.NMedia-1].z(params.SSP[params.NMedia-1].z.size()-1));  // 转换double为float
+    params.MODFile.write(reinterpret_cast<char*>(&SSPzn), sizeof(float));
     
     for (int mode = 0; mode < eigen.M; mode++)
     {
@@ -659,29 +674,41 @@ void VectorSolve(KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen, 
         {
             int index = ISzTab(isz);
             eigenfun.phiS(mode, isz) = complex<double>(Phi(index)) + WTS(isz) * complex<double>(Phi(index + 1) - Phi(index));
+            eigenfun.dphidzS(mode, isz) = complex<double>(eigenfun.dphidz(mode, index)) + WTS(isz) * complex<double>(eigenfun.dphidz(mode, index + 1) - eigenfun.dphidz(mode, index));
         }
         for (int irz = 0; irz < params.Pos->NRz; irz++)
         {
             int index = IRzTab(irz);
             eigenfun.phiR(mode, irz) = complex<double>(Phi(index)) + WTR(irz) * complex<double>(Phi(index + 1) - Phi(index));
+            eigenfun.dphidzR(mode, irz) = complex<double>(eigenfun.dphidz(mode, index)) + WTR(irz) * complex<double>(eigenfun.dphidz(mode, index + 1) - eigenfun.dphidz(mode, index));
+        }
+        for (int izz = 0; izz < NzTab; izz++)
+        {
+            int index = IZzTab(izz);
+            phiZ(mode, izz) = complex<double>(Phi(index)) + WTZ(izz) * complex<double>(Phi(index + 1) - Phi(index));
         }
         // std::cout << "mode:" << mode << std::endl;
         // std::cout << "Phi: \n" << Phi << std::endl;
         // 写入Phi
-        MODFile.seekp((eigen.IRecProfile + 2 + mode) * 4 * eigen.LRecordLength, std::ios::beg);
-        for (int isz = 0; isz < params.Pos->NSz; isz++)
+        params.MODFile.seekp((eigen.IRecProfile + 2 + mode) * 4 * eigen.LRecordLength, std::ios::beg);
+        
+        // for (int isz = 0; isz < params.Pos->NSz; isz++)
+        // {
+        //     std::complex<float> phiS = static_cast<std::complex<float>>(eigenfun.phiS(mode, isz));  // 转换double为float
+        //     MODFile.write(reinterpret_cast<char*>(&phiS), sizeof(std::complex<float>));
+        // }
+        // for (int irz = 0; irz < params.Pos->NRz; irz++)
+        // {
+        //     std::complex<float> phiR = static_cast<std::complex<float>>(eigenfun.phiR(mode, irz));  // 转换double为float
+        //     MODFile.write(reinterpret_cast<char*>(&phiR), sizeof(std::complex<float>));
+        // }
+        // 输出phiZ到.mod中
+        for (int izz = 0; izz < NzTab; izz++)
         {
-            std::complex<float> phiS = static_cast<std::complex<float>>(eigenfun.phiS(mode, isz));  // 转换double为float
-            MODFile.write(reinterpret_cast<char*>(&phiS), sizeof(std::complex<float>));
-        }
-        for (int irz = 0; irz < params.Pos->NRz; irz++)
-        {
-            std::complex<float> phiR = static_cast<std::complex<float>>(eigenfun.phiR(mode, irz));  // 转换double为float
-            MODFile.write(reinterpret_cast<char*>(&phiR), sizeof(std::complex<float>));
+            std::complex<float> phiZf = static_cast<std::complex<float>>(phiZ(mode, izz));  // 转换double为float
+            params.MODFile.write(reinterpret_cast<char*>(&phiZf), sizeof(std::complex<float>));
         }
     }
-    MODFile.close();
-    std::cout << "MOD文件导出完成: " << filename << std::endl;
 }
 
 void Normalize(int &mode, VectorXd &Phi, int &ITP, int &NTotal1, double &x, KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen)
@@ -803,7 +830,7 @@ void ScatterLoss(int &mode, complex<double> &Perturbation_k, VectorXd &Phi, doub
 {
     double omega = 2 * pi * params.freqinfo->freq;
     double omega2 = SQ(omega);
-    double rho1, rho2, rhoInside, h2;
+    double rho1, rho2, rhoInside, h2, sigma;
     complex<double> eta1Sq, eta2Sq, U, PhiC; // kx = sqrt(x),
     int j = 0, L = params.mesh.Loc(params.FirstAcoustic);
     for (int im = params.FirstAcoustic - 1; im <= params.LastAcoustic; im++) // Loop over media
@@ -835,6 +862,7 @@ void ScatterLoss(int &mode, complex<double> &Perturbation_k, VectorXd &Phi, doub
                 U = 0.0;
                 break;
             }
+            sigma = params.HSTop.sigma;
         }
         else
         {
@@ -844,6 +872,7 @@ void ScatterLoss(int &mode, complex<double> &Perturbation_k, VectorXd &Phi, doub
             rho1 = kramtrx.rho(L);
             eta1Sq = (2.0 + kramtrx.B1(L)) / h2 - x;
             U = (-Phi(j - 1) - 0.5 * (kramtrx.B1(L) - h2 * x) * Phi(j)) / (params.mesh.h(im) * rho1);
+            sigma = params.SSP[im].sigma;
         }
 
         // Calculate rho2, eta2
@@ -868,6 +897,7 @@ void ScatterLoss(int &mode, complex<double> &Perturbation_k, VectorXd &Phi, doub
                 eta2Sq = 0.0;
                 break;
             }
+            sigma = params.HSBot.sigma;
         }
         else
         {
@@ -875,8 +905,14 @@ void ScatterLoss(int &mode, complex<double> &Perturbation_k, VectorXd &Phi, doub
             eta2Sq = (2.0 + kramtrx.B1(L + 1)) / SQ(params.mesh.h(im + 1)) - x;
         }
         PhiC = Phi(j);
-        complex<double> kup = KupIng(params.SSP[im + 1].sigma, eta1Sq, rho1, eta2Sq, rho2, PhiC, U);
+        complex<double> kup = KupIng(sigma, eta1Sq, rho1, eta2Sq, rho2, PhiC, U);
+        // // 打印kup
+        // cout << "kup: \n"
+        //      << kup << endl;
         Perturbation_k += kup;
     }
+    // 打印Perturbation_k
+    // cout << "Perturbation_k: \n"
+    //      << Perturbation_k << endl;
     eigen.k(mode) = Perturbation_k;
 }
