@@ -11,7 +11,7 @@ void set_pekeris(parameters& params)
     params.Bdry = new BdryType();
 
     // 频率
-    params.freqinfo->freq = 150;
+    params.freqinfo->freq = 200;
     params.freqinfo->Nfreq = 1;
     params.freqinfo->freqvec = VectorXd(1);
     params.freqinfo->freqvec(0) = params.freqinfo->freq;

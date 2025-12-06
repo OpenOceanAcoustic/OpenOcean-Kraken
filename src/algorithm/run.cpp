@@ -5,6 +5,26 @@ void run()
     parameters params;
     set_pekeris(params);
     // set_Munk(params);
+
+    // 检查竖直网络步长是否小于波长/20
+    for (int i = 0; i < params.NMedia; ++i)
+    {
+        double h = params.SSP[i].depth / params.SSP[i].N;
+        double lambda_1_20 = params.SSP[i].alphaR[params.SSP[i].NPts - 1] / params.freqinfo->freq / 20.0; // 最后一个声速计算波长
+        int Nneeded = int((params.SSP[i].depth) / lambda_1_20);
+        Nneeded = std::max(Nneeded, 10); // require a minimum of 10 points				要求每一层媒质至少有10个点
+
+        if (h > lambda_1_20)
+        {
+            // 打印警告信息（中文）
+            cout << "警告：KRAKEN 垂直网格步长太大，已经将网格数量: " << params.SSP[i].N << " 调整为: " << Nneeded << endl;
+            params.SSP[i].N = Nneeded;
+        }
+        else if (params.mesh.N(i) == 0) // 网格数为0时，将网格数调整为Nneeded
+        {
+            params.SSP[i].N = Nneeded;
+        }
+    }
     // 初始化cp cs
     UpdateSSPLoss(params.freqinfo->freq, params.freqinfo->freq, params.NMedia,
                   params.SSPType, params.AttenUnit, params.SSP);
@@ -89,10 +109,10 @@ void run()
 
     // 写入模态数 M
     params.MODFile.seekp(eigen.IRecProfile * 4 * eigen.LRecordLength, std::ios::beg);
-    params.MODFile.write(reinterpret_cast<const char*>(&M), sizeof(int));
+    params.MODFile.write(reinterpret_cast<const char *>(&M), sizeof(int));
 
     // 写入复本征值 k
-    int IFirst = 0;   // C++ 从 0 开始
+    int IFirst = 0; // C++ 从 0 开始
     for (int IREC = 0; IREC < (2 * M - 1) / eigen.LRecordLength + 1; ++IREC)
     {
         int ILast = std::min(M, IFirst + eigen.LRecordLength / 2) - 1;
@@ -108,8 +128,8 @@ void run()
         {
             complex<float> kf;
             kf = std::complex<float>(eigen.k(IFirst + i).real(), eigen.k(IFirst + i).imag());
-            params.MODFile.write(reinterpret_cast<const char*>(&kf),
-                      sizeof(std::complex<float>));
+            params.MODFile.write(reinterpret_cast<const char *>(&kf),
+                                 sizeof(std::complex<float>));
         }
 
         IFirst = ILast + 1;
@@ -138,4 +158,3 @@ void run()
     export_shd(filename_vr, params, uAllSources_vr);
     export_shd(filename_vz, params, uAllSources_vz);
 }
-
