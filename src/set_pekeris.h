@@ -5,6 +5,7 @@
 
 void set_pekeris(parameters& params);
 void set_Munk(parameters& params);
+void set_Dickins(parameters& params);
 
 
 #endif
