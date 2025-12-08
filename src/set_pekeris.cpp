@@ -124,13 +124,13 @@ void set_Munk(parameters& params)
     // 海面、海底参数
     params.HSTop.BC = BC_Mode::MODE_V_Vacuum;  // 海面边界条件，参考set_Munk
     params.HSBot.BC = BC_Mode::MODE_A_Half_space;  // 对应env中的'A'
-    params.HSBot.alphaI = 0.0;  // 对应env中海底参数的0.0
+    params.HSBot.alphaI = 0.8;  // 对应env中海底参数的0.0
     params.HSBot.alphaR = 1600.00;  // 对应env中海底参数的1600.00
     params.HSBot.betaI = 0.0;  // 海底横波衰减系数，默认0
     params.HSBot.betaR = 0.0;  // 海底横波速度，默认0
     params.HSBot.Depth = 5000.0;  // 对应env中的DEPTH of bottom (m)
     params.HSBot.rho = 1.8;  // 对应env中海底参数的1.8
-    params.HSBot.sigma = 0.8;  // 对应env中海底参数的0.8
+    params.HSBot.sigma = 0.0;  // 对应env中海底参数的0.8
 
     // 相速度范围（参考声速剖面范围设置）
     params.Chigh = 20000;
@@ -144,26 +144,26 @@ void set_Munk(parameters& params)
     params.Pos->Sz.resize(params.Pos->NSz);
     params.Pos->Sz(0) = 1000.0;  // 对应env中的SD(1:NSD)=1000.0 (m)
 
-    params.Pos->NRr = 500;  // 对应env中的NR=1001
+    params.Pos->NRr = 501;  // 对应env中的NR=1001
     params.Pos->Rr.resize(params.Pos->NRr);
     for(size_t i = 0; i < params.Pos->NRr; ++i){
         // 对应env中的R范围0.0-100.0 km，转换为m并线性分布
-        params.Pos->Rr(i) = 100.0 * (i+1);  // 步长100m (100000m / 1000步)
+        params.Pos->Rr(i) = 100.0 * i;  // 步长100m (100000m / 1000步)
     }
 
-    params.Pos->NRz = 500;  // 对应env中的NRD=501
+    params.Pos->NRz = 1001;  // 对应env中的NRD=501
     params.Pos->NRz_per_range = params.Pos->NRz;
     params.Pos->Rz.resize(params.Pos->NRz);
     params.Pos->Ro.resize(params.Pos->NRz);
     for(size_t i = 0; i < params.Pos->NRz; ++i){
         // 对应env中的RD范围0.0-5000.0 m，线性分布
-        params.Pos->Rz(i) = 10.0 * (i+1);  // 步长10m (5000m / 500步)
+        params.Pos->Rz(i) = 5.0 * (i);  // 步长10m (5000m / 500步)
         params.Pos->Ro(i) = 0;
     }
     params.Pos->GridType = Grid_Mode::MODE_R_Rectangular;
 
     // 最大距离（对应100.0 km转换为m）
-    params.Rmax = 50000;
+    params.Rmax = 5e4;
 
     // 计算模式，本征值和声场
     params.runMode = Run_Mode::MODE_B_Both;

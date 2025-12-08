@@ -399,6 +399,7 @@ struct MeshParams
 struct EigenParams
 {
     int M;             // 模式数量
+    int firstM;    // iset=0时的模式个数，决定了矩阵维度大小
     VectorXd EVMat;    // 本征值矩阵(一维向量化)
     VectorXd Extrap;   // 外推矩阵
     VectorXcd k;        // 波数向量

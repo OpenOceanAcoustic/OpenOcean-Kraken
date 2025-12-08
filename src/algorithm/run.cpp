@@ -4,8 +4,8 @@ void run()
 {
     parameters params;
     // set_pekeris(params);
-    // set_Munk(params);
-    set_Dickins(params);
+    set_Munk(params);
+    // set_Dickins(params);
 
     // 检查竖直网络步长是否小于波长/20
     for (int i = 0; i < params.NMedia; ++i)

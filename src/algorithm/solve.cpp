@@ -23,10 +23,11 @@ void SolveEp(int &iset, const int &NSets, EigenParams &eigen, EigenFunction &eig
     }
     if (iset == 0)
     {
+        eigen.firstM = eigen.M;
         eigen.Extrap.resize(NSets * eigen.M);
     }
     
-    int start_idx = iset * eigen.M;
+    int start_idx = iset * eigen.firstM;
     eigen.Extrap.segment(start_idx, eigen.M) = eigen.EVMat.segment(start_idx, eigen.M);
 
     // std::cout << "iset: " << iset << " \n"
@@ -62,6 +63,14 @@ void SolveEp(int &iset, const int &NSets, EigenParams &eigen, EigenFunction &eig
         VectorSolve(kramtrx, params, eigen, eigenfun, NTotal, NTotal1);
     }
 
+    // // 打印特征值
+    // std::cout << "iset: " << iset << " \n" << std::endl;
+    // for (int mode = 0; mode < eigen.M; ++mode)
+    // {
+    //     // 8位精度输出
+    //     std::cout << std::setprecision(8) << eigen.EVMat(iset * eigen.firstM + mode) << std::endl;
+    // }
+
     // 初始化误差和KEY
     Error = 1.0e10;
     int KEY = 2 * eigen.M / 3;
@@ -77,8 +86,8 @@ void SolveEp(int &iset, const int &NSets, EigenParams &eigen, EigenFunction &eig
             for (int mode = 0; mode < eigen.M; ++mode)
             {
                 // 计算当前(j, mode)和(j+1, mode)在向量中的索引
-                int idx_j = j * eigen.M + mode;
-                int idx_j1 = (j + 1) * eigen.M + mode;
+                int idx_j = j * eigen.firstM + mode;
+                int idx_j1 = (j + 1) * eigen.firstM + mode;
 
                 double x1 = SQ(params.mesh.NV[j]); // NV是0基存储
                 double x2 = SQ(params.mesh.NV[iset]);
@@ -111,7 +120,7 @@ void Solve1(int &iset, const int &NSets, EigenParams &eigen, KrakenMatrix &kramt
     // 确定模态数量
     xMin = 1.00001 * omega2 / SQ(params.Chigh);
 
-    FUNCT(iset, mode, xMin, Delta, iPower, kramtrx, params, eigen.EVMat, iscountm, modeCount);
+    FUNCT(iset, mode, xMin, Delta, iPower, kramtrx, params, eigen.EVMat, eigen.firstM, iscountm, modeCount);
     int M = modeCount;
     eigen.M = M;
 
@@ -130,7 +139,7 @@ void Solve1(int &iset, const int &NSets, EigenParams &eigen, KrakenMatrix &kramt
     }
 
     xMax = omega2 / SQ(params.Clow); // 最大波数的平方
-    FUNCT(iset, mode, xMax, Delta, iPower, kramtrx, params, eigen.EVMat, iscountm, modeCount);
+    FUNCT(iset, mode, xMax, Delta, iPower, kramtrx, params, eigen.EVMat, eigen.firstM, iscountm, modeCount);
 
     M = M - modeCount;
     eigen.M = M;
@@ -169,7 +178,7 @@ void Solve1(int &iset, const int &NSets, EigenParams &eigen, KrakenMatrix &kramt
         x1 = xL(modeIdx);
         x2 = xR(modeIdx);
         Eps = std::abs(x2) * std::pow(10.0, 2.0 - std::numeric_limits<double>::digits10);
-        ZBRENTX(x, x1, x2, Eps, iset, mode, Delta, iPower, kramtrx, params, eigen.EVMat, iscountm, modeCount,
+        ZBRENTX(x, x1, x2, Eps, iset, mode, Delta, iPower, kramtrx, params, eigen.EVMat, eigen.firstM, iscountm, modeCount,
                 ErrorMessage, FUNCT); // Brent求根法
 
         if (!ErrorMessage.empty())
@@ -177,7 +186,7 @@ void Solve1(int &iset, const int &NSets, EigenParams &eigen, KrakenMatrix &kramt
             // 输出警告信息
         }
 
-        eigen.EVMat(iset * M + modeIdx) = x;
+        eigen.EVMat(iset * eigen.firstM + modeIdx) = x;
     }
 }
 
@@ -195,12 +204,12 @@ void Solve2(int &iset, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &pa
 
     for (int mode = 0; mode < eigen.M; mode++)
     {
-        x = 1.0001 * x;
+        x = 1.00001 * x;
         if (iset >= 1)
         {
             for (int i = 0; i < iset; i++)
             {
-                P(i) = eigen.EVMat(i * eigen.M + mode);
+                P(i) = eigen.EVMat(i * eigen.firstM + mode);
             }
             if (iset >= 2)
             {
@@ -215,15 +224,15 @@ void Solve2(int &iset, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &pa
                                (x1 - x2);
                     }
                 }
-                x = P(1);
+                x = P(0);
             }
         }
         Tolerance = abs(x) * kramtrx.B1.size() * pow(10.0, (1.0 - std::numeric_limits<double>::digits10));
-        ZSecantX(x, Tolerance, Iteration, MaxIteration, iset, mode, Delta, iPower, kramtrx, params, eigen.EVMat, iscountm, modeCount, ErrorMessage, FUNCT);
-        eigen.EVMat(iset * eigen.M + mode) = x;
+        ZSecantX(x, Tolerance, Iteration, MaxIteration, iset, mode, Delta, iPower, kramtrx, params, eigen.EVMat, eigen.firstM, iscountm, modeCount, ErrorMessage, FUNCT);
+        eigen.EVMat(iset * eigen.firstM + mode) = x;
         if (omega2 / SQ(params.Chigh) > x)
         {
-            eigen.M--;
+            eigen.M=mode;
             return;
         }
     }
@@ -246,21 +255,21 @@ void Solve3(int &iset, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &pa
     // 确定模态数量
     xMin = 1.00001 * omega2 / SQ(params.Chigh);
 
-    FUNCT(iset, mode, xMin, Delta, iPower, kramtrx, params, eigen.EVMat, iscountm, modeCount);  
+    FUNCT(iset, mode, xMin, Delta, iPower, kramtrx, params, eigen.EVMat, eigen.firstM, iscountm, modeCount);  
     int M = modeCount;
 
     for (int modeIdx = 0; modeIdx < M; ++modeIdx)
     {
-        x = eigen.EVMat(iset * M + modeIdx);
+        x = eigen.EVMat(iset * eigen.firstM + modeIdx);
         Tolerance = std::abs(x) * std::pow(10.0, 2.0 - std::numeric_limits<double>::digits10);
-        ZSecantX(x, Tolerance, IT, MaxIT, iset, mode, Delta, iPower, kramtrx, params, eigen.EVMat, iscountm, modeCount, ErrorMessage, FUNCT);
+        ZSecantX(x, Tolerance, IT, MaxIT, iset, mode, Delta, iPower, kramtrx, params, eigen.EVMat, eigen.firstM, iscountm, modeCount, ErrorMessage, FUNCT);
         
         if (!ErrorMessage.empty())
         {
             // 输出警告信息
         }
 
-        eigen.EVMat(iset * M + modeIdx) = x;
+        eigen.EVMat(iset * eigen.firstM + modeIdx) = x;
 
         if (omega2 / SQ(params.Chigh) > x)
         {
@@ -272,7 +281,7 @@ void Solve3(int &iset, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &pa
 
 // FUNCT函数：计算色散关系
 void FUNCT(int &iset, int &mode, double &x, double &Delta, int &iPower, KrakenMatrix &kramtrx,
-           parameters &params, VectorXd &EVMat, bool coutmodes, int &modeCount)
+           parameters &params, VectorXd &EVMat, const int& firstM, bool coutmodes, int &modeCount)
 {
     int iPowerBot;
     double f, g;
@@ -309,7 +318,7 @@ void FUNCT(int &iset, int &mode, double &x, double &Delta, int &iPower, KrakenMa
     {
         for (int j = 0; j < mode; ++j)
         {
-            Delta = Delta / (x - EVMat(iset * mode + j));
+            Delta = Delta / (x - EVMat(iset * firstM + j));
 
             // 必要时进行缩放
             while (std::abs(Delta) < BCIFloor && std::abs(Delta) > 0.0)
@@ -392,7 +401,7 @@ void Bisection(int &iset, int &mode, double xMin, double xMax, VectorXd &xL, Vec
         xL(i) = xMin;
         xR(i) = xMax;
     }
-    FUNCT(iset, mode, xMax, Delta, iPower, kramtrx, params, eigen.EVMat, true, NZer1);
+    FUNCT(iset, mode, xMax, Delta, iPower, kramtrx, params, eigen.EVMat, eigen.firstM, true, NZer1);
 
     if (eigen.M == 1)
     {
@@ -421,7 +430,7 @@ void Bisection(int &iset, int &mode, double xMin, double xMax, VectorXd &xL, Vec
             for (j = 0; j < MaxBisections; ++j)
             {
                 x = x1 + (x2 - x1) / 2;
-                FUNCT(iset, modeIdx, x, Delta, iPower, kramtrx, params, eigen.EVMat, true, modeCount);
+                FUNCT(iset, modeIdx, x, Delta, iPower, kramtrx, params, eigen.EVMat, eigen.firstM, true, modeCount);
                 NZeros = modeCount - NZer1;
 
                 if (NZeros < modeIdx)
