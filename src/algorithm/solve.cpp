@@ -433,7 +433,7 @@ void Bisection(int &iset, int &mode, double xMin, double xMax, VectorXd &xL, Vec
                 FUNCT(iset, modeIdx, x, Delta, iPower, kramtrx, params, eigen.EVMat, eigen.firstM, true, modeCount);
                 NZeros = modeCount - NZer1;
 
-                if (NZeros < modeIdx)
+                if (NZeros < modeIdx + 1)
                 {
                     // 零点不够多，这是一个新的右边界
                     x2 = x;
