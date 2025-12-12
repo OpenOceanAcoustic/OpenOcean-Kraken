@@ -32,6 +32,7 @@ void Evaluate(EigenFunction &eigenfun, EigenParams &eigen, parameters &params, i
 
     VectorXcd col_vec;
     col_vec = phiS.col(isz);
+    double c0 = 1500; // 假设水下的标准声速为1500 m/s
     double omega = 2 * pi * params.freqinfo->freq;
     double rho = 1.0; // 假设水的密度为1 g/cm³ （不知道如何导入密度，先在这里设置一个标准值）
     // cout<< "col_vec:\n" << col_vec.real()<<endl;
@@ -46,14 +47,14 @@ void Evaluate(EigenFunction &eigenfun, EigenParams &eigen, parameters &params, i
     if (params.SourceType == Source_Mode::MODE_X_Line) // Cylindrical coordinates
     {
         constants = factor * col_vec.array() / eigen.k.array();
-        constants_vr = factor * col_vec.array() * eigen.k.array() / (omega * rho);
-        constants_vz = factor * col_vec.array() / (eigen.k.array() * omega * rho * I1D);
+        constants_vr = factor * col_vec.array() * eigen.k.array() / omega *c0;
+        constants_vz = factor * col_vec.array() * c0 / (eigen.k.array() * omega * I1D);
     }
     else
     {
         constants = factor * col_vec.array() / eigen.k.array().sqrt();
-        constants_vr = factor * col_vec.array() * eigen.k.array().sqrt() / (omega * rho);
-        constants_vz = factor / I1D * col_vec.array() / eigen.k.array().sqrt() / (omega * rho);
+        constants_vr = factor * col_vec.array() * eigen.k.array().sqrt() / omega * c0;
+        constants_vz = factor * col_vec.array() * c0 / (eigen.k.array().sqrt() * omega * I1D);
     }
 
     // 计算ik向量（波数相关项）
