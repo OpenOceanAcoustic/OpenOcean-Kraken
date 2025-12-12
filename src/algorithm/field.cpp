@@ -15,7 +15,10 @@
 // - Nz, Nr: 深度和距离网格数量
 // - MinExp, TINY: 数值计算参数（根据实际定义补充）
 
-void Evaluate(EigenFunction &eigenfun, EigenParams &eigen, parameters &params, std::complex<float> *uAllSources, int isz)
+void Evaluate(EigenFunction &eigenfun, EigenParams &eigen, parameters &params, int isz,
+              std::complex<float> *uAllSources,
+              std::complex<float> *uAllSources_vr,
+              std::complex<float> *uAllSources_vz)
 {
     // 如果没有模态，返回零压力场
     if (eigen.M <= 0)
@@ -23,19 +26,36 @@ void Evaluate(EigenFunction &eigenfun, EigenParams &eigen, parameters &params, s
         return;
     }
 
+    MatrixXcd phiR = eigenfun.phiR;
+    MatrixXcd dphidzR = eigenfun.dphidzR;
+    MatrixXcd phiS = eigenfun.phiS;
+
     VectorXcd col_vec;
-    col_vec = eigenfun.phiS.col(isz);
+    col_vec = phiS.col(isz);
+    double c0 = 1500; // 假设水下的标准声速为1500 m/s
+    double omega = 2 * pi * params.freqinfo->freq;
+    double rho = 1.0; // 假设水的密度为1 g/cm³ （不知道如何导入密度，先在这里设置一个标准值）
     // cout<< "col_vec:\n" << col_vec.real()<<endl;
 
     // 初始化因子和常数向量
     std::complex<double> factor = I1D * std::sqrt(2.0 * pi) * std::exp(I1D * pi / 4.0);
     Eigen::VectorXcd constants(eigen.M);
+    Eigen::VectorXcd constants_vr(eigen.M);
+    Eigen::VectorXcd constants_vz(eigen.M);
 
     // 根据选项计算常数向量
     if (params.SourceType == Source_Mode::MODE_X_Line) // Cylindrical coordinates
+    {
         constants = factor * col_vec.array() / eigen.k.array();
+        constants_vr = factor * col_vec.array() * eigen.k.array() / omega *c0;
+        constants_vz = factor * col_vec.array() * c0 / (eigen.k.array() * omega * I1D);
+    }
     else
+    {
         constants = factor * col_vec.array() / eigen.k.array().sqrt();
+        constants_vr = factor * col_vec.array() * eigen.k.array().sqrt() / omega * c0;
+        constants_vz = factor * col_vec.array() * c0 / (eigen.k.array().sqrt() * omega * I1D);
+    }
 
     // 计算ik向量（波数相关项）
     Eigen::VectorXcd ik = -I1D * eigen.k.array();
@@ -46,11 +66,15 @@ void Evaluate(EigenFunction &eigenfun, EigenParams &eigen, parameters &params, s
 
     // 初始化Cmat矩阵 (M x Nz)：预计算深度相关项
     Eigen::MatrixXcd Cmat(eigen.M, params.Pos->NRz);
+    Eigen::MatrixXcd Cmat_vr(eigen.M, params.Pos->NRz);
+    Eigen::MatrixXcd Cmat_vz(eigen.M, params.Pos->NRz);
     for (int iz = 0; iz < params.Pos->NRz; ++iz)
     {                                                                 // 0-based索引
         Eigen::VectorXcd exp_terms = ik.array() * params.Pos->Ro(iz); // ik * Rz(iz)
         exp_terms = exp_terms.array().exp();                          // e^(ik * Rz(iz))
-        Cmat.col(iz) = constants.array() * eigenfun.phiR.col(iz).array() * exp_terms.array();
+        Cmat.col(iz) = constants.array() * phiR.col(iz).array() * exp_terms.array();
+        Cmat_vr.col(iz) = constants_vr.array() * phiR.col(iz).array() * exp_terms.array();
+        Cmat_vz.col(iz) = constants_vz.array() * dphidzR.col(iz).array() * exp_terms.array();
     }
 
     // 遍历所有距离点计算压力场
@@ -77,6 +101,16 @@ void Evaluate(EigenFunction &eigenfun, EigenParams &eigen, parameters &params, s
                 VectorXcd col_vec1 = Cmat.col(iz);
                 complex<double> data = (col_vec1.array() * Hank.array()).sum();
                 uAllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = data;
+
+                // 计算水平振速vr
+                VectorXcd col_vec_vr = Cmat_vr.col(iz);
+                complex<double> data_vr = (col_vec_vr.array() * Hank.array()).sum();
+                uAllSources_vr[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = data_vr;
+
+                // 计算垂直振速vz
+                VectorXcd col_vec_vz = Cmat_vz.col(iz);
+                complex<double> data_vz = (col_vec_vz.array() * Hank.array()).sum();
+                uAllSources_vz[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = data_vz;
             }
         }
         else
@@ -86,6 +120,16 @@ void Evaluate(EigenFunction &eigenfun, EigenParams &eigen, parameters &params, s
                 Eigen::VectorXcd temp = Cmat.col(iz).array() * Hank.array();
                 uAllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = temp.array().abs2().sum();                                         // 模平方和
                 uAllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = std::sqrt(uAllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])]); // 开平方
+
+                // 计算水平振速vr
+                Eigen::VectorXcd temp_vr = Cmat_vr.col(iz).array() * Hank.array();
+                uAllSources_vr[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = temp_vr.array().abs2().sum();                                         // 模平方和
+                uAllSources_vr[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = std::sqrt(uAllSources_vr[GetFieldAddr(isz, iz, ir, &params.Pos[0])]); // 开平方
+
+                // 计算垂直振速vz
+                Eigen::VectorXcd temp_vz = Cmat_vz.col(iz).array() * Hank.array();
+                uAllSources_vz[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = temp_vz.array().abs2().sum();                                         // 模平方和
+                uAllSources_vz[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = std::sqrt(uAllSources_vz[GetFieldAddr(isz, iz, ir, &params.Pos[0])]); // 开平方
             }
         }
 
@@ -98,6 +142,8 @@ void Evaluate(EigenFunction &eigenfun, EigenParams &eigen, parameters &params, s
                 if (std::abs(denom) > 1e-3)
                 { // 避免除零
                     uAllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] /= std::sqrt(denom);
+                    uAllSources_vr[GetFieldAddr(isz, iz, ir, &params.Pos[0])] /= std::sqrt(denom);
+                    uAllSources_vz[GetFieldAddr(isz, iz, ir, &params.Pos[0])] /= std::sqrt(denom);
                 }
             }
         }
@@ -117,7 +163,6 @@ void field(EigenFunction &eigenfun, EigenParams &eigen, parameters &params, std:
 
     VectorXcd Hank(eigen.M);
     // VectorXcd phi(eigen.M);
-    double rLeft;
 
     for (int irr = 0; irr < params.Pos->NRr; irr++)
     {

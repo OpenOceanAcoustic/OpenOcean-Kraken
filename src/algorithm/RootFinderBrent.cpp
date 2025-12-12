@@ -3,7 +3,7 @@
 
 void ZBRENTX(double &x, double &a, double &b, const double t, 
         int& iset, int &mode, double &Delta, int &iPower, KrakenMatrix &kramtrx,
-           parameters& params, VectorXd &EVMat, bool coutmodes, int &modeCount,
+           parameters& params, VectorXd &EVMat, const int& firstM, bool coutmodes, int &modeCount,
     std::string &errorMessage, FunctType funct) {
     int iExpA, iExpB, iExpC;
     const double MACHEP = 1.0E-16;
@@ -14,8 +14,8 @@ void ZBRENTX(double &x, double &a, double &b, const double t,
     errorMessage = "";
     
     // 计算区间端点的函数值
-    funct(iset, mode, a, fa, iExpA, kramtrx, params, EVMat, false, modeCount);
-    funct(iset, mode, b, fb, iExpB, kramtrx, params, EVMat, false, modeCount);
+    funct(iset, mode, a, fa, iExpA, kramtrx, params, EVMat, firstM, false, modeCount);
+    funct(iset, mode, b, fb, iExpB, kramtrx, params, EVMat, firstM, false, modeCount);
     
     // 检查区间端点函数值是否异号
     if ((fa > 0.0 && fb > 0.0) || (fa < 0.0 && fb < 0.0)) {
@@ -132,7 +132,7 @@ void ZBRENTX(double &x, double &a, double &b, const double t,
         }
         
         // 计算新的b点函数值
-        funct(iset, mode, b, fb, iExpB, kramtrx, params, EVMat, false, modeCount);
+        funct(iset, mode, b, fb, iExpB, kramtrx, params, EVMat, firstM, false, modeCount);
         
         // 更新c点
         if ((fb > 0.0) == (fc > 0.0)) {

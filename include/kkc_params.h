@@ -399,6 +399,7 @@ struct MeshParams
 struct EigenParams
 {
     int M;             // 模式数量
+    int firstM;    // iset=0时的模式个数，决定了矩阵维度大小
     VectorXd EVMat;    // 本征值矩阵(一维向量化)
     VectorXd Extrap;   // 外推矩阵
     VectorXcd k;        // 波数向量
@@ -410,8 +411,12 @@ struct EigenParams
 // 本征函数结构体
 struct EigenFunction
 {
-    MatrixXcd phiR;  // 本征函数值
-    MatrixXcd phiS;  // 本征函数值
+    MatrixXcd phi;  // 原始mesh的本征函数值
+    MatrixXcd phiR;  // 接收器深度本征函数值
+    MatrixXcd phiS;  // 声源深度本征函数值
+    MatrixXcd dphidz;  // 原始mesh本征函数值对深度微分
+    MatrixXcd dphidzR;  // 接收器深度本征函数值对深度微分
+    MatrixXcd dphidzS;  // 声源深度本征函数值对深度微分
     VectorXi modes; // 模式索引
     VectorXd depth; // 深度向量
 };
@@ -531,6 +536,9 @@ struct parameters
     // 输出控制
     bool outputModes; // 是否输出模式
     bool outputField; // 是否输出声场
+
+    // .mod 文件流
+    std::ofstream MODFile;
 };
 
 // 输出结构

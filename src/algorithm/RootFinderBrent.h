@@ -5,7 +5,7 @@
 
 // 定义函数类型，对应Fortran中的FUNCT子例程
 typedef void (*FunctType)(int& iset, int &mode, double& x, double &Delta, int &iPower, KrakenMatrix &kramtrx,
-           parameters& params, VectorXd &EVMat, bool coutmodes, int &modeCount);
+           parameters& params, VectorXd &EVMat, const int& firstM, bool coutmodes, int &modeCount);
 
     
 /**
@@ -23,7 +23,7 @@ typedef void (*FunctType)(int& iset, int &mode, double& x, double &Delta, int &i
     
 void ZBRENTX(double &x, double &a, double &b, const double t, 
         int& iset, int &mode, double &Delta, int &iPower, KrakenMatrix &kramtrx,
-           parameters& params, VectorXd &EVMat, bool coutmodes, int &modeCount,
+           parameters& params, VectorXd &EVMat, const int& firstM, bool coutmodes, int &modeCount,
     std::string &errorMessage, FunctType funct);
 
 #endif // ROOT_FINDER_BRENT_H
