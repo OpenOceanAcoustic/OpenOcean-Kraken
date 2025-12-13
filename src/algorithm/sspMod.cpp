@@ -102,7 +102,7 @@ void n2Linear(SSPStructure &SSP,int iMedium)
 
 
         // S波速度计算
-         std::complex<double> betaTop = SSP.cs[offset_start + Lay];
+        std::complex<double> betaTop = SSP.cs[offset_start + Lay];
         std::complex<double> betaBot = SSP.cs[offset_start + Lay + 1];
 
          if (std::abs(betaTop) > 1e-12 && std::abs(betaBot) > 1e-12) {

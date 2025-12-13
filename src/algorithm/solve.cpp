@@ -165,6 +165,7 @@ void Solve1(int &iset, size_t iprof, const int &NSets, EigenParams &eigen, Krake
     if (M > NTotal / 5)
     {
         // 输出警告信息
+        std::cout << "Approximate number of modes = " << M << " Warning in KRAKEN - Solve1 : Mesh too coarse to sample the modes adequately" << std::endl;
     }
 
     Bisection(iset, iprof, mode, xMin, xMax, xL, xR, kramtrx, params, eigen); // 初始化上下边界
@@ -611,8 +612,8 @@ void VectorSolve(size_t iprof, KrakenMatrix &kramtrx, parameters &params, EigenP
         L = params.mesh.Loc(params.FirstAcoustic);
         for (int im = params.FirstAcoustic; im <= params.LastAcoustic; im++)
         {
-            xh2 = x * SQ(params.mesh.h(params.FirstAcoustic));
-            h_rho = params.mesh.h(params.FirstAcoustic) * kramtrx.rho(L);
+            xh2 = x * SQ(params.mesh.h(im));
+            h_rho = params.mesh.h(im) * kramtrx.rho(L+1);
             if (im >= params.FirstAcoustic + 1)
             {
                 L++;
@@ -644,19 +645,25 @@ void VectorSolve(size_t iprof, KrakenMatrix &kramtrx, parameters &params, EigenP
         if (IErr != 0)
         {
             // 未收敛
+            std::cout << "mode = " << mode << std::endl;
+            std::cout << "Warning in KRAKEN - InverseIteration: Inverse iteration failed to converge" << std::endl;
+            Phi = VectorXd::Zero(NTotal1);   // zero out the errant eigenvector
         }
         else
         {
             Normalize(iprof, mode, eigen.firstM, Phi, ITP, NTotal1, x, kramtrx, params, eigen);
         }
-
+        int index = 0;
         for (int im = params.FirstAcoustic; im <= params.LastAcoustic; ++im)
         {
             double h = params.mesh.h(im);
             int Nn = params.mesh.N(im);
-            for (int ii = 0; ii < Nn + 1; ii++)
+            if (im == params.LastAcoustic)
             {
-                int index = params.mesh.Loc(im) + ii;
+                Nn++;
+            }
+            for (int ii = 0; ii < Nn; ii++)
+            {
                 eigenfun.phi(mode, index) = Phi(index);
                 if (index == 0)
                 {
@@ -670,6 +677,7 @@ void VectorSolve(size_t iprof, KrakenMatrix &kramtrx, parameters &params, EigenP
                 {
                     eigenfun.dphidz(mode, index) = (Phi(index + 1) - Phi(index - 1)) / (2 * h);
                 }
+                index++;
             }
         }
         // // 打印phi和dphidz

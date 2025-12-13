@@ -117,6 +117,119 @@ void set_pekeris(parameters& params)
     params.Title = "Pekeris";
 }
 
+
+void set_pekeris_2_mediums(parameters& params)
+{
+    params.freqinfo = new FreqInfo();
+    params.Pos = new Position();
+
+    // 剖面个数
+    params.NProf = 1;
+    params.SSP = new SSPStructure[params.NProf];
+    params.HSTop = new HSInfo[params.NProf];
+    params.HSBot = new HSInfo[params.NProf];
+
+    // 介质层数
+    params.SSP[0].NMedia = 2;
+
+    // 频率
+    params.freqinfo->freq = 150;
+    params.freqinfo->Nfreq = 1;
+    params.freqinfo->freqvec = VectorXd(1);
+    params.freqinfo->freqvec(0) = params.freqinfo->freq;
+
+    // 海面、海底参数
+    params.HSTop[0].BC = BC_Mode::MODE_V_Vacuum;
+    params.HSBot[0].BC = BC_Mode::MODE_A_Half_space;
+    params.HSBot[0].alphaI = 0.2;
+    params.HSBot[0].alphaR = 1800.0;
+    params.HSBot[0].betaI = 0.0;
+    params.HSBot[0].betaR = 0.0;
+    params.HSBot[0].Depth = 220.0;
+    params.HSBot[0].rho = 1.6;
+    params.HSBot[0].sigma = 0;
+
+    // 相速度范围
+    params.Chigh = 2000;
+    params.Clow = 1200;
+
+    // 绝热模式
+    params.modeType = ModeType::Adiabatic;
+
+    // 声源接收设置
+    params.Pos->NSz = 1;
+    params.Pos->Sz.resize(params.Pos->NSz);
+    params.Pos->Sz(0) = 25;
+    params.Pos->NRr = 300;
+    params.Pos->Rr.resize(params.Pos->NRr);
+    for(size_t i = 0; i < params.Pos->NRr; ++i){
+        params.Pos->Rr(i) = 100 * (i + 1);
+    }
+    params.Pos->NRz = 221;
+    params.Pos->NRz_per_range = params.Pos->NRz;
+    params.Pos->Rz.resize(params.Pos->NRz);
+    params.Pos->Ro.resize(params.Pos->NRz);
+    for(size_t i = 0; i < params.Pos->NRz; ++i){
+        params.Pos->Rz(i) = i;
+        params.Pos->Ro(i) = 0;
+    }
+    params.Pos->GridType = Grid_Mode::MODE_R_Rectangular;
+
+    // 最大距离 m
+    params.Rmax = 30000;
+
+    // 计算模式，本征值和声场
+    params.runMode = Run_Mode::MODE_B_Both;
+
+    // 相干和非相干
+    params.coherenceType = CoherenceType::Coherent;
+
+    // 点声源
+    params.SourceType = Source_Mode::MODE_R_Point;
+    params.AttenUnit = Atten_Mode::MODE_W_db_per_lambda;
+
+    // 声速剖面类型
+    params.SSP[0].SSPType = SSP_Mode::MODE_C_cLinear;
+
+    // 声速剖面
+    params.SSP[0].NPts.resize(params.SSP[0].NMedia);
+    params.SSP[0].beta.resize(params.SSP[0].NMedia);
+    params.SSP[0].ft.resize(params.SSP[0].NMedia);
+    params.SSP[0].NMesh.resize(params.SSP[0].NMedia);
+    params.SSP[0].depth.resize(params.SSP[0].NMedia);
+    params.SSP[0].sigma.resize(params.SSP[0].NMedia);
+    params.SSP[0].offset.resize(params.SSP[0].NMedia);
+
+    params.SSP[0].NPts[0] = 2; params.SSP[0].NPts[1] = 2;
+    params.SSP[0].offset[0] = 0; params.SSP[0].offset[1] = params.SSP[0].offset[0] + params.SSP[0].NPts[0];
+    int NPtsAll = params.SSP[0].NPts.sum();
+    params.SSP[0].alphaR.resize(NPtsAll);
+    params.SSP[0].alphaI.resize(NPtsAll);
+    params.SSP[0].betaR = VectorXd::Zero(NPtsAll);
+    params.SSP[0].betaI = VectorXd::Zero(NPtsAll);
+    params.SSP[0].rho.resize(NPtsAll);
+    params.SSP[0].z.resize(NPtsAll);
+    params.SSP[0].cp.resize(NPtsAll);
+    params.SSP[0].cs.resize(NPtsAll);
+
+    // 填充env中的声速剖面数据（z, alphaR, alphaI, rho） (深度, 纵波速度, 纵波吸收, 密度)
+    // 第一层（海水层）
+    params.SSP->z(0) = 0.0;     params.SSP->alphaR(0) = 1500.00;   params.SSP->alphaI(0) = 0.0;   params.SSP->rho(0) = 1.0;
+    params.SSP->z(1) = 200.0;   params.SSP->alphaR(1) = 1500.00;   params.SSP->alphaI(1) = 0.0;   params.SSP->rho(1) = 1.0;
+    // 第二层（沉积层）
+    params.SSP->z(2) = 200.0;   params.SSP->alphaR(2) = 1600.00;   params.SSP->alphaI(2) = 0.1;   params.SSP->rho(2) = 1.6;
+    params.SSP->z(3) = 220.0;   params.SSP->alphaR(3) = 1600.00;   params.SSP->alphaI(3) = 0.1;   params.SSP->rho(3) = 1.6;
+
+    params.SSP[0].beta[0] = 0.0; params.SSP[0].beta[1] = 0.0;
+    params.SSP[0].ft[0] = 0.0;   params.SSP[0].ft[1] = 0.0;
+    params.SSP[0].NMesh[0] = 0;  params.SSP[0].NMesh[1] = 0;
+    
+    params.SSP[0].depth[0] = 200; params.SSP[0].depth[1] = 20;
+    params.SSP[0].sigma[0] = 0;   params.SSP[0].sigma[1] = 0;
+
+    params.Title = "Pekeris";
+}
+
 void set_Munk(parameters& params)
 {
     params.freqinfo = new FreqInfo();

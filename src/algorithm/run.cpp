@@ -5,7 +5,8 @@ void run()
     parameters params;
     // set_pekeris(params);
     // set_Munk(params);
-    set_Dickins(params);
+    // set_Dickins(params);
+    set_pekeris_2_mediums(params);
 
     params.NProf = 1;
     KrakenMatrix kramtrx;
@@ -15,12 +16,13 @@ void run()
     params.mesh.hV.resize(params.mesh.NSets);
     for (size_t iprof = 0; iprof < params.NProf; iprof++)
     {
-
+        size_t ilay=0;
         // 检查竖直网络步长是否小于波长/20
         for (int i = 0; i < params.SSP[iprof].NMedia; ++i)
         {
+            ilay += params.SSP[iprof].NPts[i];
             double h = params.SSP[iprof].depth[i] / params.SSP[iprof].NMesh[i];
-            double lambda_1_20 = params.SSP[iprof].alphaR[params.SSP[iprof].NPts[i] - 1] / params.freqinfo->freq / 20.0; // 最后一个声速计算波长
+            double lambda_1_20 = params.SSP[iprof].alphaR[ilay - 1] / params.freqinfo->freq / 20.0; // 最后一个声速计算波长
             int Nneeded = int((params.SSP[iprof].depth[i]) / lambda_1_20);
             Nneeded = std::max(Nneeded, 10); // require a minimum of 10 points				要求每一层媒质至少有10个点
 
@@ -95,9 +97,14 @@ void run()
         eigenfun[iprof].dphidzS.resize(M, eigenfun[iprof].dphidzS.cols());
         eigenfun[iprof].dphidzS = tempdphidzS;
 
-        // // 打印eigen.k
+        // // // 打印eigen.k
+        // cout << "eigen.Extrap: \n"
+        //      << eigen[iprof].Extrap.segment(0, M) << endl;
+
+
         // cout << "eigen.k: \n"
         //      << eigen[iprof].k << endl;
+
         for (int i = 0; i < M; i++)
         {
             eigen[iprof].k(i) = sqrt(eigen[iprof].Extrap(i) + eigen[iprof].k(i));

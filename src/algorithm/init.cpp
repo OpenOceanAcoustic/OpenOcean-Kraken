@@ -20,6 +20,7 @@ void Initialize(int& iset, size_t iprof, parameters& params, KrakenMatrix& kramt
     // 计算总网格点数
     params.mesh.N.resize(params.SSP[iprof].NMedia);
     params.mesh.h.resize(params.SSP[iprof].NMedia);
+
     for (int i = 0; i < params.SSP[iprof].NMedia; ++i) {
         params.mesh.N(i) = params.SSP[iprof].NMesh(i) * ntimes;
         params.mesh.h(i) = params.SSP[iprof].depth(i) / params.mesh.N(i);
@@ -38,7 +39,6 @@ void Initialize(int& iset, size_t iprof, parameters& params, KrakenMatrix& kramt
     kramtrx.B3.resize(NPoints);
     kramtrx.B4.resize(NPoints);
     kramtrx.rho.resize(NPoints);
-    params.mesh.h.resize(params.SSP[iprof].NMedia);
 
     SSPStructure SSP = params.SSP[iprof];
     SSP.cp_int.resize(NPoints);
@@ -78,26 +78,18 @@ void Initialize(int& iset, size_t iprof, parameters& params, KrakenMatrix& kramt
             // 计算当前层的最小声速
             double min_cp = 1e8;
             for (int j = 0; j < SSP.NMesh(im) + 1; ++j) {
-                min_cp = std::min(min_cp, std::real(SSP.cp_int(j)));
+                min_cp = std::min(min_cp, std::real(SSP.cp_int(ii+j)));
             }
             cMin = std::min(cMin, min_cp);
             
             // 计算B1和B1C
             double h2 = SQ(params.mesh.h(im));
             for (int j = 0; j < SSP.NMesh(im) + 1; ++j) {
-                cp2 = real(SQ(SSP.cp_int(j)));
-                double val = omega2 / cp2;
+                complex<double> val = omega2 / SQ(SSP.cp_int(ii+j));
                 kramtrx.B1(ii+j) = -2.0 + h2 * std::real(val);
                 kramtrx.B1C(ii+j) = std::imag(val);
-                kramtrx.rho(ii+j) = SSP.rho_int(j);
+                kramtrx.rho(ii+j) = SSP.rho_int(ii+j);
             }
-            // // 打印kramtrx内部参数
-            // std::cout << "B1" << kramtrx.B1.size() << kramtrx.B1.transpose() << std::endl;
-
-            // std::cout << "B1C" << kramtrx.B1C.size() << kramtrx.B1C.transpose() << std::endl;
-
-            // std::cout << "rho" << kramtrx.rho.size() << kramtrx.rho.transpose() << std::endl;
-
 
         } else { // 弹性介质情况
             SSP.Material[im] = Media_Mode::MODE_E_Elastic;
@@ -118,6 +110,13 @@ void Initialize(int& iset, size_t iprof, parameters& params, KrakenMatrix& kramt
             }
         }
     }
+
+    // // 打印kramtrx内部参数
+    // std::cout << "B1 " << kramtrx.B1.size() << kramtrx.B1.transpose() << std::endl;
+
+    // std::cout << "B1C " << kramtrx.B1C.size() << kramtrx.B1C.transpose() << std::endl;
+
+    // std::cout << "rho " << kramtrx.rho.size() << kramtrx.rho.transpose() << std::endl;
     
 
     // 处理底部半空间属性
