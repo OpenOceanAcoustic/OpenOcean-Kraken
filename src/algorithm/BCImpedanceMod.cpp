@@ -1,11 +1,11 @@
 #include "BCImpedanceMod.h"
 
 // 计算边界条件阻抗
-void BCImpedance(const double& x,  bool& isTop, complex<double> &f, complex<double> &g,
+void BCImpedance(size_t iprof, const double& x,  bool& isTop, complex<double> &f, complex<double> &g,
                  int &iPower, const bool& isComplex, KrakenMatrix &kramtrx, parameters& params, 
                  int& modeCount)
 {
-    int iTop = 0, iBot = 0, Medium;
+    int iTop = 0, iBot = 0;
     VectorXd yV = VectorXd::Zero(5);
     double mu;
     double rhoInside = 1.0;
@@ -16,7 +16,7 @@ void BCImpedance(const double& x,  bool& isTop, complex<double> &f, complex<doub
     double omega2 = SQ(omega);
     double hFirstAcoustic = params.mesh.h(0);
     double hFirstAcoustic2 = SQ(hFirstAcoustic);
-    HSInfo HS = params.HSTop;
+    HSInfo HS = params.HSTop[iprof];
 
     iPower = 0;
 
@@ -41,7 +41,7 @@ void BCImpedance(const double& x,  bool& isTop, complex<double> &f, complex<doub
             cInside = std::sqrt(omega2 * hFirstAcoustic2 /
                       (2.0 + kramtrx.B1(kramtrx.B1.size() - 1)));
         }
-        HS = params.HSBot;
+        HS = params.HSBot[iprof];
     }
 
     // 根据边界条件类型返回阻抗
@@ -162,9 +162,9 @@ void BCImpedance(const double& x,  bool& isTop, complex<double> &f, complex<doub
     }
     else
     {
-        if (params.LastAcoustic < params.NMedia-1)
+        if (params.LastAcoustic < params.SSP[iprof].NMedia-1)
         { // 从底部向上传播
-            for (int im = params.NMedia - 1; im > params.LastAcoustic; --im)
+            for (int im = params.SSP[iprof].NMedia - 1; im > params.LastAcoustic; --im)
             {
                 ElasticUP(x, yV, iPower, im, kramtrx, params);
             }

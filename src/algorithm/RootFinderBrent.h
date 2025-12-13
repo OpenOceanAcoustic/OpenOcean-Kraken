@@ -4,7 +4,7 @@
 #include "kkc_params.h"
 
 // 定义函数类型，对应Fortran中的FUNCT子例程
-typedef void (*FunctType)(int& iset, int &mode, double& x, double &Delta, int &iPower, KrakenMatrix &kramtrx,
+typedef void (*FunctType)(int& iset, size_t iprof, int &mode, double& x, double &Delta, int &iPower, KrakenMatrix &kramtrx,
            parameters& params, VectorXd &EVMat, const int& firstM, bool coutmodes, int &modeCount);
 
     
@@ -22,7 +22,7 @@ typedef void (*FunctType)(int& iset, int &mode, double& x, double &Delta, int &i
 
     
 void ZBRENTX(double &x, double &a, double &b, const double t, 
-        int& iset, int &mode, double &Delta, int &iPower, KrakenMatrix &kramtrx,
+        int& iset, size_t iprof, int &mode, double &Delta, int &iPower, KrakenMatrix &kramtrx,
            parameters& params, VectorXd &EVMat, const int& firstM, bool coutmodes, int &modeCount,
     std::string &errorMessage, FunctType funct);
 

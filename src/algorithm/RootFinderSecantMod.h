@@ -4,11 +4,11 @@
 #include "kkc_params.h"
 
 // 定义函数类型，对应Fortran中的FUNCT子例程
-typedef void (*RealFunctType)(int& iset, int &mode, double& x, double &Delta, int &iPower, KrakenMatrix &kramtrx,
+typedef void (*RealFunctType)(int& iset, size_t iprof, int &mode, double& x, double &Delta, int &iPower, KrakenMatrix &kramtrx,
            parameters& params, VectorXd &EVMat, const int& firstM, bool coutmodes, int &modeCount);
 
            // 复数形式待补充
-typedef void (*ComplexFunctType)(int& iset, int &mode, complex<double>& x, complex<double> &Delta, int &iPower, KrakenMatrix &kramtrx,
+typedef void (*ComplexFunctType)(int& iset, size_t iprof, int &mode, complex<double>& x, complex<double> &Delta, int &iPower, KrakenMatrix &kramtrx,
            parameters& params, VectorXd &EVMat, const int& firstM, bool coutmodes, int &modeCount);
 
 
@@ -24,7 +24,7 @@ typedef void (*ComplexFunctType)(int& iset, int &mode, complex<double>& x, compl
  * @param Funct 输入参数，计算函数值的函数指针
  */
 void ZSecantX(double &x2, const double Tolerance, int &Iteration, const int MaxIteration,
-    int& iset, int &mode, double &Delta, int &iPower, KrakenMatrix &kramtrx,
+    int& iset, size_t iprof, int &mode, double &Delta, int &iPower, KrakenMatrix &kramtrx,
            parameters& params, VectorXd &EVMat, const int& firstM, bool coutmodes, int &modeCount,
               std::string &ErrorMessage, RealFunctType Funct);
 
@@ -39,7 +39,7 @@ void ZSecantX(double &x2, const double Tolerance, int &Iteration, const int MaxI
  * @param Funct 输入参数，计算函数值的函数指针
  */
 void ZSecantCX(std::complex<double> &x2, const double Tolerance, int &Iteration, const int MaxIteration,
-    int& iset, int &mode, double &Delta, int &iPower, KrakenMatrix &kramtrx,
+    int& iset, size_t iprof, int &mode, double &Delta, int &iPower, KrakenMatrix &kramtrx,
            parameters& params, VectorXd &EVMat, const int& firstM, bool coutmodes, int &modeCount,
                std::string &ErrorMessage, ComplexFunctType Funct);
 

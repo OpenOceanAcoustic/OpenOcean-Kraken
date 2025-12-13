@@ -137,19 +137,19 @@ std::complex<double> spline(const std::complex<double> *C, double H)
     return SPLINE;
 }
 
-std::complex<double> splinex(const std::complex<double> *C, double H)
-{
-    std::complex<double> SPLINEX;
-    SPLINEX = C[1] + H * (C[2] + H * C[3] / 2.0);
-    return SPLINEX;
-}
+// std::complex<double> splinex(const std::complex<double> *C, double H)
+// {
+//     std::complex<double> SPLINEX;
+//     SPLINEX = C[1] + H * (C[2] + H * C[3] / 2.0);
+//     return SPLINEX;
+// }
 
-std::complex<double> splinexx(const std::complex<double> *C, double H)
-{
-    std::complex<double> SPLINEXX;
-    SPLINEXX = C[2] + H * C[3];
-    return SPLINEXX;
-}
+// std::complex<double> splinexx(const std::complex<double> *C, double H)
+// {
+//     std::complex<double> SPLINEXX;
+//     SPLINEXX = C[2] + H * C[3];
+//     return SPLINEXX;
+// }
 
 void SplineALL(MatrixXcd &C, int &iSegz, double &H, std::complex<double> &F, std::complex<double> &FX, std::complex<double> &FXX){
     const double HALF = 0.5;

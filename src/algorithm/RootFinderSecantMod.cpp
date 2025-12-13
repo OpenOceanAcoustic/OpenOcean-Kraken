@@ -1,7 +1,7 @@
 #include "RootFinderSecantMod.h"
 
 void ZSecantX(double &x2, const double Tolerance, int &Iteration, const int MaxIteration, 
-    int& iset, int &mode, double &Delta, int &iPower, KrakenMatrix &kramtrx,
+    int& iset, size_t iprof, int &mode, double &Delta, int &iPower, KrakenMatrix &kramtrx,
            parameters& params, VectorXd &EVMat, const int& firstM, bool ismodecount, int &modeCount,
               std::string &ErrorMessage, RealFunctType Funct) {
     int iPower0, iPower1;
@@ -16,7 +16,7 @@ void ZSecantX(double &x2, const double Tolerance, int &Iteration, const int MaxI
     
     // 初始化第一个点
     x1 = x2 + 10.0 * Tolerance;
-    Funct(iset, mode, x1, f1, iPower1, kramtrx, params, EVMat, firstM, ismodecount, modeCount);
+    Funct(iset, iprof, mode, x1, f1, iPower1, kramtrx, params, EVMat, firstM, ismodecount, modeCount);
     
     // 主迭代循环
     for (Iteration = 1; Iteration <= MaxIteration; ++Iteration) {
@@ -27,7 +27,7 @@ void ZSecantX(double &x2, const double Tolerance, int &Iteration, const int MaxI
         x1 = x2;
         
         // 计算当前点的函数值
-        Funct(iset, mode, x1, f1, iPower1, kramtrx, params, EVMat, firstM, ismodecount, modeCount);
+        Funct(iset, iprof, mode, x1, f1, iPower1, kramtrx, params, EVMat, firstM, ismodecount, modeCount);
         
         // 计算割线法的位移，避免溢出
         cNum = f1 * (x1 - x0);
@@ -53,7 +53,7 @@ void ZSecantX(double &x2, const double Tolerance, int &Iteration, const int MaxI
 }
 
 void ZSecantCX(std::complex<double> &x2, const double Tolerance, int &Iteration, const int MaxIteration, 
-        int& iset, int &mode, double &Delta, int &iPower, KrakenMatrix &kramtrx,
+        int& iset, size_t iprof, int &mode, double &Delta, int &iPower, KrakenMatrix &kramtrx,
            parameters& params, VectorXd &EVMat, const int& firstM, bool coutmodes, int &modeCount,
                std::string &ErrorMessage, ComplexFunctType Funct) {
     
@@ -69,7 +69,7 @@ void ZSecantCX(std::complex<double> &x2, const double Tolerance, int &Iteration,
     
     // 初始化第一个点
     x1 = x2 + 100.0 * Tolerance;
-    Funct(iset, mode, x1, f1, iPower1, kramtrx, params, EVMat, firstM, ismodecount, modeCount);
+    Funct(iset, iprof, mode, x1, f1, iPower1, kramtrx, params, EVMat, firstM, ismodecount, modeCount);
     
     // 主迭代循环
     for (Iteration = 1; Iteration <= MaxIteration; ++Iteration) {
@@ -80,7 +80,7 @@ void ZSecantCX(std::complex<double> &x2, const double Tolerance, int &Iteration,
         x1 = x2;
         
         // 计算当前点的函数值
-        Funct(iset, mode, x1, f1, iPower1, kramtrx, params, EVMat, firstM, ismodecount, modeCount);
+        Funct(iset, iprof, mode, x1, f1, iPower1, kramtrx, params, EVMat, firstM, ismodecount, modeCount);
         
         // 计算割线法的位移，避免溢出
         cNum = f1 * (x1 - x0);
