@@ -4,8 +4,8 @@ void run()
 {
     parameters params;
     // set_pekeris(params);
-    set_Munk(params);
-    // set_Dickins(params);
+    // set_Munk(params);
+    set_Dickins(params);
 
     params.NProf = 1;
     KrakenMatrix kramtrx;
