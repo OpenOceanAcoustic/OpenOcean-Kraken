@@ -6,9 +6,9 @@ void run()
     // set_pekeris(params);
     // set_Munk(params);
     // set_Dickins(params);
-    set_pekeris_2_mediums(params);
+    // set_pekeris_2_mediums(params);
+    set_pekeris_2_profs(params);
 
-    params.NProf = 1;
     KrakenMatrix kramtrx;
     EigenParams *eigen = new EigenParams[params.NProf];
     EigenFunction *eigenfun = new EigenFunction[params.NProf];
@@ -158,13 +158,14 @@ void run()
         uAllSources_vr = new std::complex<float>[N];
         std::complex<float> *uAllSources_vz;
         uAllSources_vz = new std::complex<float>[N];
+        
         for (int isz = 0; isz < params.Pos->NSz; isz++)
         {
             Evaluate(eigenfun[iprof], eigen[iprof], params, isz, u_AllSources, uAllSources_vr, uAllSources_vz);
         }
-        string filename = "test_pressure";
-        string filename_vr = "test_vr";
-        string filename_vz = "test_vz";
+        string filename = "test_pressure" + std::to_string(iprof);
+        string filename_vr = "test_vr" + std::to_string(iprof);
+        string filename_vz = "test_vz" + std::to_string(iprof);
         export_shd(filename, params, u_AllSources);
         export_shd(filename_vr, params, uAllSources_vr);
         export_shd(filename_vz, params, uAllSources_vz);

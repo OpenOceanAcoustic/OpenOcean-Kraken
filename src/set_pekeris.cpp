@@ -227,8 +227,152 @@ void set_pekeris_2_mediums(parameters& params)
     params.SSP[0].depth[0] = 200; params.SSP[0].depth[1] = 20;
     params.SSP[0].sigma[0] = 0;   params.SSP[0].sigma[1] = 0;
 
-    params.Title = "Pekeris";
+    params.Title = "Pekeris 2 Mediums";
 }
+
+
+// TODO 多剖面
+void set_pekeris_2_profs(parameters& params)
+{
+    params.freqinfo = new FreqInfo();
+    params.Pos = new Position();
+
+    // 剖面个数
+    params.NProf = 2;
+    params.SSP = new SSPStructure[params.NProf];
+    params.HSTop = new HSInfo[params.NProf];
+    params.HSBot = new HSInfo[params.NProf];
+
+    // 频率
+    params.freqinfo->freq = 200;
+    params.freqinfo->Nfreq = 1;
+    params.freqinfo->freqvec = VectorXd(1);
+    params.freqinfo->freqvec(0) = params.freqinfo->freq;
+
+    // 第一个剖面 海面、海底参数
+    params.HSTop[0].BC = BC_Mode::MODE_V_Vacuum;
+    params.HSBot[0].BC = BC_Mode::MODE_A_Half_space;
+    params.HSBot[0].alphaI = 0.2;
+    params.HSBot[0].alphaR = 1600.0;
+    params.HSBot[0].betaI = 0.0;
+    params.HSBot[0].betaR = 0.0;
+    params.HSBot[0].Depth = 200.0;
+    params.HSBot[0].rho = 1.5;
+    params.HSBot[0].sigma = 0;
+
+    // 第二个剖面 海面、海底参数
+    params.HSTop[1].BC = BC_Mode::MODE_V_Vacuum;
+    params.HSBot[1].BC = BC_Mode::MODE_A_Half_space;
+    params.HSBot[1].alphaI = 0.2;
+    params.HSBot[1].alphaR = 1600.0;
+    params.HSBot[1].betaI = 0.0;
+    params.HSBot[1].betaR = 0.0;
+    params.HSBot[1].Depth = 200.0;
+    params.HSBot[1].rho = 1.5;
+    params.HSBot[1].sigma = 0;
+
+    // 相速度范围
+    params.Chigh = 2000;
+    params.Clow = 1200;
+
+    // 绝热模式
+    params.modeType = ModeType::Adiabatic;
+
+    // 声源接收设置
+    params.Pos->NSz = 1;
+    params.Pos->Sz.resize(params.Pos->NSz);
+    params.Pos->Sz(0) = 25;
+    params.Pos->NRr = 300;
+    params.Pos->Rr.resize(params.Pos->NRr);
+    for(size_t i = 0; i < params.Pos->NRr; ++i){
+        params.Pos->Rr(i) = 100 * (i + 1);
+    }
+    params.Pos->NRz = 201;
+    params.Pos->NRz_per_range = params.Pos->NRz;
+    params.Pos->Rz.resize(params.Pos->NRz);
+    params.Pos->Ro.resize(params.Pos->NRz);
+    for(size_t i = 0; i < params.Pos->NRz; ++i){
+        params.Pos->Rz(i) = i;
+        params.Pos->Ro(i) = 0;
+    }
+    params.Pos->GridType = Grid_Mode::MODE_R_Rectangular;
+
+    // 最大距离
+    params.Rmax = 30000;
+
+    // 计算模式，本征值和声场
+    params.runMode = Run_Mode::MODE_B_Both;
+
+    // 相干和非相干
+    params.coherenceType = CoherenceType::Coherent;
+
+    // 点声源
+    params.SourceType = Source_Mode::MODE_R_Point;
+    params.AttenUnit = Atten_Mode::MODE_W_db_per_lambda;
+
+
+    // 一个剖面 声速剖面
+    // 声速剖面类型
+    params.SSP[0].SSPType = SSP_Mode::MODE_C_cLinear;
+    // 介质层数
+    params.SSP[0].NMedia = 1;
+    params.SSP[0].NPts.resize(params.SSP[0].NMedia);
+    params.SSP[0].beta.resize(params.SSP[0].NMedia);
+    params.SSP[0].ft.resize(params.SSP[0].NMedia);
+    params.SSP[0].NMesh.resize(params.SSP[0].NMedia);
+    params.SSP[0].depth.resize(params.SSP[0].NMedia);
+    params.SSP[0].sigma.resize(params.SSP[0].NMedia);
+    params.SSP[0].offset.resize(params.SSP[0].NMedia);
+
+    params.SSP[0].NPts[0] = 2;
+    params.SSP[0].alphaR = Vector2d(1500.0, 1500.0);
+    params.SSP[0].alphaI = Vector2d(0.0, 0.0);
+    params.SSP[0].betaR = Vector2d(0.0, 0.0);
+    params.SSP[0].betaI = Vector2d(0.0, 0.0);
+    params.SSP[0].rho = Vector2d(1.0, 1.0);
+    params.SSP[0].z = Vector2d(0, 200.0);
+    params.SSP[0].cp.resize(params.SSP[0].NPts[0]);
+    params.SSP[0].cs.resize(params.SSP[0].NPts[0]);
+    params.SSP[0].beta[0] = 0.0;
+    params.SSP[0].ft[0] = 0.0;
+    params.SSP[0].NMesh[0] = 0;
+    params.SSP[0].offset[0] = 0;
+    params.SSP[0].depth[0] = 200;
+    params.SSP[0].sigma[0] = 0;
+
+    // 第二个剖面 声速剖面
+    // 声速剖面类型
+    params.SSP[1].SSPType = SSP_Mode::MODE_C_cLinear;
+    // 介质层数
+    params.SSP[1].NMedia = 1;
+    params.SSP[1].NPts.resize(params.SSP[1].NMedia);
+    params.SSP[1].beta.resize(params.SSP[1].NMedia);
+    params.SSP[1].ft.resize(params.SSP[1].NMedia);
+    params.SSP[1].NMesh.resize(params.SSP[1].NMedia);
+    params.SSP[1].depth.resize(params.SSP[1].NMedia);
+    params.SSP[1].sigma.resize(params.SSP[1].NMedia);
+    params.SSP[1].offset.resize(params.SSP[1].NMedia);
+
+    params.SSP[1].NPts[0] = 2;
+    params.SSP[1].alphaR = Vector2d(1500.0, 1500.0);
+    params.SSP[1].alphaI = Vector2d(0.0, 0.0);
+    params.SSP[1].betaR = Vector2d(0.0, 0.0);
+    params.SSP[1].betaI = Vector2d(0.0, 0.0);
+    params.SSP[1].rho = Vector2d(1.0, 1.0);
+    params.SSP[1].z = Vector2d(0, 180.0);
+    params.SSP[1].cp.resize(params.SSP[1].NPts[0]);
+    params.SSP[1].cs.resize(params.SSP[1].NPts[0]);
+    params.SSP[1].beta[0] = 0.0;
+    params.SSP[1].ft[0] = 0.0;
+    params.SSP[1].NMesh[0] = 0;
+    params.SSP[1].offset[0] = 0;
+    params.SSP[1].depth[0] = 180.0;
+    params.SSP[1].sigma[0] = 0;
+
+    params.Title = "Pekeris 2 Prof";
+}
+
+
 
 void set_Munk(parameters& params)
 {
