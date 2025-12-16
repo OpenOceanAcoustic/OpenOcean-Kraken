@@ -120,7 +120,6 @@ enum class Grid_Mode
     MODE_I_Irregular,   // 不规则网格
 };
 
-
 struct rxyz_vector
 {
     VectorXd r;
@@ -132,19 +131,25 @@ struct rxyz_vector
 // @brief 声速剖面结构体
 struct SSPStructure
 {
-    Media_Mode Material;
-    double sigma;
-    // @brief 声速剖面点数
-    int NPts;
-    // @brief 声速剖面细分点数
-    int N;
+    // 多层介质层线性存储，用NPts来指代总数据点数，NMesh指代抽样点数，NMedia来指代层数
+     // 介质层定义
+    VectorXd beta;//size = NMedia
+    VectorXd ft;//size = NMedia
+    VectorXd sigma;//size = NMedia
+    std::vector<Media_Mode> Material; 
+    SSP_Mode SSPType;
+
     // 层厚度
-    double depth;
-    // 细分步长
-    double h;
-    // 介质层定义
-    double beta;
-    double ft;
+    VectorXd depth;
+    // @brief 声速剖面点数
+    VectorXi NPts; //size = NMedia
+    // @brief多层介质存储偏移量
+    VectorXi offset; //size = NMedia
+
+    // @brief 声速剖面细分点数
+    VectorXi NMesh;//size = NMedia
+    // @brief 该剖面层数
+    int NMedia;
 
     // @brief 深度向量
     VectorXd z;
@@ -181,6 +186,36 @@ struct SSPStructure
     MatrixXcd csSpline;
     // @brief 密度三次样条系数
     MatrixXcd rhoSpline;
+
+    // 返回第 iMedia 层在全局向量中的起始索引（包含）
+    int get_media_start(int iMedia) const {
+        assert(iMedia >= 0 && iMedia < NMedia);
+        return offset[iMedia];
+    }
+
+    // 返回第 iMedia 层的结束索引（不包含，C++ 半开区间惯例）
+    int get_media_end(int iMedia) const {
+        assert(iMedia >= 0 && iMedia < NMedia);
+        return offset[iMedia] + NPts[iMedia];
+    }
+
+    // 返回该层点数（冗余但方便）
+    int get_media_size(int iMedia) const {
+        assert(iMedia >= 0 && iMedia < NMedia);
+        return NPts[iMedia];
+    }
+    // 返回该层网格点数
+    int get_media_Nmesh(int iMedia) const {
+        assert(iMedia >= 0 && iMedia < NMedia);
+        return NMesh[iMedia];
+    }
+    int get_global_interp_offset(int iMedium) const {
+        int offset = 0;
+        for (int i = 0; i < iMedium; ++i) {
+            offset += NMesh[i] + 1;  // 每层有 Nmesh+1 个插值点
+        }
+        return offset;
+    }
 };
 
 // @brief 半空间属性结构体
@@ -383,26 +418,25 @@ struct KrakenMatrix
     int modeCount;
 };
 
-
 // 有限差分网格参数
 struct MeshParams
 {
     VectorXi Loc;
-    int NSets = 5;   // 网格集数量
-    int NV[5] = {1, 2, 4, 8, 16};   // Richardson外推系数数组
-    VectorXi N;  // 各层的网格点数
-    VectorXd h;  // 各层的网格步长
-    VectorXd hV; // 网格步长向量
+    int NSets = 5;                // 网格集数量
+    int NV[5] = {1, 2, 4, 8, 16}; // Richardson外推系数数组
+    VectorXi N;                   // 各层的网格点数
+    VectorXd h;                   // 各层的网格步长
+    VectorXd hV;                  // 网格步长向量
 };
 
 // 本征值相关参数
 struct EigenParams
 {
     int M;             // 模式数量
-    int firstM;    // iset=0时的模式个数，决定了矩阵维度大小
+    int firstM;        // iset=0时的模式个数，决定了矩阵维度大小
     VectorXd EVMat;    // 本征值矩阵(一维向量化)
     VectorXd Extrap;   // 外推矩阵
-    VectorXcd k;        // 波数向量
+    VectorXcd k;       // 波数向量
     VectorXd VG;       // 群速度向量
     int LRecordLength; // 记录长度
     int IRecProfile;   // 记录指针
@@ -411,14 +445,14 @@ struct EigenParams
 // 本征函数结构体
 struct EigenFunction
 {
-    MatrixXcd phi;  // 原始mesh的本征函数值
-    MatrixXcd phiR;  // 接收器深度本征函数值
-    MatrixXcd phiS;  // 声源深度本征函数值
+    MatrixXcd phi;     // 原始mesh的本征函数值
+    MatrixXcd phiR;    // 接收器深度本征函数值
+    MatrixXcd phiS;    // 声源深度本征函数值
     MatrixXcd dphidz;  // 原始mesh本征函数值对深度微分
-    MatrixXcd dphidzR;  // 接收器深度本征函数值对深度微分
-    MatrixXcd dphidzS;  // 声源深度本征函数值对深度微分
-    VectorXi modes; // 模式索引
-    VectorXd depth; // 深度向量
+    MatrixXcd dphidzR; // 接收器深度本征函数值对深度微分
+    MatrixXcd dphidzS; // 声源深度本征函数值对深度微分
+    VectorXi modes;    // 模式索引
+    VectorXd depth;    // 深度向量
 };
 
 // Kraken特有的运行模式
@@ -432,7 +466,7 @@ enum class Run_Mode
 // 相干和非相干
 enum class CoherenceType
 {
-    Coherent, // 相干
+    Coherent,  // 相干
     Incoherent // 非相干
 };
 
@@ -452,14 +486,15 @@ struct parameters
     // @brief 任务数（声源*发射声线个数）
     size_t totalTasks;
 
+    // 距离剖面个数
+    size_t NProf;
+
     // @brief 频率信息
     FreqInfo *freqinfo;
 
-    // @brief 媒质数
-    int NMedia;
+    // // @brief 媒质数
+    // int NMedia;
 
-    // @brief 声速剖面类型
-    SSP_Mode SSPType;
     // @brief 吸收单位
     Atten_Mode AttenUnit;
 
@@ -521,8 +556,8 @@ struct parameters
     MeshParams mesh; // 网格参数
 
     // 半空间参数
-    HSInfo HSTop; // 顶部半空间
-    HSInfo HSBot; // 底部半空间
+    HSInfo* HSTop; // 顶部半空间
+    HSInfo* HSBot; // 底部半空间
 
     // 运行模式
     Run_Mode runMode; // Kraken运行模式
