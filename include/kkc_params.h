@@ -136,22 +136,22 @@ struct SSPStructure
     // @brief 最后一个声学层索引
     int LastAcoustic;
     // 多层介质层线性存储，用NPts来指代总数据点数，NMesh指代抽样点数，NMedia来指代层数
-     // 介质层定义
-    VectorXd beta;//size = NMedia
-    VectorXd ft;//size = NMedia
-    VectorXd sigma;//size = NMedia
-    std::vector<Media_Mode> Material; 
+    // 介质层定义
+    VectorXd beta;  // size = NMedia
+    VectorXd ft;    // size = NMedia
+    VectorXd sigma; // size = NMedia
+    std::vector<Media_Mode> Material;
     SSP_Mode SSPType;
 
     // 层厚度
     VectorXd depth;
     // @brief 声速剖面点数
-    VectorXi NPts; //size = NMedia
+    VectorXi NPts; // size = NMedia
     // @brief多层介质存储偏移量
-    VectorXi offset; //size = NMedia
+    VectorXi offset; // size = NMedia
 
     // @brief 声速剖面细分点数
-    VectorXi NMesh;//size = NMedia
+    VectorXi NMesh; // size = NMedia
     // @brief 该剖面层数
     int NMedia;
 
@@ -192,34 +192,55 @@ struct SSPStructure
     MatrixXcd rhoSpline;
 
     // 返回第 iMedia 层在全局向量中的起始索引（包含）
-    int get_media_start(int iMedia) const {
+    int get_media_start(int iMedia) const
+    {
         assert(iMedia >= 0 && iMedia < NMedia);
         return offset[iMedia];
     }
 
     // 返回第 iMedia 层的结束索引（不包含，C++ 半开区间惯例）
-    int get_media_end(int iMedia) const {
+    int get_media_end(int iMedia) const
+    {
         assert(iMedia >= 0 && iMedia < NMedia);
         return offset[iMedia] + NPts[iMedia];
     }
 
     // 返回该层点数（冗余但方便）
-    int get_media_size(int iMedia) const {
+    int get_media_size(int iMedia) const
+    {
         assert(iMedia >= 0 && iMedia < NMedia);
         return NPts[iMedia];
     }
     // 返回该层网格点数
-    int get_media_Nmesh(int iMedia) const {
+    int get_media_Nmesh(int iMedia) const
+    {
         assert(iMedia >= 0 && iMedia < NMedia);
         return NMesh[iMedia];
     }
-    int get_global_interp_offset(int iMedium) const {
+    int get_global_interp_offset(int iMedium) const
+    {
         int offset = 0;
-        for (int i = 0; i < iMedium; ++i) {
-            offset += NMesh[i] + 1;  // 每层有 Nmesh+1 个插值点
+        for (int i = 0; i < iMedium; ++i)
+        {
+            offset += NMesh[i] + 1; // 每层有 Nmesh+1 个插值点
         }
         return offset;
     }
+};
+
+// 输入的SSP
+struct SSP_1D
+{
+    int NPts;
+    double beta;
+    double ft;
+    double sigma;
+    VectorXd z;
+    VectorXd rho;
+    VectorXd alphaR;
+    VectorXd alphaI;
+    VectorXd betaR;
+    VectorXd betaI;
 };
 
 // @brief 半空间属性结构体
@@ -451,7 +472,7 @@ struct EigenParams
     MatrixXcd dphidzR; // 接收器深度本征函数值对深度微分
     MatrixXcd dphidzS; // 声源深度本征函数值对深度微分
     // VectorXi modes;    // 模式索引
-    VectorXd depth;    // 深度向量
+    VectorXd depth; // 深度向量
 };
 
 // Kraken特有的运行模式
@@ -552,8 +573,8 @@ struct parameters
     MeshParams mesh; // 网格参数
 
     // 半空间参数
-    HSInfo* HSTop; // 顶部半空间
-    HSInfo* HSBot; // 底部半空间
+    HSInfo *HSTop; // 顶部半空间
+    HSInfo *HSBot; // 底部半空间
 
     // 运行模式
     Run_Mode runMode; // Kraken运行模式
@@ -576,7 +597,7 @@ struct parameters
 struct kkc_output
 {
     // 本征值参数
-    EigenParams* eigen;                 // 本征值参数
+    EigenParams *eigen;                // 本征值参数
     std::complex<float> *u_AllSources; // 声压，一维化存储，内存优化较好
     std::complex<float> *v_AllSources; // 垂直振速，一维化存储，内存优化较好
     std::complex<float> *h_AllSources; // 水平振速，一维化存储，内存优化较好

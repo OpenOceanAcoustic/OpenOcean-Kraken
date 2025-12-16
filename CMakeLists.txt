@@ -33,6 +33,8 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/eigen
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/module
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/util
 )
 
 # 添加源文件
