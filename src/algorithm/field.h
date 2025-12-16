@@ -4,11 +4,11 @@
 #include "kkc_params.h"
 
 inline size_t GetFieldAddr(int32_t isz, int32_t id, int32_t ir, const Position *Pos);
-void Evaluate(EigenFunction &eigenfun, EigenParams &eigen, parameters &params,int isz,
+void Evaluate(EigenParams &eigen, parameters &params,int isz,
      std::complex<float> *uAllSources,
      std::complex<float> *uAllSources_vr,
      std::complex<float> *uAllSources_vz);
-void field(EigenFunction &eigenfun, EigenParams &eigen, parameters &params, std::complex<float> *uAllSources, int isz);
+void field(EigenParams &eigen, parameters &params, std::complex<float> *uAllSources, int isz);
 void export_shd(std::string filename, parameters& params, std::complex<float> *uAllSources);
 
 inline size_t GetFieldAddr(int32_t isz, int32_t id, int32_t ir, const Position *Pos)

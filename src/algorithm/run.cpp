@@ -11,7 +11,6 @@ void run()
 
     KrakenMatrix kramtrx;
     EigenParams *eigen = new EigenParams[params.NProf];
-    EigenFunction *eigenfun = new EigenFunction[params.NProf];
     double error;
     params.mesh.hV.resize(params.mesh.NSets);
     for (size_t iprof = 0; iprof < params.NProf; iprof++)
@@ -47,7 +46,7 @@ void run()
         {
             int ntimes = params.mesh.NV[iset];
             Initialize(iset, iprof, params, kramtrx, ntimes);
-            SolveEp(iset, iprof, params.mesh.NSets, eigen[iprof], eigenfun[iprof], kramtrx, params, error);
+            SolveEp(iset, iprof, params.mesh.NSets, eigen[iprof], kramtrx, params, error);
             if (error * params.Rmax < 1.0)
             {
                 break;
@@ -73,29 +72,29 @@ void run()
         eigen[iprof].k.resize(M);
         eigen[iprof].k = tempk;
         // 使用tempphi存储本征函数
-        MatrixXcd tempphi = eigenfun[iprof].phi.block(0, 0, eigen[iprof].M, eigenfun[iprof].phi.cols());
-        eigenfun[iprof].phi.resize(M, eigenfun[iprof].phi.cols());
-        eigenfun[iprof].phi = tempphi;
+        MatrixXcd tempphi = eigen[iprof].phi.block(0, 0, eigen[iprof].M, eigen[iprof].phi.cols());
+        eigen[iprof].phi.resize(M, eigen[iprof].phi.cols());
+        eigen[iprof].phi = tempphi;
         // 使用tempphiR存储本征函数的实部
-        MatrixXcd tempphiR = eigenfun[iprof].phiR.block(0, 0, eigen[iprof].M, eigenfun[iprof].phiR.cols());
-        eigenfun[iprof].phiR.resize(M, eigenfun[iprof].phiR.cols());
-        eigenfun[iprof].phiR = tempphiR;
+        MatrixXcd tempphiR = eigen[iprof].phiR.block(0, 0, eigen[iprof].M, eigen[iprof].phiR.cols());
+        eigen[iprof].phiR.resize(M, eigen[iprof].phiR.cols());
+        eigen[iprof].phiR = tempphiR;
         // 使用tempphiS存储本征函数的虚部
-        MatrixXcd tempphiS = eigenfun[iprof].phiS.block(0, 0, eigen[iprof].M, eigenfun[iprof].phiS.cols());
-        eigenfun[iprof].phiS.resize(M, eigenfun[iprof].phiS.cols());
-        eigenfun[iprof].phiS = tempphiS;
+        MatrixXcd tempphiS = eigen[iprof].phiS.block(0, 0, eigen[iprof].M, eigen[iprof].phiS.cols());
+        eigen[iprof].phiS.resize(M, eigen[iprof].phiS.cols());
+        eigen[iprof].phiS = tempphiS;
         // 使用tempdphidz存储本征函数的导数
-        MatrixXcd tempdphidz = eigenfun[iprof].dphidz.block(0, 0, eigen[iprof].M, eigenfun[iprof].dphidz.cols());
-        eigenfun[iprof].dphidz.resize(M, eigenfun[iprof].dphidz.cols());
-        eigenfun[iprof].dphidz = tempdphidz;
+        MatrixXcd tempdphidz = eigen[iprof].dphidz.block(0, 0, eigen[iprof].M, eigen[iprof].dphidz.cols());
+        eigen[iprof].dphidz.resize(M, eigen[iprof].dphidz.cols());
+        eigen[iprof].dphidz = tempdphidz;
         // 使用tempdphidzR存储本征函数的导数的实部
-        MatrixXcd tempdphidzR = eigenfun[iprof].dphidzR.block(0, 0, eigen[iprof].M, eigenfun[iprof].dphidzR.cols());
-        eigenfun[iprof].dphidzR.resize(M, eigenfun[iprof].dphidzR.cols());
-        eigenfun[iprof].dphidzR = tempdphidzR;
+        MatrixXcd tempdphidzR = eigen[iprof].dphidzR.block(0, 0, eigen[iprof].M, eigen[iprof].dphidzR.cols());
+        eigen[iprof].dphidzR.resize(M, eigen[iprof].dphidzR.cols());
+        eigen[iprof].dphidzR = tempdphidzR;
         // 使用tempdphidzS存储本征函数的导数的虚部
-        MatrixXcd tempdphidzS = eigenfun[iprof].dphidzS.block(0, 0, eigen[iprof].M, eigenfun[iprof].dphidzS.cols());
-        eigenfun[iprof].dphidzS.resize(M, eigenfun[iprof].dphidzS.cols());
-        eigenfun[iprof].dphidzS = tempdphidzS;
+        MatrixXcd tempdphidzS = eigen[iprof].dphidzS.block(0, 0, eigen[iprof].M, eigen[iprof].dphidzS.cols());
+        eigen[iprof].dphidzS.resize(M, eigen[iprof].dphidzS.cols());
+        eigen[iprof].dphidzS = tempdphidzS;
 
         // // // 打印eigen.k
         // cout << "eigen.Extrap: \n"
@@ -161,7 +160,7 @@ void run()
         
         for (int isz = 0; isz < params.Pos->NSz; isz++)
         {
-            Evaluate(eigenfun[iprof], eigen[iprof], params, isz, u_AllSources, uAllSources_vr, uAllSources_vz);
+            Evaluate(eigen[iprof], params, isz, u_AllSources, uAllSources_vr, uAllSources_vz);
         }
         string filename = "test_pressure" + std::to_string(iprof);
         string filename_vr = "test_vr" + std::to_string(iprof);

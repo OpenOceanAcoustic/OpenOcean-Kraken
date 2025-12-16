@@ -13,7 +13,7 @@ void Initialize(int& iset, size_t iprof, parameters& params, KrakenMatrix& kramt
     double& Clow = params.Clow;
     double cMin = 1e8;
     double& cHigh = params.Chigh;
-    params.FirstAcoustic = -1;
+    params.SSP[iprof].FirstAcoustic = -1;
     params.mesh.Loc.resize(params.SSP[iprof].NMedia+1);
     params.mesh.Loc[0] = 0; // C++使用0-based索引
     
@@ -70,10 +70,10 @@ void Initialize(int& iset, size_t iprof, parameters& params, KrakenMatrix& kramt
         // 加载有限差分方程的对角线
         if (std::real(SSP.cs[0]) == 0.0) { // 声学介质情况
             SSP.Material[im] = Media_Mode::MODE_A_Acoustic;
-            if (params.FirstAcoustic == -1) {
-                params.FirstAcoustic = im;
+            if (params.SSP[iprof].FirstAcoustic == -1) {
+                params.SSP[iprof].FirstAcoustic = im;
             }
-            params.LastAcoustic = im;
+            params.SSP[iprof].LastAcoustic = im;
             
             // 计算当前层的最小声速
             double min_cp = 1e8;

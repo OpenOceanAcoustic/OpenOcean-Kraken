@@ -131,6 +131,10 @@ struct rxyz_vector
 // @brief 声速剖面结构体
 struct SSPStructure
 {
+    // @brief 第一个声学层索引
+    int FirstAcoustic;
+    // @brief 最后一个声学层索引
+    int LastAcoustic;
     // 多层介质层线性存储，用NPts来指代总数据点数，NMesh指代抽样点数，NMedia来指代层数
      // 介质层定义
     VectorXd beta;//size = NMedia
@@ -440,18 +444,13 @@ struct EigenParams
     VectorXd VG;       // 群速度向量
     int LRecordLength; // 记录长度
     int IRecProfile;   // 记录指针
-};
-
-// 本征函数结构体
-struct EigenFunction
-{
     MatrixXcd phi;     // 原始mesh的本征函数值
     MatrixXcd phiR;    // 接收器深度本征函数值
     MatrixXcd phiS;    // 声源深度本征函数值
     MatrixXcd dphidz;  // 原始mesh本征函数值对深度微分
     MatrixXcd dphidzR; // 接收器深度本征函数值对深度微分
     MatrixXcd dphidzS; // 声源深度本征函数值对深度微分
-    VectorXi modes;    // 模式索引
+    // VectorXi modes;    // 模式索引
     VectorXd depth;    // 深度向量
 };
 
@@ -501,9 +500,6 @@ struct parameters
     // @brief 声源位置
     Position *Pos;
 
-    int FirstAcoustic;
-    int LastAcoustic;
-
     // @brief 声速剖面参数
     SSPStructure *SSP;
 
@@ -511,17 +507,17 @@ struct parameters
     BdryType *Bdry;
 
     // @brief 边界形状参数
-    Matrix<BdryPt, 1, Dynamic> Top, Bot;
+    // Matrix<BdryPt, 1, Dynamic> Top, Bot;
 
     // @brief 顶部边界点数
-    int NatiPts;
+    // int NatiPts;
 
     ReflectionCoefInfo ReflectionCoef; // @brief 反射系数参数
 
     // @brief 底部边界点数
-    int NbtyPts;
+    // int NbtyPts;
 
-    bool isTopSet, isBotSet; // @brief 是否设置了顶部和底部边界
+    // bool isTopSet, isBotSet; // @brief 是否设置了顶部和底部边界
 
     // @brief 实例化SrcBmPat为SBP
     SrcBmPat *SBP;
@@ -535,13 +531,13 @@ struct parameters
     std::complex<double> epsilon;
 
     // @brief iBeamWindow2
-    double iBeamWindow2;
+    // double iBeamWindow2;
 
     // @brief RadMax
-    double RadMax;
+    // double RadMax;
 
     // @brief ft
-    double ft;
+    // double ft;
 
     bool is_Velocity = false; // @brief 是否计算振速
     kkc_Log *log;             // 日志
@@ -580,7 +576,7 @@ struct parameters
 struct kkc_output
 {
     // 本征值参数
-    EigenParams eigen;                 // 本征值参数
+    EigenParams* eigen;                 // 本征值参数
     std::complex<float> *u_AllSources; // 声压，一维化存储，内存优化较好
     std::complex<float> *v_AllSources; // 垂直振速，一维化存储，内存优化较好
     std::complex<float> *h_AllSources; // 水平振速，一维化存储，内存优化较好
