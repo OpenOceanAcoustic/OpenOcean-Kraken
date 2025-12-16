@@ -15,7 +15,7 @@
 // - Nz, Nr: 深度和距离网格数量
 // - MinExp, TINY: 数值计算参数（根据实际定义补充）
 
-void Evaluate(EigenFunction &eigenfun, EigenParams &eigen, parameters &params, int isz,
+void Evaluate(EigenParams &eigen, parameters &params, int isz,
               std::complex<float> *uAllSources,
               std::complex<float> *uAllSources_vr,
               std::complex<float> *uAllSources_vz)
@@ -26,9 +26,9 @@ void Evaluate(EigenFunction &eigenfun, EigenParams &eigen, parameters &params, i
         return;
     }
 
-    MatrixXcd phiR = eigenfun.phiR;
-    MatrixXcd dphidzR = eigenfun.dphidzR;
-    MatrixXcd phiS = eigenfun.phiS;
+    MatrixXcd phiR = eigen.phiR;
+    MatrixXcd dphidzR = eigen.dphidzR;
+    MatrixXcd phiS = eigen.phiS;
 
     VectorXcd col_vec;
     col_vec = phiS.col(isz);
@@ -150,7 +150,7 @@ void Evaluate(EigenFunction &eigenfun, EigenParams &eigen, parameters &params, i
     }
 }
 
-void field(EigenFunction &eigenfun, EigenParams &eigen, parameters &params, std::complex<float> *uAllSources, int isz)
+void field(EigenParams &eigen, parameters &params, std::complex<float> *uAllSources, int isz)
 {
     VectorXcd constt, sumk;
     constt.resize(eigen.M);
@@ -158,7 +158,7 @@ void field(EigenFunction &eigenfun, EigenParams &eigen, parameters &params, std:
 
     for (int i = 0; i < eigen.M; i++)
     {
-        constt(i) = I1D * std::sqrt(2.0 * pi) * std::exp(I1D * pi / 4.0) * eigenfun.phiS(i, isz);
+        constt(i) = I1D * std::sqrt(2.0 * pi) * std::exp(I1D * pi / 4.0) * eigen.phiS(i, isz);
     }
 
     VectorXcd Hank(eigen.M);
@@ -202,7 +202,7 @@ void field(EigenFunction &eigenfun, EigenParams &eigen, parameters &params, std:
             size_t base = GetFieldAddr(isz, irz, irr, &params.Pos[0]);
             for (int i = 0; i < eigen.M; i++)
             {
-                uAllSources[base] += eigenfun.phiR(i, irz) * Hank(i);
+                uAllSources[base] += eigen.phiR(i, irz) * Hank(i);
             }
         }
     }

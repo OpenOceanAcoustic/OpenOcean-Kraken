@@ -24,9 +24,9 @@ void BCImpedance(size_t iprof, const double& x,  bool& isTop, complex<double> &f
     if (isTop)
     {
 
-        if (params.FirstAcoustic > -1)
+        if (params.SSP[iprof].FirstAcoustic > -1)
         {
-            iTop      = params.mesh.Loc( params.FirstAcoustic ) + params.mesh.N( params.FirstAcoustic );
+            iTop      = params.mesh.Loc( params.SSP[iprof].FirstAcoustic ) + params.mesh.N( params.SSP[iprof].FirstAcoustic );
             rhoInside = kramtrx.rho(iTop);
             cInside = std::sqrt(omega2 * hFirstAcoustic2) /
                       (2.0 + kramtrx.B1(0));
@@ -34,9 +34,9 @@ void BCImpedance(size_t iprof, const double& x,  bool& isTop, complex<double> &f
     }
     else
     {
-        if (params.LastAcoustic > -1)
+        if (params.SSP[iprof].LastAcoustic > -1)
         {
-            iBot      = params.mesh.Loc( params.LastAcoustic ) + params.mesh.N( params.LastAcoustic );
+            iBot      = params.mesh.Loc( params.SSP[iprof].LastAcoustic ) + params.mesh.N( params.SSP[iprof].LastAcoustic );
             rhoInside = kramtrx.rho(iBot);
             cInside = std::sqrt(omega2 * hFirstAcoustic2 /
                       (2.0 + kramtrx.B1(kramtrx.B1.size() - 1)));
@@ -149,9 +149,9 @@ void BCImpedance(size_t iprof, const double& x,  bool& isTop, complex<double> &f
     // 穿过弹性层传播
     if (isTop)
     {
-        if (params.FirstAcoustic > 1)
+        if (params.SSP[iprof].FirstAcoustic > 1)
         { // 从顶部向下传播
-            for (int im = 0; im < params.FirstAcoustic; ++im)
+            for (int im = 0; im < params.SSP[iprof].FirstAcoustic; ++im)
             {
                 ElasticDN(x, yV, iPower, im, kramtrx, params);
             }
@@ -162,9 +162,9 @@ void BCImpedance(size_t iprof, const double& x,  bool& isTop, complex<double> &f
     }
     else
     {
-        if (params.LastAcoustic < params.SSP[iprof].NMedia-1)
+        if (params.SSP[iprof].LastAcoustic < params.SSP[iprof].NMedia-1)
         { // 从底部向上传播
-            for (int im = params.SSP[iprof].NMedia - 1; im > params.LastAcoustic; --im)
+            for (int im = params.SSP[iprof].NMedia - 1; im > params.SSP[iprof].LastAcoustic; --im)
             {
                 ElasticUP(x, yV, iPower, im, kramtrx, params);
             }
