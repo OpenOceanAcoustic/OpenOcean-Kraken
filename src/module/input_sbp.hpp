@@ -5,7 +5,10 @@ class input_sbp : public paramsBase
 public:
     input_sbp() {}
     virtual ~input_sbp() {}
-    virtual void Init(parameters &params) const override {}
+    virtual void Init(parameters &params) const override
+    {
+        params.SBP = new SrcBmPat();
+    }
 
     virtual void Default(parameters &params) const override
     {

@@ -10,6 +10,7 @@ public:
     // 初始化函数
     virtual void Init(parameters &params) const override
     {
+        params.SSP = new SSPStructure[params.NProf];
     }
 
     // 设置默认值
@@ -21,16 +22,16 @@ public:
     // 运行前的预处理
     virtual void Preprocess(parameters &params) const override
     {
-        // 初始化偏移量
+        double freq = params.freqinfo->freq;
         for (size_t iprof = 0; iprof < params.NProf; iprof++)
         {
             auto &ssp = params.SSP[iprof];
             ssp.offset[0] = 0;
-            size_t ilay=0;
+            size_t ilay = 0;
             size_t NMeshAll = 0;
             for (int imedia = 0; imedia < ssp.NMedia; imedia++)
             {
-                if (ssp.NMedia > 0)
+                if (imedia > 0)
                     ssp.offset[imedia] = ssp.offset[imedia - 1] + ssp.NPts[imedia - 1];
                 ilay += params.SSP[iprof].NPts[imedia];
                 double h = params.SSP[iprof].depth[imedia] / params.SSP[iprof].NMesh[imedia];
@@ -44,19 +45,36 @@ public:
                     cout << "警告：KRAKEN 垂直网格步长太大，已经将网格数量: " << params.SSP[iprof].NMesh[imedia] << " 调整为: " << Nneeded << endl;
                     params.SSP[iprof].NMesh[imedia] = Nneeded;
                 }
-                else if (params.mesh.N(imedia-1) == 0) // 网格数为0时，将网格数调整为Nneeded
+                else if (params.mesh.N(imedia - 1) == 0) // 网格数为0时，将网格数调整为Nneeded
                 {
                     params.SSP[iprof].NMesh[imedia] = Nneeded;
                 }
                 NMeshAll += params.SSP[iprof].NMesh[imedia];
             }
+
+            params.SSP[iprof].FirstAcoustic = -1;
+            params.mesh[iprof].Loc.resize(params.SSP[iprof].NMedia + 1);
+            params.mesh[iprof].Loc[0] = 0; // C++使用0-based索引
+
+            // 计算总网格点数
+            params.mesh[iprof].N.resize(params.SSP[iprof].NMedia);
+            params.mesh[iprof].h.resize(params.SSP[iprof].NMedia);
+
             // 每一层都需要+1
             NMeshAll += ssp.NMedia;
-            ssp.NMeshMax = NMeshAll * params.mesh.NV[params.mesh.NSets-1]; // 最大的网格数
+            ssp.NMeshMax = NMeshAll * params.mesh.NV[params.mesh.NSets - 1]; // 最大的网格数
             // 最大内存初始化，避免每次的维度不一致
             ssp.cp_int.resize(ssp.NMeshMax);
             ssp.cs_int.resize(ssp.NMeshMax);
             ssp.rho_int.resize(ssp.NMeshMax);
+
+            // 将计算矩阵也初始化
+            ssp.B1.resize(ssp.NMeshMax);
+            ssp.B1C.resize(ssp.NMeshMax);
+            ssp.B2.resize(ssp.NMeshMax);
+            ssp.B3.resize(ssp.NMeshMax);
+            ssp.B4.resize(ssp.NMeshMax);
+            ssp.rhoparam.resize(ssp.NMeshMax);
             if (ssp.SSPType == SSP_Mode::MODE_P_cPCHIP)
             {
                 ssp.cpCoef.resize(4, ssp.NMeshMax);
@@ -69,6 +87,9 @@ public:
                 ssp.csSpline.resize(4, ssp.NMeshMax);
                 ssp.rhoSpline.resize(4, ssp.NMeshMax);
             }
+            // 计算SSP的参数
+            UpdateSSPLoss(freq, freq, ssp.NMedia,
+                          ssp.SSPType, params.AttenUnit, ssp);
         }
     }
 
@@ -129,8 +150,6 @@ private:
     // 设置默认值的私有方法
     void setDefaultValues(parameters &params) const
     {
-        params.NProf = 1;
-        params.SSP = new SSPStructure[params.NProf];
         params.SSP[0].NMedia = 1;
         // 声速剖面类型
         params.SSP[0].SSPType = SSP_Mode::MODE_C_cLinear;

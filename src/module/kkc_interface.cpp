@@ -27,12 +27,12 @@ void print_header()
 class kkc_interface_PIMPL
 {
 public:
+    input_Freq INPUT_FREQ;
     input_SSP INPUT_SSP;
     input_Boundary INPUT_BOUNDARY;
     input_Sz_Rz_RR INPUT_SZ_RZ_RR;
     input_reflcoef INPUT_REFLCOEF;
     input_sbp INPUT_SBP;
-    input_Freq INPUT_FREQ;
 
     output_Field OUTPUT_FIELD;
     kkc_interface_PIMPL()
@@ -65,12 +65,6 @@ void kkc_interface::init() // 初始化
         std::cerr << "Error: Failed to allocate memory for parameters" << std::endl;
         exit(1);
     }
-    // 初始化params的各个成员变量
-    params->freqinfo = new FreqInfo();
-    params->Pos = new Position();
-    params->SSP = new SSPStructure();
-    params->Bdry = new BdryType();
-    params->SBP = new SrcBmPat();
     params->log = &kkc_Log::get_instance();
     this->field_size = 0; // 场大小初始化为0
 
@@ -78,12 +72,14 @@ void kkc_interface::init() // 初始化
     auto &params = this->getParams(); // 获取参数
     auto &output = this->getOutput(); // 获取输出
     // 参数初始化
+    impl->INPUT_FREQ.Init(params);
+    impl->INPUT_FREQ.Default(params);
+
     impl->INPUT_SSP.Init(params);
     impl->INPUT_BOUNDARY.Init(params);
     impl->INPUT_SZ_RZ_RR.Init(params);
     impl->INPUT_REFLCOEF.Init(params);
     impl->INPUT_SBP.Init(params);
-    impl->INPUT_FREQ.Init(params);
 
     // default params
     impl->INPUT_SSP.Default(params);
@@ -91,7 +87,6 @@ void kkc_interface::init() // 初始化
     impl->INPUT_SZ_RZ_RR.Default(params);
     impl->INPUT_REFLCOEF.Default(params);
     impl->INPUT_SBP.Default(params);
-    impl->INPUT_FREQ.Default(params);
 
     // output初始化
     impl->OUTPUT_FIELD.Init(output);
@@ -132,10 +127,10 @@ void kkc_interface::output_setup() // 设置输出参数
 
 void kkc_interface::run() // 运行
 {
-    print_header();             // 打印头信息
-    this->setup();              // 配置
-    this->runSolveV();          // 求解本征值和本征函数
-    this->runField();           // 求解声场
+    print_header();    // 打印头信息
+    this->setup();     // 配置
+    this->runSolveV(); // 求解本征值和本征函数
+    this->runField();  // 求解声场
 }
 
 void kkc_interface::clearResults() // 清除结果
@@ -151,8 +146,8 @@ void kkc_interface::free() // 释放内存
     // 释放params的各个成员变量的内存
     delete params->freqinfo;
     delete params->Pos;
-    delete params->SSP;
-    delete params->Bdry;
+    delete[] params->SSP;
+    delete[] params->Bdry;
     delete params->SBP;
     delete params;
 
@@ -164,12 +159,17 @@ void kkc_interface::free() // 释放内存
 
 void kkc_interface::runSolveV()
 {
-    EigenVWorker(...);
+    auto &params = this->getParams(); // 获取参数
+    auto &output = this->getOutput(); // 获取输出
+    for (size_t iprof = 0; iprof < params.NProf; iprof++)
+    {
+        EigenVWorker(iprof, params, output);
+    }
 }
 
 void kkc_interface::runField()
 {
-    FieldSolveWorker(...);
+    // FieldSolveWorker();
 }
 
 void kkc_interface::set_Title(std::string &title) // 设置标题
@@ -190,9 +190,21 @@ void kkc_interface::set_freqvec(VectorXd freqvec) // 设置频率向量
     impl->INPUT_FREQ.set_freqvec(params, freqvec); // 设置频率向量
 }
 
+void kkc_interface::set_RProf(const VectorXd &RProf) // 设置距离剖面
+{
+    auto &params = this->getParams();          // 获取参数
+    impl->INPUT_FREQ.set_RProf(params, RProf); // 设置 RProf
+}
+
+void kkc_interface::set_RProf(const double &start, const double &end, const int &NProf) // 设置距离剖面（插值）
+{
+    auto &params = this->getParams();                      // 获取参数
+    impl->INPUT_FREQ.set_RProf(params, start, end, NProf); // 设置 RProf
+}
+
 void kkc_interface::set_SSP(SSP_1D *sspInput, size_t NProf) // 设置SSP
 {
-    auto &params = this->getParams();        // 获取参数
+    auto &params = this->getParams();                 // 获取参数
     impl->INPUT_SSP.set_SSP(params, sspInput, NProf); // 设置1D SSP
 }
 
@@ -269,45 +281,33 @@ void kkc_interface::set_bottom_Type(BC_Mode bc) // 设置底部边界条件类�
     impl->INPUT_BOUNDARY.set_bottom_Type(params, bc); // 设置底部边界条件类型
 }
 
-void kkc_interface::set_BottomLine(double zTemp, double alphaR, double alphaI, double betaR, double betaI, double rho) // 设置底部半空间
+void kkc_interface::set_BottomLine(double zTemp, double alphaR, double alphaI, double betaR, double betaI, double rho, size_t iprof) // 设置底部半空间
 {
-    auto &params = this->getParams();                                                     // 获取参数
-    impl->INPUT_BOUNDARY.setBottomLine(params, zTemp, alphaR, alphaI, betaR, betaI, rho); // 设置底部半空间
+    auto &params = this->getParams();                                                            // 获取参数
+    impl->INPUT_BOUNDARY.setBottomLine(params, zTemp, alphaR, alphaI, betaR, betaI, rho, iprof); // 设置底部半空间
 }
 
-void kkc_interface::set_SurfaceLine(double zTemp, double alphaR, double alphaI, double betaR, double betaI, double rho) // 设置表面半空间
+void kkc_interface::set_SurfaceLine(double zTemp, double alphaR, double alphaI, double betaR, double betaI, double rho, size_t iprof) // 设置表面半空间
 {
-    auto &params = this->getParams();                                                      // 获取参数
-    impl->INPUT_BOUNDARY.setSurfaceLine(params, zTemp, alphaR, alphaI, betaR, betaI, rho); // 设置表面半空间
-}
-
-void kkc_interface::set_Surface_Grain(double zTemp, double Mz) // 设置表面粒子
-{
-    auto &params = this->getParams();                         // 获取参数
-    impl->INPUT_BOUNDARY.setSurface_Grain(params, zTemp, Mz); // 设置表面粒子
-}
-
-void kkc_interface::set_Bottom_Grain(double zTemp, double Mz) // 设置底部粒子
-{
-    auto &params = this->getParams();                        // 获取参数
-    impl->INPUT_BOUNDARY.setBottom_Grain(params, zTemp, Mz); // 设置底部粒子
+    auto &params = this->getParams();                                                             // 获取参数
+    impl->INPUT_BOUNDARY.setSurfaceLine(params, zTemp, alphaR, alphaI, betaR, betaI, rho, iprof); // 设置表面半空间
 }
 
 void kkc_interface::set_GridType(Grid_Mode type) // 设置网格类型
 {
-    auto &params = this->getParams();           // 获取参数
+    auto &params = this->getParams();                // 获取参数
     impl->INPUT_SZ_RZ_RR.set_GridType(params, type); // 设置网格类型
 }
 
 void kkc_interface::set_SourceType(Source_Mode type) // 设置源类型
 {
-    auto &params = this->getParams();             // 获取参数
+    auto &params = this->getParams();              // 获取参数
     impl->INPUT_FREQ.set_SourceType(params, type); // 设置源类型
 }
 
 void kkc_interface::set_RunMode(Run_Mode mode) // 运行模式
 {
-    auto &params = this->getParams();          // 获取参数
+    auto &params = this->getParams();           // 获取参数
     impl->INPUT_FREQ.set_RunMode(params, mode); // 设置运行模式
 }
 
@@ -623,11 +623,11 @@ bool kkc_interface::from_json(const std::string &jsonPath) // 从json读取参�
     }
 
     // 调用各个模块的逆向解析函数
-    json_to_positions(in);
-    json_to_ssp(in);
-    json_to_boundary(in);
-    json_to_refl(in);
-    json_to_SBP(in);
+    // json_to_positions(in);
+    // json_to_ssp(in);
+    // json_to_boundary(in);
+    // json_to_refl(in);
+    // json_to_SBP(in);
 
     is_Success = true;
     return is_Success;
@@ -655,10 +655,10 @@ std::string kkc_interface::to_json_string() const // 将参数写入json字符�
     out["Title"] = params.Title;                                                 // 标题
     params.is_Velocity ? out["is_Velocity"] = true : out["is_Velocity"] = false; // 是否计算振速
 
-    positions_to_json(out); // 位置
-    boundary_to_json(out);  // 边界条件
-    ssp_to_json(out);       // SSP
-    refl_to_json(out);      // 反射系数
-    SBP_to_json(out);       // 指向性
-    return out.dump(4);     // 写入json字符串
+    // positions_to_json(out); // 位置
+    // boundary_to_json(out);  // 边界条件
+    // ssp_to_json(out);       // SSP
+    // refl_to_json(out);      // 反射系数
+    // SBP_to_json(out);       // 指向性
+    return out.dump(4); // 写入json字符串
 }

@@ -6,17 +6,24 @@ public:
     input_Freq() {}
     virtual ~input_Freq() {}
 
-    virtual void Init(parameters &params) const override {}
+    virtual void Init(parameters &params) const override 
+    {
+        params.freqinfo = new FreqInfo();
+    }
 
     virtual void Default(parameters &params) const override
     {
+        params.NProf = 1;
         auto &freqinfo = params.freqinfo;
         freqinfo->Nfreq = 1;
         freqinfo->freq = 100;
         freqinfo->freqvec.resize(1);
         freqinfo->freqvec[0] = 100;
-
-        // std::cout<<"input_Freq::Default() is called!"<<std::endl;
+        params.Title = "Default";
+        params.RProf.resize(params.NProf);
+        params.RProf[0] = 0;
+        params.SourceType = Source_Mode::MODE_R_Point;
+        params.runMode = Run_Mode::MODE_B_Both;
     }
 
     virtual void Preprocess(parameters &params) const override
@@ -44,6 +51,21 @@ public:
         freqinfo->Nfreq = freqvec.size();
         freqinfo->freqvec = freqvec;
     }
+    
+    // 手动设置全部距离剖面
+    void set_RProf(parameters &params, const VectorXd &RProf)
+    {
+        params.NProf = RProf.size();
+        params.RProf = RProf;
+    }
+
+    // 插值生成距离剖面
+    void set_RProf(parameters &params, const double &start, const double &end, const int &NProf)
+    {
+        params.RProf.resize(params.NProf);
+        linspace(start, end, params.NProf, params.RProf); // 线性插值
+    }
+
 
     void set_SourceType(parameters &params, Source_Mode type)
     {

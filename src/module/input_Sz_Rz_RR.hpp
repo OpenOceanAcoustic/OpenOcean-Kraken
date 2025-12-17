@@ -6,7 +6,10 @@ public:
     input_Sz_Rz_RR() {}
     virtual ~input_Sz_Rz_RR() {}
 
-    virtual void Init(parameters &params) const override {}
+    virtual void Init(parameters &params) const override
+    {
+        params.Pos = new Position();
+    }
 
     virtual void Default(parameters &params) const override
     {

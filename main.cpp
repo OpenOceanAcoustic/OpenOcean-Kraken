@@ -1,4 +1,5 @@
-#include "src/algorithm/run.h"
+# include "kkc_interface.h"
+// #include "src/algorithm/run.h"
 
 int main()
 {
@@ -6,6 +7,9 @@ int main()
     // 设置控制台输出为 UTF-8
     system("chcp 65001 >nul");
     #endif
-    run();
+    // run();
+    kkc_interface kkc;
+    kkc.run();
+
     return 0;
 }

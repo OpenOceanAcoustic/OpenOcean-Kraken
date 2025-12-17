@@ -117,38 +117,38 @@ void run()
         // 假设 MODFile 已以二进制方式打开，且已定位到 IRecProfile 对应位置
         // 此处用 std::ofstream 模拟，实际工程中请确保文件已正确打开并保持同步
 
-        // 写入模态数 M
-        params.MODFile.seekp(eigen[iprof].IRecProfile * 4 * eigen[iprof].LRecordLength, std::ios::beg);
-        params.MODFile.write(reinterpret_cast<const char *>(&M), sizeof(int));
+        // // 写入模态数 M
+        // params.MODFile.seekp(eigen[iprof].IRecProfile * 4 * eigen[iprof].LRecordLength, std::ios::beg);
+        // params.MODFile.write(reinterpret_cast<const char *>(&M), sizeof(int));
 
-        // 写入复本征值 k
-        int IFirst = 0; // C++ 从 0 开始
-        for (int IREC = 0; IREC < (2 * M - 1) / eigen[iprof].LRecordLength + 1; ++IREC)
-        {
-            int ILast = std::min(M, IFirst + eigen[iprof].LRecordLength / 2) - 1;
-            int segLen = ILast - IFirst + 1;
+        // // 写入复本征值 k
+        // int IFirst = 0; // C++ 从 0 开始
+        // for (int IREC = 0; IREC < (2 * M - 1) / eigen[iprof].LRecordLength + 1; ++IREC)
+        // {
+        //     int ILast = std::min(M, IFirst + eigen[iprof].LRecordLength / 2) - 1;
+        //     int segLen = ILast - IFirst + 1;
 
-            // 定位到对应记录
-            params.MODFile.seekp((eigen[iprof].IRecProfile + 2 + M + IREC) * 4 * eigen[iprof].LRecordLength, std::ios::beg);
+        //     // 定位到对应记录
+        //     params.MODFile.seekp((eigen[iprof].IRecProfile + 2 + M + IREC) * 4 * eigen[iprof].LRecordLength, std::ios::beg);
 
-            // 将 eigen.k 中 IFirst 到 ILast 的复数写出
-            // 转换为complex float输出
+        //     // 将 eigen.k 中 IFirst 到 ILast 的复数写出
+        //     // 转换为complex float输出
 
-            for (int i = 0; i < segLen; i++)
-            {
-                complex<float> kf;
-                kf = std::complex<float>(eigen[iprof].k(IFirst + i).real(), eigen[iprof].k(IFirst + i).imag());
-                params.MODFile.write(reinterpret_cast<const char *>(&kf),
-                                     sizeof(std::complex<float>));
-            }
+        //     for (int i = 0; i < segLen; i++)
+        //     {
+        //         complex<float> kf;
+        //         kf = std::complex<float>(eigen[iprof].k(IFirst + i).real(), eigen[iprof].k(IFirst + i).imag());
+        //         params.MODFile.write(reinterpret_cast<const char *>(&kf),
+        //                              sizeof(std::complex<float>));
+        //     }
 
-            IFirst = ILast + 1;
-        }
+        //     IFirst = ILast + 1;
+        // }
 
-        // 更新下一段起始记录号
-        eigen[iprof].IRecProfile += 3 + M + (2 * M - 1) / eigen[iprof].LRecordLength;
+        // // 更新下一段起始记录号
+        // eigen[iprof].IRecProfile += 3 + M + (2 * M - 1) / eigen[iprof].LRecordLength;
 
-        params.MODFile.close();
+        // params.MODFile.close();
 
         size_t N = (size_t)params.Pos->NSz * (size_t)params.Pos->NRz_per_range * (size_t)params.Pos->NRr;
         std::complex<float> *u_AllSources;

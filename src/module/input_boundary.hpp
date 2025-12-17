@@ -8,6 +8,8 @@ public:
 
     virtual void Init(parameters &params) const override
     {
+        params.HSTop = new HSInfo[params.NProf];
+        params.HSBot = new HSInfo[params.NProf];
     }
 
     virtual void Default(parameters &params) const override
@@ -17,23 +19,22 @@ public:
 
     virtual void Preprocess(parameters &params) const override
     {
+        double freq = params.freqinfo->freq;
+        for (size_t iprof = 0; iprof < params.NProf; iprof++)
+        {
+            UpdateHSLoss(freq, freq, params.AttenUnit, params.HSTop[iprof], params.HSBot[iprof]);
+        }
     }
 
     // 顶部边界类型选项
-    void set_surface_Type(parameters &params, BC_Mode bc)
+    void set_surface_Type(parameters &params, BC_Mode bc, size_t iprof)
     {
-        for (int i = 0; i < params.NProf; i++)
-        {
-            params.HSTop[i].BC = bc;
-        }
+        params.HSTop[iprof].BC = bc;
     }
     // 底部边界类型选项
-    void set_bottom_Type(parameters &params, BC_Mode bc)
+    void set_bottom_Type(parameters &params, BC_Mode bc, size_t iprof)
     {
-        for (int i = 0; i < params.NProf; i++)
-        {
-            params.HSBot[i].BC = bc;
-        }
+        params.HSBot[iprof].BC = bc;
     }
 
     // 设置海底半空间
@@ -46,6 +47,7 @@ public:
         params.HSBot[iprof].betaI = betaI;
         params.HSBot[iprof].rho = rho;
     }
+
     // 设置海面半空间
     void setSurfaceLine(parameters &params, double zTemp, double alphaR, double alphaI, double betaR, double betaI, double rho, size_t iprof)
     {
@@ -96,10 +98,6 @@ private:
     // 设置默认值的私有方法
     void setDefaultValues(parameters &params) const
     {
-        params.NProf = 1;
-        params.HSTop = new HSInfo[params.NProf];
-        params.HSBot = new HSInfo[params.NProf];
-
         // 第一个剖面 海面、海底参数
         params.HSTop[0].BC = BC_Mode::MODE_V_Vacuum;
         params.HSBot[0].BC = BC_Mode::MODE_A_Half_space;

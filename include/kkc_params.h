@@ -193,6 +193,14 @@ struct SSPStructure
     // @brief 密度三次样条系数
     MatrixXcd rhoSpline;
 
+    // 计算矩阵
+    VectorXd B1;
+    VectorXd B1C;
+    VectorXd B2;
+    VectorXd B3;
+    VectorXd B4;
+    VectorXd rhoparam;
+
     // 返回第 iMedia 层在全局向量中的起始索引（包含）
     int get_media_start(int iMedia) const
     {
@@ -239,7 +247,7 @@ struct SSP_1D
     VectorXd beta;
     VectorXd ft;
     VectorXd sigma;
-    VectorXd NMesh;
+    VectorXi NMesh;
     VectorXd z;
     VectorXd rho;
     VectorXd alphaR;
@@ -513,6 +521,8 @@ struct parameters
 
     // 距离剖面个数
     size_t NProf;
+    // @brief 距离剖面向量
+    VectorXd RProf;
 
     // @brief 频率信息
     FreqInfo *freqinfo;
