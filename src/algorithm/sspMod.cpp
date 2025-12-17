@@ -1,6 +1,6 @@
 #include "sspMod.h"
 
-void EvaluateSSP(SSPStructure &SSP, SSP_Mode &ssptype,int iMedium)
+void EvaluateSSP(SSPStructure &SSP, SSP_Mode &ssptype, int iMedium)
 {
     // double cxx, cyy, cxy, cxz, cyz;
     // 输入校验
@@ -8,16 +8,16 @@ void EvaluateSSP(SSPStructure &SSP, SSP_Mode &ssptype,int iMedium)
     switch (ssptype)
     {
     case SSP_Mode::MODE_N_n2Linear:
-        n2Linear(SSP,iMedium);
+        n2Linear(SSP, iMedium);
         break;
     case SSP_Mode::MODE_C_cLinear:
-        cLinear(SSP,iMedium);
+        cLinear(SSP, iMedium);
         break;
     case SSP_Mode::MODE_P_cPCHIP:
-        cPCHIP(SSP,iMedium);
+        cPCHIP(SSP, iMedium);
         break;
     case SSP_Mode::MODE_S_cCubic:
-        cCubic(SSP,iMedium);
+        cCubic(SSP, iMedium);
         break;
     // case SSP_Mode::MODE_A_Analytic:
     //     Analytic(cp, cs, rho_k, Medium, N1); // 需要实现Analytic函数
@@ -25,7 +25,7 @@ void EvaluateSSP(SSPStructure &SSP, SSP_Mode &ssptype,int iMedium)
     default:
         // 报错
         std::cerr << "Unknown SSP type in EvaluateSSP, use default type *cLinear*" << std::endl;
-        cLinear(SSP,iMedium);
+        cLinear(SSP, iMedium);
         break;
     }
 }
@@ -40,13 +40,13 @@ void EvaluateSSP(SSPStructure &SSP, SSP_Mode &ssptype,int iMedium)
  * @param Medium 介质层数
  * @param N1 分层个数
  */
-void n2Linear(SSPStructure &SSP,int iMedium)
-{   
+void n2Linear(SSPStructure &SSP, int iMedium)
+{
     // 确定介质位置
     int offset_start = SSP.get_media_start(iMedium);
     int offset_end = SSP.get_media_end(iMedium);
     int current_medium_Nmesh = SSP.get_media_Nmesh(iMedium); // 当前介质网格点数
-    int current_medium_size = SSP.get_media_size(iMedium); // 当前介质点数
+    int current_medium_size = SSP.get_media_size(iMedium);   // 当前介质点数
     // 计算当前介质在全局插值数组中的起始位置
     int global_offset = SSP.get_global_interp_offset(iMedium);
     // 计算步长
@@ -57,18 +57,18 @@ void n2Linear(SSPStructure &SSP,int iMedium)
     // SSP.rho_int.resize(SSP.N + 1);
 
     // 遍历每个分层点
-    for (int local_iz  = 0; local_iz  <= current_medium_Nmesh + 1; local_iz ++)
+    for (int local_iz = 0; local_iz <= current_medium_Nmesh + 1; local_iz++)
     {
         // 计算当前深度
-        double z = SSP.z(offset_start) + local_iz  * h;
+        double z = SSP.z(offset_start) + local_iz * h;
         // 确保最后一个点的深度准确
-        if (local_iz  == current_medium_Nmesh)
+        if (local_iz == current_medium_Nmesh)
         {
             z = SSP.z(offset_end);
         }
 
         // 找到当前深度所在的层
-        while (Lay < current_medium_size - 1 && z > SSP.z(offset_start+Lay + 1))
+        while (Lay < current_medium_size - 1 && z > SSP.z(offset_start + Lay + 1))
         {
             Lay++;
         }
@@ -77,44 +77,55 @@ void n2Linear(SSPStructure &SSP,int iMedium)
         double z_top = SSP.z[offset_start + Lay];
         double z_bot = SSP.z[offset_start + Lay + 1];
         double dz = z_bot - z_top;
-        if (std::abs(dz) < 1e-12) dz = 1.0; // 避免除零
+        if (std::abs(dz) < 1e-12)
+            dz = 1.0; // 避免除零
         double R = (z - z_top) / dz;
         R = std::max(0.0, std::min(1.0, R)); // clamp to [0,1]
 
         // P波速度计算 (N2线性插值)
-        std::complex<double> alphaTop =SSP.cp[offset_start + Lay];
+        std::complex<double> alphaTop = SSP.cp[offset_start + Lay];
         std::complex<double> alphaBot = SSP.cp[offset_start + Lay + 1];
         // 防止除零（物理上 cp 不应为 0，但做安全处理）
-        if (std::abs(alphaTop) < 1e-12) alphaTop = std::complex<double>(1500.0, 0.0);
-        if (std::abs(alphaBot) < 1e-12) alphaBot = std::complex<double>(1500.0, 0.0);
+        if (std::abs(alphaTop) < 1e-12)
+            alphaTop = std::complex<double>(1500.0, 0.0);
+        if (std::abs(alphaBot) < 1e-12)
+            alphaBot = std::complex<double>(1500.0, 0.0);
 
         std::complex<double> N2Top = 1.0 / (alphaTop * alphaTop);
         std::complex<double> N2Bot = 1.0 / (alphaBot * alphaBot);
         std::complex<double> N2Interp = (1.0 - R) * N2Top + R * N2Bot;
 
-         int global_idx = global_offset + local_iz;
+        int global_idx = global_offset + local_iz;
         // 避免开方错误
-       if (std::real(N2Interp) <= 0.0) {
+        if (std::real(N2Interp) <= 0.0)
+        {
             SSP.cp_int[global_idx] = std::complex<double>(1500.0, 0.0); // 默认声速
-        } else {
+        }
+        else
+        {
             SSP.cp_int[global_idx] = 1.0 / std::sqrt(N2Interp);
         }
-
 
         // S波速度计算
         std::complex<double> betaTop = SSP.cs[offset_start + Lay];
         std::complex<double> betaBot = SSP.cs[offset_start + Lay + 1];
 
-         if (std::abs(betaTop) > 1e-12 && std::abs(betaBot) > 1e-12) {
+        if (std::abs(betaTop) > 1e-12 && std::abs(betaBot) > 1e-12)
+        {
             N2Top = 1.0 / (betaTop * betaTop);
             N2Bot = 1.0 / (betaBot * betaBot);
             N2Interp = (1.0 - R) * N2Top + R * N2Bot;
-            if (std::real(N2Interp) <= 0.0) {
+            if (std::real(N2Interp) <= 0.0)
+            {
                 SSP.cs_int[global_idx] = std::complex<double>(0.0, 0.0);
-            } else {
+            }
+            else
+            {
                 SSP.cs_int[global_idx] = 1.0 / std::sqrt(N2Interp);
             }
-        } else {
+        }
+        else
+        {
             SSP.cs_int[global_idx] = std::complex<double>(0.0, 0.0);
         }
 
@@ -141,9 +152,9 @@ void cLinear(SSPStructure &SSP, int iMedium)
 
     // 获取当前介质在原始数据中的范围（注意：get_media_end 返回的是半开区间 end）
     int orig_start = SSP.get_media_start(iMedium);
-    int orig_end   = SSP.get_media_end(iMedium);      // = orig_start + NPts[iMedium]
-    int orig_size  = SSP.get_media_size(iMedium);     // = NPts[iMedium]
-    int Nmesh      = SSP.get_media_Nmesh(iMedium);    // 插值段数
+    int orig_end = SSP.get_media_end(iMedium);   // = orig_start + NPts[iMedium]
+    int orig_size = SSP.get_media_size(iMedium); // = NPts[iMedium]
+    int Nmesh = SSP.get_media_Nmesh(iMedium);    // 插值段数
 
     // 计算当前介质在插值输出数组中的起始位置
     int interp_start = SSP.get_global_interp_offset(iMedium);
@@ -171,24 +182,29 @@ void cLinear(SSPStructure &SSP, int iMedium)
     {
         // 计算当前深度 z
         double z = z_top + local_iz * h;
-        if (local_iz == Nmesh) {
+        if (local_iz == Nmesh)
+        {
             z = z_bot; // 精确保底，避免浮点误差导致越界
         }
 
         // 在当前介质内查找 z 所在的原始子层
-        while (Lay < orig_size - 1 && z > SSP.z[orig_start + Lay + 1]) {
+        while (Lay < orig_size - 1 && z > SSP.z[orig_start + Lay + 1])
+        {
             Lay++;
         }
 
         // 防止 Lay 越界（理论上不会发生，但安全起见）
-        if (Lay >= orig_size - 1) Lay = orig_size - 2;
-        if (Lay < 0) Lay = 0;
+        if (Lay >= orig_size - 1)
+            Lay = orig_size - 2;
+        if (Lay < 0)
+            Lay = 0;
 
         // 插值参数 R ∈ [0, 1]
         double zL = SSP.z[orig_start + Lay];
         double zR = SSP.z[orig_start + Lay + 1];
         double dz = zR - zL;
-        if (std::abs(dz) < 1e-14) dz = 1.0; // 避免除零
+        if (std::abs(dz) < 1e-14)
+            dz = 1.0; // 避免除零
 
         double R = (z - zL) / dz;
         R = std::max(0.0, std::min(1.0, R)); // clamp to [0,1]
@@ -224,9 +240,9 @@ void cPCHIP(SSPStructure &SSP, int iMedium)
 
     // 获取当前介质在原始数据中的范围
     int orig_start = SSP.get_media_start(iMedium);
-    int orig_end   = SSP.get_media_end(iMedium);      // 半开区间 [start, end)
-    int orig_size  = SSP.get_media_size(iMedium);     // = NPts[iMedium]
-    int Nmesh      = SSP.get_media_Nmesh(iMedium);    // 插值段数
+    int orig_end = SSP.get_media_end(iMedium);   // 半开区间 [start, end)
+    int orig_size = SSP.get_media_size(iMedium); // = NPts[iMedium]
+    int Nmesh = SSP.get_media_Nmesh(iMedium);    // 插值段数
 
     // 计算当前介质在插值输出数组中的起始位置
     int interp_start = SSP.get_global_interp_offset(iMedium);
@@ -253,16 +269,20 @@ void cPCHIP(SSPStructure &SSP, int iMedium)
     for (int local_iz = 0; local_iz <= Nmesh; ++local_iz)
     {
         double z = z_top + local_iz * h;
-        if (local_iz == Nmesh) {
+        if (local_iz == Nmesh)
+        {
             z = z_bot; // 精确保底
         }
 
         // 在当前介质内查找 z 所在的原始子层
-        while (Lay < orig_size - 1 && z > SSP.z[orig_start + Lay + 1]) {
+        while (Lay < orig_size - 1 && z > SSP.z[orig_start + Lay + 1])
+        {
             Lay++;
         }
-        if (Lay >= orig_size - 1) Lay = orig_size - 2;
-        if (Lay < 0) Lay = 0;
+        if (Lay >= orig_size - 1)
+            Lay = orig_size - 2;
+        if (Lay < 0)
+            Lay = 0;
 
         // 相对于当前子层起点的偏移
         double xt = z - SSP.z[orig_start + Lay];
@@ -278,7 +298,9 @@ void cPCHIP(SSPStructure &SSP, int iMedium)
             SSP.cpCoef(0, coef_col) +
             (SSP.cpCoef(1, coef_col) +
              (SSP.cpCoef(2, coef_col) +
-              SSP.cpCoef(3, coef_col) * xt) * xt) * xt;
+              SSP.cpCoef(3, coef_col) * xt) *
+                 xt) *
+                xt;
         SSP.cp_int[global_idx] = cp_val;
 
         // --- S 波速度：PCHIP ---
@@ -286,7 +308,9 @@ void cPCHIP(SSPStructure &SSP, int iMedium)
             SSP.csCoef(0, coef_col) +
             (SSP.csCoef(1, coef_col) +
              (SSP.csCoef(2, coef_col) +
-              SSP.csCoef(3, coef_col) * xt) * xt) * xt;
+              SSP.csCoef(3, coef_col) * xt) *
+                 xt) *
+                xt;
         SSP.cs_int[global_idx] = cs_val;
 
         // --- 密度：PCHIP（取实部）---
@@ -294,7 +318,9 @@ void cPCHIP(SSPStructure &SSP, int iMedium)
             SSP.rhoCoef(0, coef_col) +
             (SSP.rhoCoef(1, coef_col) +
              (SSP.rhoCoef(2, coef_col) +
-              SSP.rhoCoef(3, coef_col) * xt) * xt) * xt;
+              SSP.rhoCoef(3, coef_col) * xt) *
+                 xt) *
+                xt;
         SSP.rho_int[global_idx] = std::real(rho_val);
     }
 }
@@ -312,13 +338,11 @@ void cPCHIP(SSPStructure &SSP, int iMedium)
  */
 void cCubic(SSPStructure &SSP, int iMedium)
 {
-    
-
     // 获取当前介质在原始数据中的范围
     int orig_start = SSP.get_media_start(iMedium);
-    int orig_end   = SSP.get_media_end(iMedium);      // 半开区间 [start, end)
-    int orig_size  = SSP.get_media_size(iMedium);     // = NPts[iMedium]
-    int Nmesh      = SSP.get_media_Nmesh(iMedium);    // 插值段数
+    int orig_end = SSP.get_media_end(iMedium);   // 半开区间 [start, end)
+    int orig_size = SSP.get_media_size(iMedium); // = NPts[iMedium]
+    int Nmesh = SSP.get_media_Nmesh(iMedium);    // 插值段数
 
     // 计算当前介质在插值输出数组中的起始位置
     int interp_start = SSP.get_global_interp_offset(iMedium);
@@ -345,16 +369,20 @@ void cCubic(SSPStructure &SSP, int iMedium)
     for (int local_iz = 0; local_iz <= Nmesh; ++local_iz)
     {
         double z = z_top + local_iz * h_step;
-        if (local_iz == Nmesh) {
+        if (local_iz == Nmesh)
+        {
             z = z_bot; // 精确保底
         }
 
         // 在当前介质内查找 z 所在的原始子层
-        while (Lay < orig_size - 1 && z > SSP.z[orig_start + Lay + 1]) {
+        while (Lay < orig_size - 1 && z > SSP.z[orig_start + Lay + 1])
+        {
             Lay++;
         }
-        if (Lay >= orig_size - 1) Lay = orig_size - 2;
-        if (Lay < 0) Lay = 0;
+        if (Lay >= orig_size - 1)
+            Lay = orig_size - 2;
+        if (Lay < 0)
+            Lay = 0;
 
         // 相对于当前子层起点的偏移（即 H）
         double H = z - SSP.z[orig_start + Lay];
@@ -444,7 +472,7 @@ void Analytic(VectorXcd &cp, VectorXcd &cs, VectorXd &rho, int Medium, int N1)
 
 void UpdateSSPLoss(double freq, double freq0,
                    int NMedia, SSP_Mode SSPType, Atten_Mode AttenUnit,
-                   SSPStructure& ssp)
+                   SSPStructure &ssp)
 {
     for (int iMedium = 0; iMedium < NMedia; ++iMedium)
     {
@@ -463,8 +491,6 @@ void UpdateSSPLoss(double freq, double freq0,
             ssp.cs(iz) = CRCI(ssp.z(iz), ssp.betaR(iz), ssp.betaI(iz),
                               freq, freq0, AttenUnit,
                               ssp.beta[iMedium], ssp.ft[iMedium]);
-
-
         }
 
         // Step 2: 如果使用 PCHIP 插值
@@ -475,7 +501,7 @@ void UpdateSSPLoss(double freq, double freq0,
             Eigen::VectorXcd cp_seg = ssp.cp.segment(start, npoints);
             Eigen::VectorXcd cs_seg = ssp.cs.segment(start, npoints);
             Eigen::VectorXcd rho_seg = ssp.rho.segment(start, npoints);
-            
+
             // 创建局部系数矩阵（4 x npoints）
             Eigen::MatrixXcd cpCoef_local(4, npoints);
             Eigen::MatrixXcd csCoef_local(4, npoints);
@@ -485,7 +511,7 @@ void UpdateSSPLoss(double freq, double freq0,
             // 调用 PCHIP（传完整局部矩阵，非 block）
             PCHIP(z_seg, cp_seg, npoints, cpCoef_local, work_local);
             PCHIP(z_seg, cs_seg, npoints, csCoef_local, work_local);
-            PCHIP(z_seg, rho_seg, npoints, rhoCoef_local, work_local); // 注意：若 PCHIP 要求 
+            PCHIP(z_seg, rho_seg, npoints, rhoCoef_local, work_local); // 注意：若 PCHIP 要求
             // 写回全局矩阵
             ssp.cpCoef.block(0, start, 4, npoints) = cpCoef_local;
             ssp.csCoef.block(0, start, 4, npoints) = csCoef_local;
@@ -501,7 +527,7 @@ void UpdateSSPLoss(double freq, double freq0,
             Eigen::VectorXcd cp_val = ssp.cp.segment(start, npoints);
             Eigen::VectorXcd cs_val = ssp.cs.segment(start, npoints);
             Eigen::VectorXcd rho_val = ssp.rho.segment(start, npoints).cast<std::complex<double>>();
-            
+
             // 局部样条系数矩阵（假设 4 行）
             Eigen::MatrixXcd cpSpline_local(4, npoints);
             Eigen::MatrixXcd csSpline_local(4, npoints);
@@ -520,12 +546,11 @@ void UpdateSSPLoss(double freq, double freq0,
             ssp.cpSpline.block(0, start, 4, npoints) = cpSpline_local;
             ssp.csSpline.block(0, start, 4, npoints) = csSpline_local;
             ssp.rhoSpline.block(0, start, 4, npoints) = rhoSpline_local;
-            
         }
     }
 }
 
-void UpdateHSLoss(double &freq, double &freq0,  Atten_Mode &AttenUnit, HSInfo &HSTop, HSInfo &HSBot)
+void UpdateHSLoss(double &freq, double &freq0, Atten_Mode &AttenUnit, HSInfo &HSTop, HSInfo &HSBot)
 {
     double huge = 1e8;
     if (HSTop.BC == BC_Mode::MODE_A_Half_space)

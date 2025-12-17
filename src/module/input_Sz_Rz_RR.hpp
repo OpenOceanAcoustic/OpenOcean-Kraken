@@ -112,6 +112,13 @@ public:
         pos->is_Linspace_Sz = true;
     }
 
+    // 设置网格类型
+    void set_GridType(parameters &params, const Grid_Mode &GridType)
+    {
+        auto &pos = params.Pos;
+        pos->GridType = GridType;
+    }
+
     VectorXd get_Rr(const parameters &params)
     {
         auto &pos = params.Pos;
@@ -128,6 +135,13 @@ public:
     {
         auto &pos = params.Pos;
         return pos->Sz;
+    }
+
+    // 获取网格类型
+    Grid_Mode get_GridType(const parameters &params)
+    {
+        auto &pos = params.Pos;
+        return pos->GridType;
     }
 
     // 打印

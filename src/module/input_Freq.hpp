@@ -37,11 +37,22 @@ public:
         freqinfo->Nfreq = 1;
         freqinfo->freq = freq;
     }
+
     void set_freqvec(parameters &params, VectorXd freqvec)
     {
         auto &freqinfo = params.freqinfo;
         freqinfo->Nfreq = freqvec.size();
         freqinfo->freqvec = freqvec;
+    }
+
+    void set_SourceType(parameters &params, Source_Mode type)
+    {
+        params.SourceType = type;
+    }
+
+    void set_RunMode(parameters &params, Run_Mode mode)
+    {
+        params.runMode = mode;
     }
 
     double get_freq(const parameters &params) const

@@ -8,6 +8,7 @@
 #include <iostream>
 #include <memory>
 #include <float.h>
+#include "nlohmann/json.hpp"
 
 #define SQ(a) ((a) * (a)) // Square
 using namespace std;
@@ -131,6 +132,8 @@ struct rxyz_vector
 // @brief 声速剖面结构体
 struct SSPStructure
 {
+    // @brief 该剖面层数
+    int NMedia;
     // @brief 第一个声学层索引
     int FirstAcoustic;
     // @brief 最后一个声学层索引
@@ -152,22 +155,21 @@ struct SSPStructure
 
     // @brief 声速剖面细分点数
     VectorXi NMesh; // size = NMedia
-    // @brief 该剖面层数
-    int NMedia;
+    size_t NMeshMax; // 最大网格数
 
     // @brief 深度向量
     VectorXd z;
-
     VectorXd alphaR; // 声速，纵波速度
     VectorXd alphaI; // 横波速度
     VectorXd betaR;  // 纵波衰减
     VectorXd betaI;  // 横波衰减
-    // @brief 密度向量
-    VectorXd rho;
+    VectorXd rho; // 密度
 
     // @brief 声速向量
-    VectorXcd cp;
-    VectorXcd cs;
+    VectorXcd cp; // 纵波声速，根据alphaR和alphaI算出的复声速
+    VectorXcd cs; // 横波声速，根据betaR和betaI算出的复声速
+
+    // @brief 声速剖面插值点声速
     VectorXcd cp_int;
     VectorXcd cs_int;
     VectorXd rho_int;
@@ -231,10 +233,13 @@ struct SSPStructure
 // 输入的SSP
 struct SSP_1D
 {
-    int NPts;
-    double beta;
-    double ft;
-    double sigma;
+    int NMedia;
+    SSP_Mode SSPType;
+    VectorXi NPts;
+    VectorXd beta;
+    VectorXd ft;
+    VectorXd sigma;
+    VectorXd NMesh;
     VectorXd z;
     VectorXd rho;
     VectorXd alphaR;
@@ -588,9 +593,6 @@ struct parameters
     // 输出控制
     bool outputModes; // 是否输出模式
     bool outputField; // 是否输出声场
-
-    // .mod 文件流
-    std::ofstream MODFile;
 };
 
 // 输出结构

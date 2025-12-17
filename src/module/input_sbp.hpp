@@ -48,7 +48,6 @@ public:
         // std::cout << "pat: " << sbp->pat.transpose() << std::endl;
         // }
         sbp->isSet = true;
-        params.Beam->BeamType.setBeamShiftType(Beam_Mode::Beam_Shift_Type::MODE_F_SBP); // 设置射线偏移模式为 SBP
     }
 
     std::pair<VectorXd, VectorXd> get_SBP(const parameters &params)
