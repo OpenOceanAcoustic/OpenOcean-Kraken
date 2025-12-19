@@ -65,16 +65,23 @@ void kkc_interface::init() // 初始化
         std::cerr << "Error: Failed to allocate memory for parameters" << std::endl;
         exit(1);
     }
+
+    // 初始化params的各个成员变量
+    params->freqinfo = new FreqInfo();
+    params->SSP = new SSPStructure[params->NProf];
+    params->HSTop = new HSInfo[params->NProf];
+    params->HSBot = new HSInfo[params->NProf];
+    params->Pos = new Position();
+    params->SBP = new SrcBmPat();
     params->log = &kkc_Log::get_instance();
     this->field_size = 0; // 场大小初始化为0
 
     this->is_setup = false;           // 初始化是否设置参数标志位
     auto &params = this->getParams(); // 获取参数
     auto &output = this->getOutput(); // 获取输出
+
     // 参数初始化
     impl->INPUT_FREQ.Init(params);
-    impl->INPUT_FREQ.Default(params);
-
     impl->INPUT_SSP.Init(params);
     impl->INPUT_BOUNDARY.Init(params);
     impl->INPUT_SZ_RZ_RR.Init(params);
@@ -82,6 +89,7 @@ void kkc_interface::init() // 初始化
     impl->INPUT_SBP.Init(params);
 
     // default params
+    impl->INPUT_FREQ.Default(params);
     impl->INPUT_SSP.Default(params);
     impl->INPUT_BOUNDARY.Default(params);
     impl->INPUT_SZ_RZ_RR.Default(params);
@@ -96,6 +104,8 @@ void kkc_interface::init() // 初始化
 void kkc_interface::setup() // 设置参数
 {
     input_setup(); // 设置输入参数(外界输入参数，因此每次计算时候都重新计算一次环境)
+    intm_setup();  // 设置中间矩阵参数
+
     if (!this->is_setup)
     {
         this->output_setup();  // 若未配置，则配置输出的内存
@@ -120,9 +130,26 @@ void kkc_interface::input_setup() // 设置输入参数
     this->field_size = (size_t)params.Pos->NSz * (size_t)params.Pos->NRz_per_range * (size_t)params.Pos->NRr;
 }
 
+// 中间矩阵配置
+void kkc_interface::intm_setup() // 设置中间矩阵参数
+{
+    auto &params = this->getParams(); // 获取参数
+    size_t num_threads = 1;
+    this->intm_TridMtx = new TridMtx[num_threads];
+    for (size_t i = 0; i < num_threads; i++)
+    {
+        this->intm_TridMtx[i].resize(params.NMeshMax, params.NMediaMax, params.mesh.NSets);
+    }
+}
+
 // 输出配置
 void kkc_interface::output_setup() // 设置输出参数
 {
+    auto &params = this->getParams(); // 获取参数
+    auto &output = this->getOutput(); // 获取输出
+    output.eigen = new EigenParams[params.NProf];
+
+    impl->OUTPUT_FIELD.Preprocess(params, output);
 }
 
 void kkc_interface::run() // 运行
@@ -161,15 +188,23 @@ void kkc_interface::runSolveV()
 {
     auto &params = this->getParams(); // 获取参数
     auto &output = this->getOutput(); // 获取输出
+
+
     for (size_t iprof = 0; iprof < params.NProf; iprof++)
     {
-        EigenVWorker(iprof, params, output);
+        EigenVWorker(iprof, params, this->intm_TridMtx[0], output);
     }
 }
 
 void kkc_interface::runField()
 {
     // FieldSolveWorker();
+    auto &params = this->getParams(); // 获取参数
+    auto &output = this->getOutput(); // 获取输出
+    for (size_t iprof = 0; iprof < params.NProf; iprof++)
+    {
+        ComputePressure(iprof, params, output);
+    }
 }
 
 void kkc_interface::set_Title(std::string &title) // 设置标题
@@ -269,16 +304,16 @@ void kkc_interface::set_Rz(const double &start, const double &end, const int &NR
 }
 
 // 边界条件设置类
-void kkc_interface::set_surface_Type(BC_Mode bc) // 设置边界条件类型
+void kkc_interface::set_surface_Type(BC_Mode bc, size_t iprof) // 设置边界条件类型
 {
-    auto &params = this->getParams();                  // 获取参数
-    impl->INPUT_BOUNDARY.set_surface_Type(params, bc); // 设置边界条件类型
+    auto &params = this->getParams();                         // 获取参数
+    impl->INPUT_BOUNDARY.set_surface_Type(params, bc, iprof); // 设置边界条件类型
 }
 
-void kkc_interface::set_bottom_Type(BC_Mode bc) // 设置底部边界条件类型
+void kkc_interface::set_bottom_Type(BC_Mode bc, size_t iprof) // 设置底部边界条件类型
 {
-    auto &params = this->getParams();                 // 获取参数
-    impl->INPUT_BOUNDARY.set_bottom_Type(params, bc); // 设置底部边界条件类型
+    auto &params = this->getParams();                        // 获取参数
+    impl->INPUT_BOUNDARY.set_bottom_Type(params, bc, iprof); // 设置底部边界条件类型
 }
 
 void kkc_interface::set_BottomLine(double zTemp, double alphaR, double alphaI, double betaR, double betaI, double rho, size_t iprof) // 设置底部半空间

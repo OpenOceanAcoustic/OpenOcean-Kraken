@@ -5,20 +5,20 @@ void ERROUT() {
 
 };
 
-void SolveEp(int &iset, size_t iprof, const int &NSets, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &params, double &Error)
+void SolveEp(const int &iset, const size_t &iprof, const int &NSets, EigenParams &eigen, TridMtx &trid, parameters &params, double &Error)
 {
     double omega2 = SQ(2 * pi * params.freqinfo->freq);
     if (iprof > 0 && iset < 2 && params.modeType == ModeType::Couple)
     {
-        Solve3(iset, iprof, eigen, kramtrx, params);
+        Solve3(iset, iprof, eigen, trid, params);
     }
     else if ((iset < 2) && (params.SSP[iprof].NMedia <= params.SSP[iprof].LastAcoustic - params.SSP[iprof].FirstAcoustic + 1))
     {
-        Solve1(iset, iprof, NSets, eigen, kramtrx, params);
+        Solve1(iset, iprof, NSets, eigen, trid, params);
     }
     else
     {
-        Solve2(iset, iprof, eigen, kramtrx, params);
+        Solve2(iset, iprof, eigen, trid, params);
     }
     if (iset == 0)
     {
@@ -52,14 +52,14 @@ void SolveEp(int &iset, size_t iprof, const int &NSets, EigenParams &eigen, Krak
     int NTotal = 0;
     for (int i = params.SSP[iprof].FirstAcoustic; i <= params.SSP[iprof].LastAcoustic; ++i)
     {
-        NTotal += params.mesh.N(i);
+        NTotal += trid.N(i);
     }
     int NTotal1 = NTotal + 1;
 
     // 如果是第一个网格，计算特征向量
     if (iset == 0)
     {
-        VectorSolve(iprof, kramtrx, params, eigen, NTotal, NTotal1);
+        VectorSolve(iprof, trid, params, eigen, NTotal, NTotal1);
     }
 
     // // 打印特征值
@@ -105,11 +105,11 @@ void SolveEp(int &iset, size_t iprof, const int &NSets, EigenParams &eigen, Krak
 }
 
 // Solve1函数：使用Sturm序列分离本征值以及用Brent求根法求得本征值
-void Solve1(int &iset, size_t iprof, const int &NSets, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &params)
+void Solve1(const int &iset, const size_t &iprof, const int &NSets, EigenParams &eigen, TridMtx &trid, parameters &params)
 {
     int iPower = 0, NTotal, mode = 0; // NzTab = 0,
     double x, x1, x2, xMin, xMax, Eps, Delta;
-    bool iscountm = true;
+    bool isCountMode = true;
     std::string ErrorMessage;
     VectorXd xL, xR;
     double omega2 = SQ(2 * pi * params.freqinfo->freq);
@@ -119,7 +119,7 @@ void Solve1(int &iset, size_t iprof, const int &NSets, EigenParams &eigen, Krake
     // 确定模态数量
     xMin = 1.00001 * omega2 / SQ(params.Chigh);
 
-    FUNCT(iset, iprof, mode, xMin, Delta, iPower, kramtrx, params, eigen.EVMat, eigen.firstM, iscountm, modeCount);
+    FUNCT(iset, iprof, mode, xMin, Delta, iPower, trid, params, eigen.EVMat, eigen.firstM, isCountMode, modeCount);
     int M = modeCount;
     eigen.M = M;
 
@@ -138,7 +138,7 @@ void Solve1(int &iset, size_t iprof, const int &NSets, EigenParams &eigen, Krake
     }
 
     xMax = omega2 / SQ(params.Clow); // 最大波数的平方
-    FUNCT(iset, iprof, mode, xMax, Delta, iPower, kramtrx, params, eigen.EVMat, eigen.firstM, iscountm, modeCount);
+    FUNCT(iset, iprof, mode, xMax, Delta, iPower, trid, params, eigen.EVMat, eigen.firstM, isCountMode, modeCount);
 
     M = M - modeCount;
     eigen.M = M;
@@ -159,7 +159,7 @@ void Solve1(int &iset, size_t iprof, const int &NSets, EigenParams &eigen, Krake
     NTotal = 0;
     for (int i = params.SSP[iprof].FirstAcoustic; i <= params.SSP[iprof].LastAcoustic; ++i)
     {
-        NTotal += params.mesh.N(i);
+        NTotal += trid.N(i);
     }
 
     if (M > NTotal / 5)
@@ -168,17 +168,17 @@ void Solve1(int &iset, size_t iprof, const int &NSets, EigenParams &eigen, Krake
         std::cout << "Approximate number of modes = " << M << " Warning in KRAKEN - Solve1 : Mesh too coarse to sample the modes adequately" << std::endl;
     }
 
-    Bisection(iset, iprof, mode, xMin, xMax, xL, xR, kramtrx, params, eigen); // 初始化上下边界
+    Bisection(iset, iprof, mode, xMin, xMax, xL, xR, trid, params, eigen); // 初始化上下边界
 
     // 使用ZBRENT精化每个本征值
-    iscountm = false;
+    isCountMode = false;
 
     for (int modeIdx = 0; modeIdx < M; ++modeIdx)
     {
         x1 = xL(modeIdx);
         x2 = xR(modeIdx);
         Eps = std::abs(x2) * std::pow(10.0, 2.0 - std::numeric_limits<double>::digits10);
-        ZBRENTX(x, x1, x2, Eps, iset, iprof, mode, Delta, iPower, kramtrx, params, eigen.EVMat, eigen.firstM, iscountm, modeCount,
+        ZBRENTX(x, x1, x2, Eps, iset, iprof, mode, Delta, iPower, trid, params, eigen.EVMat, eigen.firstM, modeCount,
                 ErrorMessage, FUNCT); // Brent求根法
 
         if (!ErrorMessage.empty())
@@ -190,14 +190,14 @@ void Solve1(int &iset, size_t iprof, const int &NSets, EigenParams &eigen, Krake
     }
 }
 
-void Solve2(int &iset, size_t iprof, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &params)
+void Solve2(const int &iset, const size_t& iprof, EigenParams &eigen, TridMtx &trid, parameters &params)
 {
     double omega2 = SQ(2 * pi * params.freqinfo->freq), x1, x2, Tolerance, Delta;
     double x = omega2 / SQ(params.Clow);
     int Iteration, MaxIteration = 2000, iPower = 0, modeCount = 0;
     string ErrorMessage;
 
-    bool iscountm = false;
+    bool isCountMode = false;
 
     VectorXd P;
     P.resize(10);
@@ -217,18 +217,18 @@ void Solve2(int &iset, size_t iprof, EigenParams &eigen, KrakenMatrix &kramtrx, 
                 {
                     for (int j = 0; j < iset - ii - 1; j++)
                     {
-                        x1 = SQ(params.mesh.hV(j));
-                        x2 = SQ(params.mesh.hV(j + ii + 1));
-                        P(j) = ((SQ(params.mesh.hV(iset)) - x2) * P(j) -
-                                (SQ(params.mesh.hV(iset)) - x1) * P(j + 1)) /
+                        x1 = SQ(trid.h(j));
+                        x2 = SQ(trid.h(j + ii + 1));
+                        P(j) = ((SQ(trid.h(iset)) - x2) * P(j) -
+                                (SQ(trid.h(iset)) - x1) * P(j + 1)) /
                                (x1 - x2);
                     }
                 }
                 x = P(0);
             }
         }
-        Tolerance = abs(x) * kramtrx.B1.size() * pow(10.0, (1.0 - std::numeric_limits<double>::digits10));
-        ZSecantX(x, Tolerance, Iteration, MaxIteration, iset, iprof, mode, Delta, iPower, kramtrx, params, eigen.EVMat, eigen.firstM, iscountm, modeCount, ErrorMessage, FUNCT);
+        Tolerance = abs(x) * trid.B1.size() * pow(10.0, (1.0 - std::numeric_limits<double>::digits10));
+        ZSecantX(x, Tolerance, Iteration, MaxIteration, iset, iprof, mode, Delta, iPower, trid, params, eigen.EVMat, eigen.firstM, isCountMode, modeCount, ErrorMessage, FUNCT);
         eigen.EVMat(iset * eigen.firstM + mode) = x;
         if (omega2 / SQ(params.Chigh) > x)
         {
@@ -238,13 +238,13 @@ void Solve2(int &iset, size_t iprof, EigenParams &eigen, KrakenMatrix &kramtrx, 
     }
 }
 
-void Solve3(int &iset, size_t iprof, EigenParams &eigen, KrakenMatrix &kramtrx, parameters &params)
+void Solve3(const int &iset, const size_t &iprof, EigenParams &eigen, TridMtx &trid, parameters &params)
 {
     int IT, MaxIT, iPower = 0, mode = 0; // NzTab = 0,
     double x, xMin, Tolerance, Delta;
     std::string ErrorMessage;
 
-    bool iscountm = false;
+    bool isCountMode = false;
 
     MaxIT = 500;
 
@@ -255,14 +255,14 @@ void Solve3(int &iset, size_t iprof, EigenParams &eigen, KrakenMatrix &kramtrx, 
     // 确定模态数量
     xMin = 1.00001 * omega2 / SQ(params.Chigh);
 
-    FUNCT(iset, iprof, mode, xMin, Delta, iPower, kramtrx, params, eigen.EVMat, eigen.firstM, iscountm, modeCount);
+    FUNCT(iset, iprof, mode, xMin, Delta, iPower, trid, params, eigen.EVMat, eigen.firstM, isCountMode, modeCount);
     int M = modeCount;
 
     for (int modeIdx = 0; modeIdx < M; ++modeIdx)
     {
         x = eigen.EVMat(iset * eigen.firstM + modeIdx);
         Tolerance = std::abs(x) * std::pow(10.0, 2.0 - std::numeric_limits<double>::digits10);
-        ZSecantX(x, Tolerance, IT, MaxIT, iset, iprof, mode, Delta, iPower, kramtrx, params, eigen.EVMat, eigen.firstM, iscountm, modeCount, ErrorMessage, FUNCT);
+        ZSecantX(x, Tolerance, IT, MaxIT, iset, iprof, mode, Delta, iPower, trid, params, eigen.EVMat, eigen.firstM, isCountMode, modeCount, ErrorMessage, FUNCT);
 
         if (!ErrorMessage.empty())
         {
@@ -279,9 +279,143 @@ void Solve3(int &iset, size_t iprof, EigenParams &eigen, KrakenMatrix &kramtrx, 
     }
 }
 
+// 初始化有限差分方程
+void TridPreprocess(int &iset, size_t iprof, parameters &params, TridMtx &trid, int ntimes)
+{
+    bool ElasticFlag = false;
+    int NPoints = 0;
+
+    double Two_h;
+    double cp2, cs2;
+    double omega2 = SQ(2 * pi * params.freqinfo->freq);
+
+    // 初始化变量
+    double &Clow = params.Clow;
+    double cMin = 1e8;
+    double &cHigh = params.Chigh;
+    params.SSP[iprof].FirstAcoustic = -1;
+    trid.Loc[0] = 0; // C++使用0-based索引
+
+    for (int i = 0; i < params.SSP[iprof].NMedia; ++i)
+    {
+        trid.N(i) = params.SSP[iprof].NMesh(i) * ntimes;
+        trid.h(i) = params.SSP[iprof].depth(i) / trid.N(i);
+        NPoints += trid.N(i);
+        if (i == 0)
+        {
+            trid.hV(iset) = trid.h(i);
+        }
+    }
+    NPoints += params.SSP[iprof].NMedia;
+
+    // 处理每个介质层
+    for (int im = 0; im < params.SSP[iprof].NMedia; ++im)
+    { // C++使用0-based索引
+        // 计算当前层的起始位置
+        if (im != 0)
+        {
+            trid.Loc(im) = trid.Loc(im - 1) + trid.N(im - 1) + 1;
+        }
+
+        int ii = trid.Loc(im); // C++使用0-based索引，不需要+1
+        Two_h = 2.0 * trid.h(im);
+
+        EvaluateSSP(trid, params.SSP[iprof], params.SSP[iprof].SSPType, im);
+
+        // 打印rho_int
+        // std::cout << "RHO INT" << SSP.rho_int.transpose() << std::endl;
+
+        // 加载有限差分方程的对角线
+        if (params.SSP[iprof].Material[im] == Media_Mode::MODE_A_Acoustic)
+        { // 声学介质情况
+
+            // 计算当前层的最小声速
+            double min_cp = 1e8;
+            for (int j = 0; j < trid.N(im) + 1; ++j)
+            {
+                min_cp = std::min(min_cp, std::real(trid.cp_int(ii + j)));
+            }
+            cMin = std::min(cMin, min_cp);
+
+            // 计算B1和B1C
+            double h2 = SQ(trid.h(im));
+            for (int j = 0; j < trid.N(im) + 1; ++j)
+            {
+                complex<double> val = omega2 / SQ(trid.cp_int(ii + j));
+                trid.B1(ii + j) = -2.0 + h2 * std::real(val);
+                trid.B1C(ii + j) = std::imag(val);
+                trid.rho(ii + j) = trid.rho_int(ii + j);
+            }
+        }
+        else
+        { // 弹性介质情况
+            ElasticFlag = true;
+            Two_h = 2.0 * trid.h(im);
+
+            for (int j = 0; j < trid.N(im) + 1; ++j)
+            {
+                cMin = std::min(std::real(trid.cs_int[j]), cMin);
+
+                cp2 = SQ(std::real(trid.cp_int(j)));
+                cs2 = SQ(std::real(trid.cs_int(j)));
+
+                trid.B1(ii + j) = Two_h / (trid.rho_int(j) * cs2);
+                trid.B2(ii + j) = Two_h / (trid.rho_int(j) * cp2);
+                trid.B3(ii + j) = 4.0 * Two_h * trid.rho_int(j) * cs2 * (cp2 - cs2) / cp2;
+                trid.B4(ii + j) = Two_h * (cp2 - 2.0 * cs2) / cp2;
+                trid.rho(ii + j) = Two_h * std::real(omega2) * trid.rho_int(j);
+            }
+        }
+    }
+
+    // // 打印kramtrx内部参数
+    // std::cout << "B1 " << kramtrx.B1.size() << kramtrx.B1.transpose() << std::endl;
+
+    // std::cout << "B1C " << kramtrx.B1C.size() << kramtrx.B1C.transpose() << std::endl;
+
+    // std::cout << "rho " << kramtrx.rho.size() << kramtrx.rho.transpose() << std::endl;
+
+    // 处理底部半空间属性
+    if (params.HSBot[iprof].BC == BC_Mode::MODE_A_Half_space)
+    {
+        if (std::real(params.HSBot[iprof].cs) > 0.0)
+        { // 弹性底部半空间
+            ElasticFlag = true;
+            cMin = std::min(cMin, std::real(params.HSBot[iprof].cs));
+            cHigh = std::min(cHigh, std::real(params.HSBot[iprof].cs));
+        }
+        else
+        { // 声学底部半空间
+            cMin = std::min(cMin, std::real(params.HSBot[iprof].cp));
+        }
+    }
+
+    // 处理顶部半空间属性
+    if (params.HSTop[iprof].BC == BC_Mode::MODE_A_Half_space)
+    {
+        if (std::real(params.HSTop[iprof].cs) > 0.0)
+        { // 弹性顶部半空间
+            ElasticFlag = true;
+            cMin = std::min(cMin, std::real(params.HSTop[iprof].cs));
+            cHigh = std::min(cHigh, std::real(params.HSTop[iprof].cs));
+        }
+        else
+        { // 声学顶部半空间
+            cMin = std::min(cMin, std::real(params.HSTop[iprof].cp));
+        }
+    }
+
+    // 如果存在弹性介质，则减小cMin以考虑Scholte波
+    if (ElasticFlag)
+    {
+        cMin = 0.85 * cMin;
+    }
+    Clow = std::max(Clow, cMin);
+}
+
 // FUNCT函数：计算色散关系
-void FUNCT(int &iset, size_t iprof, int &mode, double &x, double &Delta, int &iPower, KrakenMatrix &kramtrx,
-           parameters &params, VectorXd &EVMat, const int &firstM, bool coutmodes, int &modeCount)
+void FUNCT(const int &iset, const size_t &iprof, const int &mode, double &x, double &Delta, int &iPower, TridMtx &trid,
+           parameters &params, VectorXd &EVMat, const int &firstM, const bool &isCountMode, int &modeCount)
 {
     int iPowerBot;
     double f, g;
@@ -291,18 +425,18 @@ void FUNCT(int &iset, size_t iprof, int &mode, double &x, double &Delta, int &iP
     modeCount = 0;
 
     // 调用BCImpedance计算底部阻抗
-    BCImpedance(iprof, x, isTop, fTop, gTop, iPower, isComplex, kramtrx,
+    BCImpedance(iprof, x, isTop, fTop, gTop, iPower, isComplex, trid,
                 params, modeCount);
 
     f = std::real(fTop);
     g = std::real(gTop);
 
     // 穿过声学层
-    AcousticLayers(iprof, x, f, g, iPower, kramtrx, params, coutmodes, modeCount);
+    AcousticLayers(iprof, x, f, g, iPower, trid, params, isCountMode, modeCount);
 
     isTop = true;
     // 调用BCImpedance计算顶部阻抗
-    BCImpedance(iprof, x, isTop, fBot, gBot, iPowerBot, isComplex, kramtrx,
+    BCImpedance(iprof, x, isTop, fBot, gBot, iPowerBot, isComplex, trid,
                 params, modeCount);
 
     Delta = std::real(f * std::real(gBot) - g * std::real(fBot));
@@ -337,7 +471,7 @@ void FUNCT(int &iset, size_t iprof, int &mode, double &x, double &Delta, int &iP
 }
 
 // AcousticLayers函数：穿过声学层
-void AcousticLayers(size_t iprof, double x, double &f, double &g, int &iPower, KrakenMatrix &kramtrx, parameters &params, bool &coutmodes, int &modeCount)
+void AcousticLayers(const size_t &iprof, double x, double &f, double &g, int &iPower, TridMtx &trid, parameters &params, const bool &isCountMode, int &modeCount)
 {
     double p0 = 0.0, p1, p2, h2k2;
 
@@ -349,21 +483,21 @@ void AcousticLayers(size_t iprof, double x, double &f, double &g, int &iPower, K
     // 遍历声学层
     for (int im = params.SSP[iprof].LastAcoustic; im >= params.SSP[iprof].FirstAcoustic; --im)
     {
-        h2k2 = SQ(params.mesh.h(im)) * x;
-        int ii = params.mesh.Loc(im) + params.mesh.N(im);
-        double rhoMedium = kramtrx.rho(params.mesh.Loc(im)); // 使用每层顶部的密度值
+        h2k2 = SQ(trid.h(im)) * x;
+        int ii = trid.Loc(im) + trid.N(im);
+        double rhoMedium = trid.rho(trid.Loc(im)); // 使用每层顶部的密度值
 
         p1 = -2.0 * g;
-        p2 = (kramtrx.B1(ii) - h2k2) * g - 2.0 * params.mesh.h(im) * f * rhoMedium;
+        p2 = (trid.B1(ii) - h2k2) * g - 2.0 * trid.h(im) * f * rhoMedium;
 
         // 向上穿过单层介质
-        for (ii = params.mesh.Loc(im) + params.mesh.N(im) - 1; ii >= params.mesh.Loc(im); --ii)
+        for (ii = trid.Loc(im) + trid.N(im) - 1; ii >= trid.Loc(im); --ii)
         {
             p0 = p1;
             p1 = p2;
-            p2 = (h2k2 - kramtrx.B1(ii)) * p1 - p0;
+            p2 = (h2k2 - trid.B1(ii)) * p1 - p0;
 
-            if (coutmodes)
+            if (isCountMode)
             {
                 if (p0 * p1 <= 0.0)
                 {
@@ -382,15 +516,15 @@ void AcousticLayers(size_t iprof, double x, double &f, double &g, int &iPower, K
         }
 
         // 计算f和g
-        rhoMedium = kramtrx.rho(params.mesh.Loc(im));
-        f = -(p2 - p0) / (2.0 * params.mesh.h(im)) / rhoMedium;
+        rhoMedium = trid.rho(trid.Loc(im));
+        f = -(p2 - p0) / (2.0 * trid.h(im)) / rhoMedium;
         g = -p1;
     }
 }
 
 // Bisection函数：返回每个本征值的隔离区间
-void Bisection(int &iset, size_t iprof, int &mode, double xMin, double xMax, VectorXd &xL, VectorXd &xR,
-               KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen)
+void Bisection(const int &iset, const size_t &iprof, int &mode, double xMin, double xMax, VectorXd &xL, VectorXd &xR,
+               TridMtx &trid, parameters &params, EigenParams &eigen)
 {
     int j, NZeros, NZer1, iPower, modeCount;
     double x, x1, x2, Delta;
@@ -401,7 +535,7 @@ void Bisection(int &iset, size_t iprof, int &mode, double xMin, double xMax, Vec
         xL(i) = xMin;
         xR(i) = xMax;
     }
-    FUNCT(iset, iprof, mode, xMax, Delta, iPower, kramtrx, params, eigen.EVMat, eigen.firstM, true, NZer1);
+    FUNCT(iset, iprof, mode, xMax, Delta, iPower, trid, params, eigen.EVMat, eigen.firstM, true, NZer1);
 
     if (eigen.M == 1)
     {
@@ -430,7 +564,7 @@ void Bisection(int &iset, size_t iprof, int &mode, double xMin, double xMax, Vec
             for (j = 0; j < MaxBisections; ++j)
             {
                 x = x1 + (x2 - x1) / 2;
-                FUNCT(iset, iprof, modeIdx, x, Delta, iPower, kramtrx, params, eigen.EVMat, eigen.firstM, true, modeCount);
+                FUNCT(iset, iprof, modeIdx, x, Delta, iPower, trid, params, eigen.EVMat, eigen.firstM, true, modeCount);
                 NZeros = modeCount - NZer1;
 
                 if (NZeros < modeIdx + 1)
@@ -463,12 +597,12 @@ void Bisection(int &iset, size_t iprof, int &mode, double xMin, double xMax, Vec
     }
 }
 
-void VectorSolve(size_t iprof, KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen,
-            int &NTotal, int &NTotal1)
+void VectorSolve(size_t iprof, TridMtx &trid, parameters &params, EigenParams &eigen,
+                 int &NTotal, int &NTotal1)
 {
     int j = 0, NzTab, iPower, modeCount = 0, L, ITP, IErr;
     double h_rho, x, xh2;
-    VectorXd z(NTotal1), Phi(NTotal1), d(NTotal1), e(NTotal1 + 1), zTab, WTS, WTR, WTZ;
+    VectorXd z(NTotal1), Psi(NTotal1), dPsidz(NTotal1), d(NTotal1), e(NTotal1 + 1), zTab, WTS, WTR, WTZ;
     VectorXi ISzTab, IRzTab, IZzTab, Ix, Iy;
     VectorXcd PhiTab;
     complex<double> fTop, gTop, fBot, gBot;
@@ -476,27 +610,18 @@ void VectorSolve(size_t iprof, KrakenMatrix &kramtrx, parameters &params, EigenP
     z(0) = params.SSP[iprof].z(params.SSP[iprof].FirstAcoustic);
     for (int im = params.SSP[iprof].FirstAcoustic; im <= params.SSP[iprof].LastAcoustic; im++)
     {
-        h_rho = params.mesh.h(im) * kramtrx.rho(params.mesh.Loc(im));
-        for (int ii = 1; ii <= params.mesh.N(im); ii++)
+        h_rho = trid.h(im) * trid.rho(trid.Loc(im));
+        for (int ii = 1; ii <= trid.N(im); ii++)
         {
             e(j + ii) = 1.0 / h_rho;
-            z(j + ii) = z(j) + params.mesh.h(im) * ii;
+            z(j + ii) = z(j) + trid.h(im) * ii;
         }
-        j = j + params.mesh.N(im);
+        j = j + trid.N(im);
     }
     e(NTotal1) = 1.0 / h_rho;
     // 为了方便输出.mod，这里还是进行合并
     MergeVectors(params.Pos->Sz, params.Pos->Rz, zTab, NzTab, Ix, Iy);
     MatrixXcd phiZ(eigen.firstM, NzTab);
-
-    // 对声源深度和接收深度分别进行处理，不在需要合并
-
-    eigen.phi.resize(eigen.firstM, NTotal1);
-    eigen.phiS.resize(eigen.firstM, params.Pos->Sz.size());
-    eigen.phiR.resize(eigen.firstM, params.Pos->Rz.size());
-    eigen.dphidz.resize(eigen.firstM, NTotal1);
-    eigen.dphidzS.resize(eigen.firstM, params.Pos->Sz.size());
-    eigen.dphidzR.resize(eigen.firstM, params.Pos->Rz.size());
 
     WTS.resize(params.Pos->NSz);
     WTR.resize(params.Pos->NRz);
@@ -510,89 +635,10 @@ void VectorSolve(size_t iprof, KrakenMatrix &kramtrx, parameters &params, EigenP
     Weight_dble(z, NTotal1, params.Pos->Rz, params.Pos->NRz, WTR, IRzTab);
     Weight_dble(z, NTotal1, zTab, NzTab, WTZ, IZzTab);
 
-    // cout << "ISzTab: " << ISzTab.transpose() << endl;
-    // cout << "IRzTab: " << IRzTab.transpose() << endl;
-    // cout << "WTR:" << WTR.transpose() << endl;
-
-    // // TODO 写入mod的头
-    // string filename = "test" + std::to_string(iprof);
-    // params.MODFile.open(filename + ".mod", std::ios::binary);
-    // if (!params.MODFile.is_open())
-    // {
-    //     std::cerr << "无法打开MOD文件: " << filename << ".mod" << std::endl;
-    //     return;
-    // }
-
-    // int ifreq = 0;
-    // // if (ifreq == 0 && iprof == 0)
-    // // {
-    //     eigen.LRecordLength = std::max(2 * params.freqinfo->Nfreq, std::max(2 * NzTab, std::max(32, 3 * (params.SSP[iprof].LastAcoustic - params.SSP[iprof].FirstAcoustic + 1))));
-    // // }
-    // if (ifreq == 0)
-    // {
-    //     eigen.IRecProfile = 0;
-    //     params.MODFile.seekp(eigen.IRecProfile * 4 * eigen.LRecordLength, std::ios::beg);
-    //     params.MODFile.write(reinterpret_cast<char *>(&eigen.LRecordLength), sizeof(int));
-    //     // 固定title为80个char
-    //     char title[80] = {0};
-    //     strncpy(title, params.Title.c_str(), params.Title.size());
-    //     params.MODFile.write(title, sizeof(title));
-    //     params.MODFile.write(reinterpret_cast<char *>(&params.freqinfo->Nfreq), sizeof(int));
-    //     int numAcoustic = params.SSP[iprof].LastAcoustic - params.SSP[iprof].FirstAcoustic + 1;
-    //     params.MODFile.write(reinterpret_cast<char *>(&numAcoustic), sizeof(int));
-    //     params.MODFile.write(reinterpret_cast<char *>(&NzTab), sizeof(int));
-    //     params.MODFile.write(reinterpret_cast<char *>(&NzTab), sizeof(int));
-
-    //     params.MODFile.seekp((eigen.IRecProfile + 1) * 4 * eigen.LRecordLength, std::ios::beg);
-    //     for (int im = params.SSP[iprof].FirstAcoustic; im <= params.SSP[iprof].LastAcoustic; im++)
-    //     {
-    //         params.MODFile.write(reinterpret_cast<char *>(&params.mesh.N(im)), sizeof(int));
-    //         params.MODFile.write(reinterpret_cast<char *>(&params.SSP->Material), sizeof(params.SSP->Material)); // fortran是字符串，这里是整数。而且只有一层，应该是params.SSP->Material[im]?
-    //     }
-    //     params.MODFile.seekp((eigen.IRecProfile + 2) * 4 * eigen.LRecordLength, std::ios::beg);
-    //     for (int im = params.SSP[iprof].FirstAcoustic; im <= params.SSP[iprof].LastAcoustic; im++)
-    //     {
-    //         float depth = static_cast<float>(params.SSP[iprof].depth[im]); // 转换double为float
-    //         params.MODFile.write(reinterpret_cast<char *>(&depth), sizeof(float));
-    //         float rho = kramtrx.rho(params.mesh.Loc(im)); // 转换double为float
-    //         params.MODFile.write(reinterpret_cast<char *>(&rho), sizeof(float));
-    //     }
-    //     params.MODFile.seekp((eigen.IRecProfile + 3) * 4 * eigen.LRecordLength, std::ios::beg);
-    //     params.MODFile.write(reinterpret_cast<char *>(params.freqinfo->freqvec.data()), params.freqinfo->Nfreq * sizeof(double));
-    //     params.MODFile.seekp((eigen.IRecProfile + 4) * 4 * eigen.LRecordLength, std::ios::beg);
-    //     // zTab转为float输出
-    //     VectorXf zTabf = zTab.cast<float>();
-    //     params.MODFile.write(reinterpret_cast<char *>(zTabf.data()), NzTab * sizeof(float));
-    //     // for (int isz = 0; isz < params.Pos->NSz; isz++)
-    //     // {
-    //     //     params.MODFile.write(reinterpret_cast<char*>(&params.Pos->Sz(isz)), sizeof(double));
-    //     // }
-    //     // for (int irz = 0; irz < params.Pos->NRz; irz++)
-    //     // {
-    //     //     params.MODFile.write(reinterpret_cast<char*>(&params.Pos->Rz(irz)), sizeof(double));
-    //     // }
-    //     eigen.IRecProfile += 5;
-    // }
-    // params.MODFile.seekp((eigen.IRecProfile + 1) * 4 * eigen.LRecordLength, std::ios::beg);
-    // params.MODFile.write(reinterpret_cast<char *>(&params.HSTop[iprof].BC), sizeof(params.HSTop[iprof].BC)); // 这也是整数而不是字符串
-    // params.MODFile.write(reinterpret_cast<char *>(&params.HSTop[iprof].cp), sizeof(std::complex<double>));
-    // params.MODFile.write(reinterpret_cast<char *>(&params.HSTop[iprof].cs), sizeof(std::complex<double>));
-    // float HSToprho = static_cast<float>(params.HSTop[iprof].rho); // 转换double为float
-    // params.MODFile.write(reinterpret_cast<char *>(&HSToprho), sizeof(float));
-    // float SSPz0 = static_cast<float>(params.SSP[iprof].z(0)); // 转换double为float
-    // params.MODFile.write(reinterpret_cast<char *>(&SSPz0), sizeof(float));
-    // params.MODFile.write(reinterpret_cast<char *>(&params.HSBot[iprof].BC), sizeof(params.HSBot[iprof].BC)); // 这也是整数而不是字符串
-    // params.MODFile.write(reinterpret_cast<char *>(&params.HSBot[iprof].cp), sizeof(std::complex<double>));
-    // params.MODFile.write(reinterpret_cast<char *>(&params.HSBot[iprof].cs), sizeof(std::complex<double>));
-    // float HSBotrho = static_cast<float>(params.HSBot[iprof].rho); // 转换double为float
-    // params.MODFile.write(reinterpret_cast<char *>(&HSBotrho), sizeof(float));
-    // float SSPzn = static_cast<float>(params.SSP[iprof].z(params.SSP[iprof].z.size() - 1)); // 转换double为float
-    // params.MODFile.write(reinterpret_cast<char *>(&SSPzn), sizeof(float));
-
     for (int mode = 0; mode < eigen.firstM; mode++)
     {
         x = eigen.EVMat(mode);
-        BCImpedance(iprof, x, isTop, fTop, gTop, iPower, isComplex, kramtrx,
+        BCImpedance(iprof, x, isTop, fTop, gTop, iPower, isComplex, trid,
                     params, modeCount);
         if (gTop == 0.0)
         {
@@ -601,35 +647,35 @@ void VectorSolve(size_t iprof, KrakenMatrix &kramtrx, parameters &params, EigenP
         }
         else
         {
-            L = params.mesh.Loc(params.SSP[iprof].FirstAcoustic);
-            xh2 = x * SQ(params.mesh.h(params.SSP[iprof].FirstAcoustic));
-            h_rho = params.mesh.h(params.SSP[iprof].FirstAcoustic) * kramtrx.rho(L);
-            d(0) = (kramtrx.B1(L) - xh2) / h_rho / 2.0 + real(fTop / gTop);
+            L = trid.Loc(params.SSP[iprof].FirstAcoustic);
+            xh2 = x * SQ(trid.h(params.SSP[iprof].FirstAcoustic));
+            h_rho = trid.h(params.SSP[iprof].FirstAcoustic) * trid.rho(L);
+            d(0) = (trid.B1(L) - xh2) / h_rho / 2.0 + real(fTop / gTop);
         }
 
         ITP = NTotal;
         j = 0;
-        L = params.mesh.Loc(params.SSP[iprof].FirstAcoustic);
+        L = trid.Loc(params.SSP[iprof].FirstAcoustic);
         for (int im = params.SSP[iprof].FirstAcoustic; im <= params.SSP[iprof].LastAcoustic; im++)
         {
-            xh2 = x * SQ(params.mesh.h(im));
-            h_rho = params.mesh.h(im) * kramtrx.rho(L + 1);
+            xh2 = x * SQ(trid.h(im));
+            h_rho = trid.h(im) * trid.rho(L + 1);
             if (im >= params.SSP[iprof].FirstAcoustic + 1)
             {
                 L++;
-                d(j) = (d(j) + (kramtrx.B1(L) - xh2) / h_rho) / 2.0;
+                d(j) = (d(j) + (trid.B1(L) - xh2) / h_rho) / 2.0;
             }
-            for (int ii = 0; ii < params.mesh.N(im); ii++)
+            for (int ii = 0; ii < trid.N(im); ii++)
             {
                 j++;
                 L++;
-                d(j) = (kramtrx.B1(L) - xh2) / h_rho;
-                if (kramtrx.B1(L) - xh2 + 2.0 > 0.0)
+                d(j) = (trid.B1(L) - xh2) / h_rho;
+                if (trid.B1(L) - xh2 + 2.0 > 0.0)
                     ITP = min(j, ITP);
             }
         }
         isTop = false;
-        BCImpedance(iprof, x, isTop, fBot, gBot, iPower, isComplex, kramtrx,
+        BCImpedance(iprof, x, isTop, fBot, gBot, iPower, isComplex, trid,
                     params, modeCount);
         if (gBot == 0.0)
         {
@@ -640,42 +686,41 @@ void VectorSolve(size_t iprof, KrakenMatrix &kramtrx, parameters &params, EigenP
         {
             d(NTotal1 - 1) = d(NTotal1 - 1) / 2.0 - real(fBot / gBot);
         }
-        InverseIterationD(NTotal1, d, e, IErr, Phi);
+        InverseIterationD(NTotal1, d, e, IErr, Psi);
 
         if (IErr != 0)
         {
             // 未收敛
             std::cout << "mode = " << mode << std::endl;
             std::cout << "Warning in KRAKEN - InverseIteration: Inverse iteration failed to converge" << std::endl;
-            Phi = VectorXd::Zero(NTotal1); // zero out the errant eigenvector
+            Psi = VectorXd::Zero(NTotal1); // zero out the errant eigenvector
         }
         else
         {
-            Normalize(iprof, mode, eigen.firstM, Phi, ITP, NTotal1, x, kramtrx, params, eigen);
+            Normalize(iprof, mode, eigen.firstM, Psi, ITP, NTotal1, x, trid, params, eigen);
         }
         int index = 0;
         for (int im = params.SSP[iprof].FirstAcoustic; im <= params.SSP[iprof].LastAcoustic; ++im)
         {
-            double h = params.mesh.h(im);
-            int Nn = params.mesh.N(im);
+            double h = trid.h(im);
+            int Nn = trid.N(im);
             if (im == params.SSP[iprof].LastAcoustic)
             {
                 Nn++;
             }
             for (int ii = 0; ii < Nn; ii++)
             {
-                eigen.phi(mode, index) = Phi(index);
                 if (index == 0)
                 {
-                    eigen.dphidz(mode, index) = (Phi(index + 1) - Phi(index)) / h;
+                    dPsidz(mode, index) = (Psi(index + 1) - Psi(index)) / h;
                 }
                 else if (index == NTotal)
                 {
-                    eigen.dphidz(mode, index) = (Phi(index) - Phi(index - 1)) / h;
+                    dPsidz(mode, index) = (Psi(index) - Psi(index - 1)) / h;
                 }
                 else
                 {
-                    eigen.dphidz(mode, index) = (Phi(index + 1) - Phi(index - 1)) / (2 * h);
+                    dPsidz(mode, index) = (Psi(index + 1) - Psi(index - 1)) / (2 * h);
                 }
                 index++;
             }
@@ -691,14 +736,14 @@ void VectorSolve(size_t iprof, KrakenMatrix &kramtrx, parameters &params, EigenP
             if (params.Pos->Sz(isz) > params.SSP[iprof].z(params.SSP[iprof].z.size() - 1))
             {
                 // TODO处理海底
-                eigen.phiS(mode, isz) = 0.0;
-                eigen.dphidzS(mode, isz) = 0.0;
+                eigen.PsiS(mode, isz) = 0.0;
+                eigen.dPsidzS(mode, isz) = 0.0;
             }
             else
             {
                 int index = ISzTab(isz);
-                eigen.phiS(mode, isz) = complex<double>(Phi(index)) + WTS(isz) * complex<double>(Phi(index + 1) - Phi(index));
-                eigen.dphidzS(mode, isz) = complex<double>(eigen.dphidz(mode, index)) + WTS(isz) * complex<double>(eigen.dphidz(mode, index + 1) - eigen.dphidz(mode, index));
+                eigen.PsiS(mode, isz) = complex<double>(Psi(index)) + WTS(isz) * complex<double>(Psi(index + 1) - Psi(index));
+                eigen.dPsidzS(mode, isz) = complex<double>(dPsidz(mode, index)) + WTS(isz) * complex<double>(dPsidz(mode, index + 1) - dPsidz(mode, index));
             }
         }
         for (int irz = 0; irz < params.Pos->NRz; irz++)
@@ -706,18 +751,18 @@ void VectorSolve(size_t iprof, KrakenMatrix &kramtrx, parameters &params, EigenP
             if (params.Pos->Rz(irz) > params.SSP[iprof].z(params.SSP[iprof].z.size() - 1))
             {
                 // TODO处理海底
-                eigen.phiR(mode, irz) = 0.0;
-                eigen.dphidzR(mode, irz) = 0.0;
+                eigen.PsiR(mode, irz) = 0.0;
+                eigen.dPsidzR(mode, irz) = 0.0;
             }
             else
             {
                 int index = IRzTab(irz);
-                eigen.phiR(mode, irz) = complex<double>(Phi(index)) + WTR(irz) * complex<double>(Phi(index + 1) - Phi(index));
-                eigen.dphidzR(mode, irz) = complex<double>(eigen.dphidz(mode, index)) + WTR(irz) * complex<double>(eigen.dphidz(mode, index + 1) - eigen.dphidz(mode, index));
+                eigen.PsiR(mode, irz) = complex<double>(Psi(index)) + WTR(irz) * complex<double>(Psi(index + 1) - Psi(index));
+                eigen.dPsidzR(mode, irz) = complex<double>(dPsidz(mode, index)) + WTR(irz) * complex<double>(dPsidz(mode, index + 1) - dPsidz(mode, index));
             }
         }
         for (int izz = 0; izz < NzTab; izz++)
-        {   
+        {
             if (zTab(izz) > params.SSP[iprof].z(params.SSP[iprof].z.size() - 1))
             {
                 // TODO处理海底
@@ -726,24 +771,10 @@ void VectorSolve(size_t iprof, KrakenMatrix &kramtrx, parameters &params, EigenP
             else
             {
                 int index = IZzTab(izz);
-                phiZ(mode, izz) = complex<double>(Phi(index)) + WTZ(izz) * complex<double>(Phi(index + 1) - Phi(index));
+                phiZ(mode, izz) = complex<double>(Psi(index)) + WTZ(izz) * complex<double>(Psi(index + 1) - Psi(index));
             }
         }
-        // std::cout << "mode:" << mode << std::endl;
-        // std::cout << "Phi: \n" << Phi << std::endl;
-        // 写入Phi
-        // params.MODFile.seekp((eigen.IRecProfile + 2 + mode) * 4 * eigen.LRecordLength, std::ios::beg);
 
-        // for (int isz = 0; isz < params.Pos->NSz; isz++)
-        // {
-        //     std::complex<float> phiS = static_cast<std::complex<float>>(eigen.phiS(mode, isz));  // 转换double为float
-        //     MODFile.write(reinterpret_cast<char*>(&phiS), sizeof(std::complex<float>));
-        // }
-        // for (int irz = 0; irz < params.Pos->NRz; irz++)
-        // {
-        //     std::complex<float> phiR = static_cast<std::complex<float>>(eigen.phiR(mode, irz));  // 转换double为float
-        //     MODFile.write(reinterpret_cast<char*>(&phiR), sizeof(std::complex<float>));
-        // }
         // 输出phiZ到.mod中
         for (int izz = 0; izz < NzTab; izz++)
         {
@@ -753,7 +784,7 @@ void VectorSolve(size_t iprof, KrakenMatrix &kramtrx, parameters &params, EigenP
     }
 }
 
-void Normalize(size_t iprof, int &mode, int &firstM, VectorXd &Phi, int &ITP, int &NTotal1, double &x, KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen)
+void Normalize(const size_t &iprof, const int &mode, const int &firstM, VectorXd &Phi, const int &ITP, const int &NTotal1, double &x, TridMtx &trid, parameters &params, EigenParams &eigen)
 {
     int iPower, modeCount = 0, j, j1, L, L1;
     double omega = (2 * pi * params.freqinfo->freq);
@@ -772,58 +803,58 @@ void Normalize(size_t iprof, int &mode, int &firstM, VectorXd &Phi, int &ITP, in
     else if (params.HSTop[iprof].BC == BC_Mode::MODE_F_File || params.HSTop[iprof].BC == BC_Mode::MODE_P_Precomputed)
     {
         isTop = true;
-        BCImpedance(iprof, x, isTop, fTop1, gTop1, iPower, isComplex, kramtrx,
+        BCImpedance(iprof, x, isTop, fTop1, gTop1, iPower, isComplex, trid,
                     params, modeCount);
         isComplex = true;
-        BCImpedance(iprof, x, isTop, fTop2, gTop2, iPower, isComplex, kramtrx,
+        BCImpedance(iprof, x, isTop, fTop2, gTop2, iPower, isComplex, trid,
                     params, modeCount);
         Del = fTop2 / gTop2 - fTop1 / gTop1;
         Perturbation_k -= Del * SQ(Phi(0));
     }
-    L = params.mesh.Loc(params.SSP[iprof].FirstAcoustic) - 1;
+    L = trid.Loc(params.SSP[iprof].FirstAcoustic) - 1;
     j = 0;
     for (int im = params.SSP[iprof].FirstAcoustic; im <= params.SSP[iprof].LastAcoustic; im++)
     {
         // Compute contribution from the volume
         L += 1;
-        rhoMedium = kramtrx.rho(L);
-        rho_omega_h2 = rhoMedium * omega2 * SQ(params.mesh.h(im));
+        rhoMedium = trid.rho(L);
+        rho_omega_h2 = rhoMedium * omega2 * SQ(trid.h(im));
         // top interface
-        SqNorm += 0.5 * params.mesh.h(im) * SQ(Phi(j)) / rhoMedium;
-        Slow += 0.5 * params.mesh.h(im) * (kramtrx.B1(L) + 2.0) * SQ(Phi(j)) / rho_omega_h2;
-        Perturbation_k += 0.5 * params.mesh.h(im) * I1D * kramtrx.B1C(L) * SQ(Phi(j)) / rhoMedium;
+        SqNorm += 0.5 * trid.h(im) * SQ(Phi(j)) / rhoMedium;
+        Slow += 0.5 * trid.h(im) * (trid.B1(L) + 2.0) * SQ(Phi(j)) / rho_omega_h2;
+        Perturbation_k += 0.5 * trid.h(im) * I1D * trid.B1C(L) * SQ(Phi(j)) / rhoMedium;
 
         // medium
         L1 = L + 1;
-        L += params.mesh.N(im) - 1;
+        L += trid.N(im) - 1;
         j1 = j + 1;
-        j += params.mesh.N(im) - 1;
+        j += trid.N(im) - 1;
 
-        SqNorm += params.mesh.h(im) * Phi.segment(j1, j - j1 + 1).array().square().sum() / rhoMedium;
-        Slow += params.mesh.h(im) * kramtrx.B1.segment(j1, j - j1 + 1).array().square().sum() / rho_omega_h2;
-        Perturbation_k += params.mesh.h(im) * I1D * (kramtrx.B1C.segment(L1, L - L1 + 1).array() * Phi.segment(j1, j - j1 + 1).array().square()).sum() / rhoMedium;
+        SqNorm += trid.h(im) * Phi.segment(j1, j - j1 + 1).array().square().sum() / rhoMedium;
+        Slow += trid.h(im) * trid.B1.segment(j1, j - j1 + 1).array().square().sum() / rho_omega_h2;
+        Perturbation_k += trid.h(im) * I1D * (trid.B1C.segment(L1, L - L1 + 1).array() * Phi.segment(j1, j - j1 + 1).array().square()).sum() / rhoMedium;
 
         // 底部边界：更新索引
         L += 1;
         j += 1;
 
         // 累加平方范数（SqNorm）
-        SqNorm += 0.5 * params.mesh.h(im) * (Phi(j) * Phi(j)) / rhoMedium;
+        SqNorm += 0.5 * trid.h(im) * (Phi(j) * Phi(j)) / rhoMedium;
 
         // 累加慢度项（Slow）
-        Slow += 0.5 * params.mesh.h(im) * (kramtrx.B1(L) + 2.0) * SQ(Phi(j)) / rho_omega_h2;
+        Slow += 0.5 * trid.h(im) * (trid.B1(L) + 2.0) * SQ(Phi(j)) / rho_omega_h2;
 
         // 累加底部接口的扰动项（第二个Perturbation_k更新）
-        Perturbation_k += 0.5 * params.mesh.h(im) * I1D * kramtrx.B1C(L) * SQ(Phi(j)) / rhoMedium;
+        Perturbation_k += 0.5 * trid.h(im) * I1D * trid.B1C(L) * SQ(Phi(j)) / rhoMedium;
     }
 
     if (params.HSBot[iprof].BC == BC_Mode::MODE_A_Half_space || params.HSBot[iprof].BC == BC_Mode::MODE_F_File || params.HSBot[iprof].BC == BC_Mode::MODE_P_Precomputed)
     {
         isTop = false;
-        BCImpedance(iprof, x, isTop, fBot1, gBot1, iPower, isComplex, kramtrx,
+        BCImpedance(iprof, x, isTop, fBot1, gBot1, iPower, isComplex, trid,
                     params, modeCount);
         isComplex = true;
-        BCImpedance(iprof, x, isTop, fBot2, gBot2, iPower, isComplex, kramtrx,
+        BCImpedance(iprof, x, isTop, fBot2, gBot2, iPower, isComplex, trid,
                     params, modeCount);
         Del = fBot2 / gBot2 - fBot1 / gBot1;
         Perturbation_k -= Del * SQ(Phi(j));
@@ -833,18 +864,18 @@ void Normalize(size_t iprof, int &mode, int &firstM, VectorXd &Phi, int &ITP, in
     x1 = 0.9999999 * x;
     x2 = 1.0000001 * x;
     isTop = true;
-    BCImpedance(iprof, x1, isTop, fTop1, gTop1, iPower, isComplex, kramtrx,
+    BCImpedance(iprof, x1, isTop, fTop1, gTop1, iPower, isComplex, trid,
                 params, modeCount);
-    BCImpedance(iprof, x2, isTop, fTop2, gTop2, iPower, isComplex, kramtrx,
+    BCImpedance(iprof, x2, isTop, fTop2, gTop2, iPower, isComplex, trid,
                 params, modeCount);
     if (gTop1 != 0.0)
         DrhoDx = real((fTop2 / gTop2 - fTop1 / gTop1)) / (x2 - x1);
 
     // Compute derivative of bottom admitance
     isTop = false;
-    BCImpedance(iprof, x1, isTop, fBot1, gBot1, iPower, isComplex, kramtrx,
+    BCImpedance(iprof, x1, isTop, fBot1, gBot1, iPower, isComplex, trid,
                 params, modeCount);
-    BCImpedance(iprof, x2, isTop, fBot2, gBot2, iPower, isComplex, kramtrx,
+    BCImpedance(iprof, x2, isTop, fBot2, gBot2, iPower, isComplex, trid,
                 params, modeCount);
     if (gBot1 != 0.0)
         DetaDx = real((fBot2 / gBot2 - fBot1 / gBot1)) / (x2 - x1);
@@ -866,16 +897,16 @@ void Normalize(size_t iprof, int &mode, int &firstM, VectorXd &Phi, int &ITP, in
     Slow = SQ(ScaleFactor) * Slow * omega / sqrt(x);
     Perturbation_k *= SQ(ScaleFactor);
     eigen.VG(mode) = 1 / Slow;
-    ScatterLoss(iprof, mode, Perturbation_k, Phi, x, kramtrx, params, eigen);
+    ScatterLoss(iprof, mode, Perturbation_k, Phi, x, trid, params, eigen);
 }
 
-void ScatterLoss(size_t iprof, int &mode, complex<double> &Perturbation_k, VectorXd &Phi, double &x, KrakenMatrix &kramtrx, parameters &params, EigenParams &eigen)
+void ScatterLoss(const size_t& iprof, const int &mode, complex<double> &Perturbation_k, VectorXd &Psi, double &x, TridMtx &trid, parameters &params, EigenParams &eigen)
 {
     double omega = 2 * pi * params.freqinfo->freq;
     double omega2 = SQ(omega);
     double rho1, rho2, rhoInside, h2, sigma;
     complex<double> eta1Sq, eta2Sq, U, PhiC; // kx = sqrt(x),
-    int j = 0, L = params.mesh.Loc(params.SSP[iprof].FirstAcoustic);
+    int j = 0, L = trid.Loc(params.SSP[iprof].FirstAcoustic);
     for (int im = params.SSP[iprof].FirstAcoustic - 1; im <= params.SSP[iprof].LastAcoustic; im++) // Loop over media
     {
         // Calculate rho1, eta1Sq, Phi, U
@@ -886,13 +917,13 @@ void ScatterLoss(size_t iprof, int &mode, complex<double> &Perturbation_k, Vecto
             case BC_Mode::MODE_A_Half_space:
                 rho1 = params.HSTop[iprof].rho;
                 eta1Sq = x - omega2 / SQ(params.HSTop[iprof].cp);
-                U = sqrt(eta1Sq) * Phi(0) / rho1;
+                U = sqrt(eta1Sq) * Psi(0) / rho1;
                 break;
             case BC_Mode::MODE_V_Vacuum:
                 rho1 = 1e-9;
                 eta1Sq = 1.0;
-                rhoInside = kramtrx.rho(params.mesh.Loc(params.SSP[iprof].FirstAcoustic));
-                U = Phi(1) / params.mesh.h(params.SSP[iprof].FirstAcoustic) / rhoInside;
+                rhoInside = trid.rho(trid.Loc(params.SSP[iprof].FirstAcoustic));
+                U = Psi(1) / trid.h(params.SSP[iprof].FirstAcoustic) / rhoInside;
                 break;
             case BC_Mode::MODE_R_Rigid:
                 rho1 = 1e9;
@@ -909,12 +940,12 @@ void ScatterLoss(size_t iprof, int &mode, complex<double> &Perturbation_k, Vecto
         }
         else
         {
-            h2 = SQ(params.mesh.h(im));
-            j = j + params.mesh.N(im);
-            L = params.mesh.Loc(im) + params.mesh.N(im);
-            rho1 = kramtrx.rho(L);
-            eta1Sq = (2.0 + kramtrx.B1(L)) / h2 - x;
-            U = (-Phi(j - 1) - 0.5 * (kramtrx.B1(L) - h2 * x) * Phi(j)) / (params.mesh.h(im) * rho1);
+            h2 = SQ(trid.h(im));
+            j = j + trid.N(im);
+            L = trid.Loc(im) + trid.N(im);
+            rho1 = trid.rho(L);
+            eta1Sq = (2.0 + trid.B1(L)) / h2 - x;
+            U = (-Psi(j - 1) - 0.5 * (trid.B1(L) - h2 * x) * Psi(j)) / (trid.h(im) * rho1);
             sigma = params.SSP[iprof].sigma[im];
         }
 
@@ -944,10 +975,10 @@ void ScatterLoss(size_t iprof, int &mode, complex<double> &Perturbation_k, Vecto
         }
         else
         {
-            rho2 = kramtrx.rho(L + 1);
-            eta2Sq = (2.0 + kramtrx.B1(L + 1)) / SQ(params.mesh.h(im + 1)) - x;
+            rho2 = trid.rho(L + 1);
+            eta2Sq = (2.0 + trid.B1(L + 1)) / SQ(trid.h(im + 1)) - x;
         }
-        PhiC = Phi(j);
+        PhiC = Psi(j);
         complex<double> kup = KupIng(sigma, eta1Sq, rho1, eta2Sq, rho2, PhiC, U);
         // // 打印kup
         // cout << "kup: \n"

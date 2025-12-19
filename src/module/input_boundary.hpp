@@ -8,8 +8,6 @@ public:
 
     virtual void Init(parameters &params) const override
     {
-        params.HSTop = new HSInfo[params.NProf];
-        params.HSBot = new HSInfo[params.NProf];
     }
 
     virtual void Default(parameters &params) const override

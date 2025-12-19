@@ -1,6 +1,6 @@
 #include "sspMod.h"
 
-void EvaluateSSP(SSPStructure &SSP, SSP_Mode &ssptype, int iMedium)
+void EvaluateSSP(TridMtx &trid, SSPStructure &SSP, SSP_Mode &ssptype, int iMedium)
 {
     // double cxx, cyy, cxy, cxz, cyz;
     // 输入校验
@@ -8,16 +8,16 @@ void EvaluateSSP(SSPStructure &SSP, SSP_Mode &ssptype, int iMedium)
     switch (ssptype)
     {
     case SSP_Mode::MODE_N_n2Linear:
-        n2Linear(SSP, iMedium);
+        n2Linear(trid, SSP, iMedium);
         break;
     case SSP_Mode::MODE_C_cLinear:
-        cLinear(SSP, iMedium);
+        cLinear(trid, SSP, iMedium);
         break;
     case SSP_Mode::MODE_P_cPCHIP:
-        cPCHIP(SSP, iMedium);
+        cPCHIP(trid, SSP, iMedium);
         break;
     case SSP_Mode::MODE_S_cCubic:
-        cCubic(SSP, iMedium);
+        cCubic(trid, SSP, iMedium);
         break;
     // case SSP_Mode::MODE_A_Analytic:
     //     Analytic(cp, cs, rho_k, Medium, N1); // 需要实现Analytic函数
@@ -25,7 +25,7 @@ void EvaluateSSP(SSPStructure &SSP, SSP_Mode &ssptype, int iMedium)
     default:
         // 报错
         std::cerr << "Unknown SSP type in EvaluateSSP, use default type *cLinear*" << std::endl;
-        cLinear(SSP, iMedium);
+        cLinear(trid, SSP, iMedium);
         break;
     }
 }
@@ -40,7 +40,7 @@ void EvaluateSSP(SSPStructure &SSP, SSP_Mode &ssptype, int iMedium)
  * @param Medium 介质层数
  * @param N1 分层个数
  */
-void n2Linear(SSPStructure &SSP, int iMedium)
+void n2Linear(TridMtx &trid, SSPStructure &SSP, int iMedium)
 {
     // 确定介质位置
     int offset_start = SSP.get_media_start(iMedium);
@@ -52,9 +52,9 @@ void n2Linear(SSPStructure &SSP, int iMedium)
     // 计算步长
     double h = (SSP.z(offset_end) - SSP.z(offset_start)) / current_medium_Nmesh;
     int Lay = 0; // 层索引
-    // SSP.cp_int.resize(SSP.N + 1);
-    // SSP.cs_int.resize(SSP.N + 1);
-    // SSP.rho_int.resize(SSP.N + 1);
+    // trid.cp_int.resize(SSP.N + 1);
+    // trid.cs_int.resize(SSP.N + 1);
+    // trid.rho_int.resize(SSP.N + 1);
 
     // 遍历每个分层点
     for (int local_iz = 0; local_iz <= current_medium_Nmesh + 1; local_iz++)
@@ -99,11 +99,11 @@ void n2Linear(SSPStructure &SSP, int iMedium)
         // 避免开方错误
         if (std::real(N2Interp) <= 0.0)
         {
-            SSP.cp_int[global_idx] = std::complex<double>(1500.0, 0.0); // 默认声速
+            trid.cp_int[global_idx] = std::complex<double>(1500.0, 0.0); // 默认声速
         }
         else
         {
-            SSP.cp_int[global_idx] = 1.0 / std::sqrt(N2Interp);
+            trid.cp_int[global_idx] = 1.0 / std::sqrt(N2Interp);
         }
 
         // S波速度计算
@@ -117,22 +117,22 @@ void n2Linear(SSPStructure &SSP, int iMedium)
             N2Interp = (1.0 - R) * N2Top + R * N2Bot;
             if (std::real(N2Interp) <= 0.0)
             {
-                SSP.cs_int[global_idx] = std::complex<double>(0.0, 0.0);
+                trid.cs_int[global_idx] = std::complex<double>(0.0, 0.0);
             }
             else
             {
-                SSP.cs_int[global_idx] = 1.0 / std::sqrt(N2Interp);
+                trid.cs_int[global_idx] = 1.0 / std::sqrt(N2Interp);
             }
         }
         else
         {
-            SSP.cs_int[global_idx] = std::complex<double>(0.0, 0.0);
+            trid.cs_int[global_idx] = std::complex<double>(0.0, 0.0);
         }
 
         // --- 密度：线性插值 ---
         double rhoTop = SSP.rho[offset_start + Lay];
         double rhoBot = SSP.rho[offset_start + Lay + 1];
-        SSP.rho_int[global_idx] = (1.0 - R) * rhoTop + R * rhoBot;
+        trid.rho_int[global_idx] = (1.0 - R) * rhoTop + R * rhoBot;
     }
 }
 
@@ -147,7 +147,7 @@ void n2Linear(SSPStructure &SSP, int iMedium)
  * @param Medium 介质层数
  * @param N1 分层个数
  */
-void cLinear(SSPStructure &SSP, int iMedium)
+void cLinear(TridMtx &trid, SSPStructure &SSP, int iMedium)
 {
 
     // 获取当前介质在原始数据中的范围（注意：get_media_end 返回的是半开区间 end）
@@ -164,10 +164,10 @@ void cLinear(SSPStructure &SSP, int iMedium)
     // for (int i = 0; i < SSP.NMedia; ++i) {
     //     total_interp_points += SSP.NMesh[i] + 1;
     // }
-    // if (static_cast<int>(SSP.cp_int.size()) != total_interp_points) {
-    //     SSP.cp_int.resize(total_interp_points);
-    //     SSP.cs_int.resize(total_interp_points);
-    //     SSP.rho_int.resize(total_interp_points);
+    // if (static_cast<int>(trid.cp_int.size()) != total_interp_points) {
+    //     trid.cp_int.resize(total_interp_points);
+    //     trid.cs_int.resize(total_interp_points);
+    //     trid.rho_int.resize(total_interp_points);
     // }
 
     // 当前介质的深度范围
@@ -213,13 +213,13 @@ void cLinear(SSPStructure &SSP, int iMedium)
         int global_idx = interp_start + local_iz;
 
         // --- P 波速度：c-linear ---
-        SSP.cp_int[global_idx] = (1.0 - R) * SSP.cp[orig_start + Lay] + R * SSP.cp[orig_start + Lay + 1];
+        trid.cp_int[global_idx] = (1.0 - R) * SSP.cp[orig_start + Lay] + R * SSP.cp[orig_start + Lay + 1];
 
         // --- S 波速度：c-linear ---
-        SSP.cs_int[global_idx] = (1.0 - R) * SSP.cs[orig_start + Lay] + R * SSP.cs[orig_start + Lay + 1];
+        trid.cs_int[global_idx] = (1.0 - R) * SSP.cs[orig_start + Lay] + R * SSP.cs[orig_start + Lay + 1];
 
         // --- 密度：线性 ---
-        SSP.rho_int[global_idx] = (1.0 - R) * SSP.rho[orig_start + Lay] + R * SSP.rho[orig_start + Lay + 1];
+        trid.rho_int[global_idx] = (1.0 - R) * SSP.rho[orig_start + Lay] + R * SSP.rho[orig_start + Lay + 1];
     }
 }
 
@@ -234,7 +234,7 @@ void cLinear(SSPStructure &SSP, int iMedium)
  * @param Medium 介质层数
  * @param N1 分层个数
  */
-void cPCHIP(SSPStructure &SSP, int iMedium)
+void cPCHIP(TridMtx &trid, SSPStructure &SSP, int iMedium)
 {
     assert(iMedium >= 0 && iMedium < SSP.NMedia);
 
@@ -252,10 +252,10 @@ void cPCHIP(SSPStructure &SSP, int iMedium)
     // for (int i = 0; i < SSP.NMedia; ++i) {
     //     total_interp += SSP.NMesh[i] + 1;
     // }
-    // if (static_cast<int>(SSP.cp_int.size()) != total_interp) {
-    //     SSP.cp_int.resize(total_interp);
-    //     SSP.cs_int.resize(total_interp);
-    //     SSP.rho_int.resize(total_interp);
+    // if (static_cast<int>(trid.cp_int.size()) != total_interp) {
+    //     trid.cp_int.resize(total_interp);
+    //     trid.cs_int.resize(total_interp);
+    //     trid.rho_int.resize(total_interp);
     // }
 
     // 当前介质的深度范围
@@ -301,7 +301,7 @@ void cPCHIP(SSPStructure &SSP, int iMedium)
               SSP.cpCoef(3, coef_col) * xt) *
                  xt) *
                 xt;
-        SSP.cp_int[global_idx] = cp_val;
+        trid.cp_int[global_idx] = cp_val;
 
         // --- S 波速度：PCHIP ---
         std::complex<double> cs_val =
@@ -311,7 +311,7 @@ void cPCHIP(SSPStructure &SSP, int iMedium)
               SSP.csCoef(3, coef_col) * xt) *
                  xt) *
                 xt;
-        SSP.cs_int[global_idx] = cs_val;
+        trid.cs_int[global_idx] = cs_val;
 
         // --- 密度：PCHIP（取实部）---
         std::complex<double> rho_val =
@@ -321,7 +321,7 @@ void cPCHIP(SSPStructure &SSP, int iMedium)
               SSP.rhoCoef(3, coef_col) * xt) *
                  xt) *
                 xt;
-        SSP.rho_int[global_idx] = std::real(rho_val);
+        trid.rho_int[global_idx] = std::real(rho_val);
     }
 }
 
@@ -336,7 +336,7 @@ void cPCHIP(SSPStructure &SSP, int iMedium)
  * @param Medium 介质层数
  * @param N1 分层个数
  */
-void cCubic(SSPStructure &SSP, int iMedium)
+void cCubic(TridMtx &trid, SSPStructure &SSP, int iMedium)
 {
     // 获取当前介质在原始数据中的范围
     int orig_start = SSP.get_media_start(iMedium);
@@ -352,10 +352,10 @@ void cCubic(SSPStructure &SSP, int iMedium)
     // for (int i = 0; i < SSP.NMedia; ++i) {
     //     total_interp += SSP.NMesh[i] + 1;
     // }
-    // if (static_cast<int>(SSP.cp_int.size()) != total_interp) {
-    //     SSP.cp_int.resize(total_interp);
-    //     SSP.cs_int.resize(total_interp);
-    //     SSP.rho_int.resize(total_interp);
+    // if (static_cast<int>(trid.cp_int.size()) != total_interp) {
+    //     trid.cp_int.resize(total_interp);
+    //     trid.cs_int.resize(total_interp);
+    //     trid.rho_int.resize(total_interp);
     // }
 
     // 当前介质的深度范围
@@ -396,17 +396,17 @@ void cCubic(SSPStructure &SSP, int iMedium)
         // --- P 波速度：三次样条 ---
         std::complex<double> cp_val, cpz, cpzz;
         SplineALL(SSP.cpSpline, coef_col, H, cp_val, cpz, cpzz);
-        SSP.cp_int[global_idx] = cp_val;
+        trid.cp_int[global_idx] = cp_val;
 
         // --- S 波速度：三次样条 ---
         std::complex<double> cs_val, csz, cszz;
         SplineALL(SSP.csSpline, coef_col, H, cs_val, csz, cszz);
-        SSP.cs_int[global_idx] = cs_val;
+        trid.cs_int[global_idx] = cs_val;
 
         // --- 密度：三次样条（取实部）---
         std::complex<double> rho_val, rhoz, rhozz;
         SplineALL(SSP.rhoSpline, coef_col, H, rho_val, rhoz, rhozz);
-        SSP.rho_int[global_idx] = std::real(rho_val);
+        trid.rho_int[global_idx] = std::real(rho_val);
     }
 }
 

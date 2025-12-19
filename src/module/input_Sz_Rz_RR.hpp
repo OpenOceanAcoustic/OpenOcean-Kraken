@@ -8,7 +8,6 @@ public:
 
     virtual void Init(parameters &params) const override
     {
-        params.Pos = new Position();
     }
 
     virtual void Default(parameters &params) const override

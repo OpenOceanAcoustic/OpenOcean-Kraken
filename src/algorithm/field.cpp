@@ -26,12 +26,12 @@ void Evaluate(EigenParams &eigen, parameters &params, int isz,
         return;
     }
 
-    MatrixXcd phiR = eigen.phiR;
-    MatrixXcd dphidzR = eigen.dphidzR;
-    MatrixXcd phiS = eigen.phiS;
+    MatrixXcd PsiR = eigen.PsiR.block(0, 0, eigen.M, eigen.PsiR.cols());
+    MatrixXcd dPsiRdz = eigen.dPsidzR.block(0, 0, eigen.M, eigen.dPsidzR.cols());
+    MatrixXcd PsiS = eigen.PsiS.block(0, 0, eigen.M, eigen.PsiS.cols());
 
     VectorXcd col_vec;
-    col_vec = phiS.col(isz);
+    col_vec = PsiS.col(isz);
     double c0 = 1500; // 假设水下的标准声速为1500 m/s
     double omega = 2 * pi * params.freqinfo->freq;
     double rho = 1.0; // 假设水的密度为1 g/cm³ （不知道如何导入密度，先在这里设置一个标准值）
@@ -72,9 +72,9 @@ void Evaluate(EigenParams &eigen, parameters &params, int isz,
     {                                                                 // 0-based索引
         Eigen::VectorXcd exp_terms = ik.array() * params.Pos->Ro(iz); // ik * Rz(iz)
         exp_terms = exp_terms.array().exp();                          // e^(ik * Rz(iz))
-        Cmat.col(iz) = constants.array() * phiR.col(iz).array() * exp_terms.array();
-        Cmat_vr.col(iz) = constants_vr.array() * phiR.col(iz).array() * exp_terms.array();
-        Cmat_vz.col(iz) = constants_vz.array() * dphidzR.col(iz).array() * exp_terms.array();
+        Cmat.col(iz) = constants.array() * PsiR.col(iz).array() * exp_terms.array();
+        Cmat_vr.col(iz) = constants_vr.array() * PsiR.col(iz).array() * exp_terms.array();
+        Cmat_vz.col(iz) = constants_vz.array() * dPsiRdz.col(iz).array() * exp_terms.array();
     }
 
     // 遍历所有距离点计算压力场
@@ -158,7 +158,7 @@ void field(EigenParams &eigen, parameters &params, std::complex<float> *uAllSour
 
     for (int i = 0; i < eigen.M; i++)
     {
-        constt(i) = I1D * std::sqrt(2.0 * pi) * std::exp(I1D * pi / 4.0) * eigen.phiS(i, isz);
+        constt(i) = I1D * std::sqrt(2.0 * pi) * std::exp(I1D * pi / 4.0) * eigen.PsiS(i, isz);
     }
 
     VectorXcd Hank(eigen.M);
@@ -202,7 +202,7 @@ void field(EigenParams &eigen, parameters &params, std::complex<float> *uAllSour
             size_t base = GetFieldAddr(isz, irz, irr, &params.Pos[0]);
             for (int i = 0; i < eigen.M; i++)
             {
-                uAllSources[base] += eigen.phiR(i, irz) * Hank(i);
+                uAllSources[base] += eigen.PsiR(i, irz) * Hank(i);
             }
         }
     }

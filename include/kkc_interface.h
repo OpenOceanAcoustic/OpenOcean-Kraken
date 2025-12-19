@@ -15,6 +15,7 @@ public:
     void init();         // 初始化
     void setup();        // 配置
     void input_setup();  // 设置输入参数
+    void intm_setup();   // 设置中间矩阵参数
     void output_setup(); // 设置输出参数
     void run();          // 运行
     void clearResults(); // 清除结果
@@ -39,8 +40,8 @@ public:
     void set_Rr(const double &start, const double &end, const int &NRr);                                      // 设置水平接收（插值）
     void set_Rz(const VectorXd &Rz);                                                                          // 设置垂直接收
     void set_Rz(const double &start, const double &end, const int &NRz);                                      // 设置垂直接收（插值）
-    void set_surface_Type(BC_Mode bc);                                                                        // 设置边界条件类型
-    void set_bottom_Type(BC_Mode bc);                                                                         // 设置底部边界条件类型
+    void set_surface_Type(BC_Mode bc, size_t iprof);                                                         // 设置边界条件类型
+    void set_bottom_Type(BC_Mode bc, size_t iprof);                                                          // 设置底部边界条件类型
     void set_BottomLine(double zTemp, double alphaR, double alphaI, double betaR, double betaI, double rho, size_t iprof);  // 设置底部半空间
     void set_SurfaceLine(double zTemp, double alphaR, double alphaI, double betaR, double betaI, double rho, size_t iprof); // 设置表面半空间
     void set_GridType(Grid_Mode type);                                                                        // 设置网格类型
@@ -81,6 +82,7 @@ public:
 
 private:
     kkc_output *output; // 输出
+    TridMtx *intm_TridMtx; // 中间矩阵
     parameters *params; // 输入
     // std::atomic<int> sharedJobID;//共享任务ID
 

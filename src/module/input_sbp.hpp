@@ -7,7 +7,6 @@ public:
     virtual ~input_sbp() {}
     virtual void Init(parameters &params) const override
     {
-        params.SBP = new SrcBmPat();
     }
 
     virtual void Default(parameters &params) const override

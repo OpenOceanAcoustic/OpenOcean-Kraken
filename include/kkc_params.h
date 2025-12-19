@@ -155,7 +155,6 @@ struct SSPStructure
 
     // @brief 声速剖面细分点数
     VectorXi NMesh; // size = NMedia
-    size_t NMeshMax; // 最大网格数
 
     // @brief 深度向量
     VectorXd z;
@@ -163,17 +162,15 @@ struct SSPStructure
     VectorXd alphaI; // 横波速度
     VectorXd betaR;  // 纵波衰减
     VectorXd betaI;  // 横波衰减
-    VectorXd rho; // 密度
+    VectorXd rho;    // 密度
 
     // @brief 声速向量
     VectorXcd cp; // 纵波声速，根据alphaR和alphaI算出的复声速
     VectorXcd cs; // 横波声速，根据betaR和betaI算出的复声速
 
-    // @brief 声速剖面插值点声速
-    VectorXcd cp_int;
-    VectorXcd cs_int;
-    VectorXd rho_int;
-
+    // @brief 声速三次样条系数矩阵
+    // 默认行大小
+    size_t row_size = 4;
     // @brief 声速三次样条系数矩阵
     MatrixXcd cspline;
     // @brief PCHIP 系数
@@ -192,14 +189,6 @@ struct SSPStructure
     MatrixXcd csSpline;
     // @brief 密度三次样条系数
     MatrixXcd rhoSpline;
-
-    // 计算矩阵
-    VectorXd B1;
-    VectorXd B1C;
-    VectorXd B2;
-    VectorXd B3;
-    VectorXd B4;
-    VectorXd rhoparam;
 
     // 返回第 iMedia 层在全局向量中的起始索引（包含）
     int get_media_start(int iMedia) const
@@ -237,6 +226,7 @@ struct SSPStructure
         return offset;
     }
 };
+
 
 // 输入的SSP
 struct SSP_1D
@@ -444,48 +434,51 @@ struct ReflectionCoefInfo
     bool isDeg = false; // @brief 是否是角度制
 };
 
-// kraken 计算矩阵
-struct KrakenMatrix
-{
-    VectorXd B1;
-    VectorXd B1C;
-    VectorXd B2;
-    VectorXd B3;
-    VectorXd B4;
-    VectorXd rho;
-    int modeCount;
-};
-
 // 有限差分网格参数
 struct MeshParams
 {
-    VectorXi Loc;
-    int NSets = 5;                // 网格集数量
+    size_t NSets = 5;                // 网格集数量
     int NV[5] = {1, 2, 4, 8, 16}; // Richardson外推系数数组
-    VectorXi N;                   // 各层的网格点数
-    VectorXd h;                   // 各层的网格步长
-    VectorXd hV;                  // 网格步长向量
 };
 
 // 本征值相关参数
 struct EigenParams
 {
-    int M;             // 模式数量
-    int firstM;        // iset=0时的模式个数，决定了矩阵维度大小
+    size_t M;             // 模式数量
+    size_t firstM;        // iset=0时的模式个数，决定了矩阵维度大小 2 D f / cmin * 1.1
     VectorXd EVMat;    // 本征值矩阵(一维向量化)
     VectorXd Extrap;   // 外推矩阵
     VectorXcd k;       // 波数向量
     VectorXd VG;       // 群速度向量
-    int LRecordLength; // 记录长度
-    int IRecProfile;   // 记录指针
-    MatrixXcd phi;     // 原始mesh的本征函数值
-    MatrixXcd phiR;    // 接收器深度本征函数值
-    MatrixXcd phiS;    // 声源深度本征函数值
-    MatrixXcd dphidz;  // 原始mesh本征函数值对深度微分
-    MatrixXcd dphidzR; // 接收器深度本征函数值对深度微分
-    MatrixXcd dphidzS; // 声源深度本征函数值对深度微分
+    MatrixXcd PsiR;    // 接收器深度本征函数值
+    MatrixXcd PsiS;    // 声源深度本征函数值
+    MatrixXcd dPsidzR; // 接收器深度本征函数值对深度微分
+    MatrixXcd dPsidzS; // 声源深度本征函数值对深度微分
     // VectorXi modes;    // 模式索引
-    VectorXd depth; // 深度向量
+
+    void resize(size_t firstM, size_t NSz, size_t NRz, size_t NMeshMax, size_t NSets)
+    {
+        EVMat.resize(firstM*NSets);
+        Extrap.resize(firstM*NSets);
+        k.resize(firstM);
+        VG.resize(firstM);
+        PsiR.resize(firstM, NRz);
+        PsiS.resize(firstM, NSz);
+        dPsidzR.resize(firstM, NRz);
+        dPsidzS.resize(firstM, NSz);
+    }
+
+    void setZero()
+    {
+        EVMat.setZero();
+        Extrap.setZero();
+        k.setZero();
+        VG.setZero();
+        PsiR.setZero();
+        PsiS.setZero();
+        dPsidzR.setZero();
+        dPsidzS.setZero();
+    }
 };
 
 // Kraken特有的运行模式
@@ -523,6 +516,8 @@ struct parameters
     size_t NProf;
     // @brief 距离剖面向量
     VectorXd RProf;
+    size_t NMeshMax; // 最大网格数
+    size_t NMediaMax;   // 最大媒质数
 
     // @brief 频率信息
     FreqInfo *freqinfo;
@@ -604,6 +599,58 @@ struct parameters
     bool outputModes; // 是否输出模式
     bool outputField; // 是否输出声场
 };
+
+// @brief 三对角矩阵结构体，kraken计算重要的中间变量
+struct TridMtx
+{
+    // @brief 深度向量
+    VectorXd z;
+    // @brief 声速剖面插值点声速
+    VectorXcd cp_int;
+    VectorXcd cs_int;
+    VectorXd rho_int;
+
+
+
+    // 计算矩阵
+    VectorXd B1;
+    VectorXd B1C;
+    VectorXd B2;
+    VectorXd B3;
+    VectorXd B4;
+    VectorXd rho;
+
+    // 本征函数
+    VectorXd psi;     // 原始mesh的本征函数值
+    VectorXd dpsidz;     // 原始mesh的本征函数值的z方向导数
+
+    // @brief 网格参数
+    VectorXi N;   // 各层的网格点数
+    VectorXd h;   // 各层的网格步长
+    VectorXd hV;  // 网格步长向量
+    VectorXi Loc; // 各层的网格点索引
+
+    void resize(size_t Maxsize, size_t NMediaMax, int NSets)
+    {
+        z.resize(Maxsize);
+        cp_int.resize(Maxsize);
+        cs_int.resize(Maxsize);
+        rho_int.resize(Maxsize);
+        B1.resize(Maxsize);
+        B1C.resize(Maxsize);
+        B2.resize(Maxsize);
+        B3.resize(Maxsize);
+        B4.resize(Maxsize);
+        rho.resize(Maxsize);
+        psi.resize(Maxsize);
+        dpsidz.resize(Maxsize);
+        N.resize(NMediaMax);
+        h.resize(NMediaMax);
+        hV.resize(NSets);
+        Loc.resize(NMediaMax);
+    }
+};
+
 
 // 输出结构
 struct kkc_output

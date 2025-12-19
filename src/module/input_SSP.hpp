@@ -10,7 +10,6 @@ public:
     // 初始化函数
     virtual void Init(parameters &params) const override
     {
-        params.SSP = new SSPStructure[params.NProf];
     }
 
     // 设置默认值
@@ -23,74 +22,74 @@ public:
     virtual void Preprocess(parameters &params) const override
     {
         double freq = params.freqinfo->freq;
+        VectorXi NMeshMaxVec(params.NProf, 0);
+        VectorXi NMediaVec(params.NProf, 0);
+
         for (size_t iprof = 0; iprof < params.NProf; iprof++)
         {
             auto &ssp = params.SSP[iprof];
+            // 先初始化内存
+            size_t vec_size = ssp.NPts.sum();
+            ssp.cp.resize(vec_size);
+            ssp.cs.resize(vec_size);
+            if (ssp.SSPType == SSP_Mode::MODE_P_cPCHIP)
+            {
+                ssp.cpCoef.resize(ssp.row_size, vec_size);
+                ssp.csCoef.resize(ssp.row_size, vec_size);
+                ssp.rhoCoef.resize(ssp.row_size, vec_size);
+            }
+            if (ssp.SSPType == SSP_Mode::MODE_S_cCubic)
+            {
+                ssp.cpSpline.resize(ssp.row_size, vec_size);
+                ssp.csSpline.resize(ssp.row_size, vec_size);
+                ssp.rhoSpline.resize(ssp.row_size, vec_size);
+            }
+
+            UpdateSSPLoss(freq, freq, ssp.NMedia, ssp.SSPType, params.AttenUnit, ssp);
             ssp.offset[0] = 0;
+            ssp.FirstAcoustic = -1;
             size_t ilay = 0;
             size_t NMeshAll = 0;
+            NMediaVec[iprof] = ssp.NMedia;
             for (int imedia = 0; imedia < ssp.NMedia; imedia++)
             {
                 if (imedia > 0)
                     ssp.offset[imedia] = ssp.offset[imedia - 1] + ssp.NPts[imedia - 1];
-                ilay += params.SSP[iprof].NPts[imedia];
-                double h = params.SSP[iprof].depth[imedia] / params.SSP[iprof].NMesh[imedia];
-                double lambda_1_20 = params.SSP[iprof].alphaR[ilay - 1] / params.freqinfo->freq / 20.0; // 最后一个声速计算波长
-                int Nneeded = int((params.SSP[iprof].depth[imedia]) / lambda_1_20);
+                if (std::real(ssp.cs[0]) == 0.0)
+                { // 声学介质情况
+                    ssp.Material[imedia] = Media_Mode::MODE_A_Acoustic;
+                    if (ssp.FirstAcoustic == -1)
+                    {
+                        ssp.FirstAcoustic = imedia;
+                    }
+                }
+                ssp.LastAcoustic = imedia;
+                ilay += ssp.NPts[imedia];
+                double h = ssp.z[imedia] / ssp.NMesh[imedia];
+                double lambda_1_20 = ssp.alphaR[ilay - 1] / params.freqinfo->freq / 20.0; // 最后一个声速计算波长
+                int Nneeded = int((ssp.z[imedia]) / lambda_1_20);
                 Nneeded = std::max(Nneeded, 10); // require a minimum of 10 points				要求每一层媒质至少有10个点
 
-                if (h > lambda_1_20)
+                if (ssp.NMesh[imedia] == 0) // 网格数为0时，将网格数调整为Nneeded
+                {
+                    // 打印信息（中文）
+                    cout << "网格数为0，按照波长1/20计算，已经将网格数量设定为: " << Nneeded << endl;
+                    ssp.NMesh[imedia] = Nneeded;
+                }
+                else if (h > lambda_1_20)
                 {
                     // 打印警告信息（中文）
-                    cout << "警告：KRAKEN 垂直网格步长太大，已经将网格数量: " << params.SSP[iprof].NMesh[imedia] << " 调整为: " << Nneeded << endl;
-                    params.SSP[iprof].NMesh[imedia] = Nneeded;
+                    cout << "警告：KRAKEN 垂直网格步长太大，已经将网格数量: " << ssp.NMesh[imedia] << " 调整为: " << Nneeded << endl;
+                    ssp.NMesh[imedia] = Nneeded;
                 }
-                else if (params.mesh.N(imedia - 1) == 0) // 网格数为0时，将网格数调整为Nneeded
-                {
-                    params.SSP[iprof].NMesh[imedia] = Nneeded;
-                }
-                NMeshAll += params.SSP[iprof].NMesh[imedia];
+                NMeshAll += ssp.NMesh[imedia];
             }
-
-            params.SSP[iprof].FirstAcoustic = -1;
-            params.mesh[iprof].Loc.resize(params.SSP[iprof].NMedia + 1);
-            params.mesh[iprof].Loc[0] = 0; // C++使用0-based索引
-
-            // 计算总网格点数
-            params.mesh[iprof].N.resize(params.SSP[iprof].NMedia);
-            params.mesh[iprof].h.resize(params.SSP[iprof].NMedia);
-
             // 每一层都需要+1
             NMeshAll += ssp.NMedia;
-            ssp.NMeshMax = NMeshAll * params.mesh.NV[params.mesh.NSets - 1]; // 最大的网格数
-            // 最大内存初始化，避免每次的维度不一致
-            ssp.cp_int.resize(ssp.NMeshMax);
-            ssp.cs_int.resize(ssp.NMeshMax);
-            ssp.rho_int.resize(ssp.NMeshMax);
-
-            // 将计算矩阵也初始化
-            ssp.B1.resize(ssp.NMeshMax);
-            ssp.B1C.resize(ssp.NMeshMax);
-            ssp.B2.resize(ssp.NMeshMax);
-            ssp.B3.resize(ssp.NMeshMax);
-            ssp.B4.resize(ssp.NMeshMax);
-            ssp.rhoparam.resize(ssp.NMeshMax);
-            if (ssp.SSPType == SSP_Mode::MODE_P_cPCHIP)
-            {
-                ssp.cpCoef.resize(4, ssp.NMeshMax);
-                ssp.csCoef.resize(4, ssp.NMeshMax);
-                ssp.rhoCoef.resize(4, ssp.NMeshMax);
-            }
-            else if (ssp.SSPType == SSP_Mode::MODE_S_cCubic)
-            {
-                ssp.cpSpline.resize(4, ssp.NMeshMax);
-                ssp.csSpline.resize(4, ssp.NMeshMax);
-                ssp.rhoSpline.resize(4, ssp.NMeshMax);
-            }
-            // 计算SSP的参数
-            UpdateSSPLoss(freq, freq, ssp.NMedia,
-                          ssp.SSPType, params.AttenUnit, ssp);
+            NMeshMaxVec[iprof] = NMeshAll * params.mesh.NV[1]; // iset=1时最大的网格数
         }
+        params.NMeshMax = NMeshMaxVec.maxCoeff(); // 所有NProf中最大的网格数
+        params.NMediaMax = NMediaVec.maxCoeff(); // 所有NProf中最大的媒质数
     }
 
     // 设置SSP的方法
@@ -170,8 +169,6 @@ private:
         params.SSP[0].betaI = Vector2d(0.0, 0.0);
         params.SSP[0].rho = Vector2d(1.0, 1.0);
         params.SSP[0].z = Vector2d(0, 200.0);
-        params.SSP[0].cp.resize(params.SSP[0].NPts[0]);
-        params.SSP[0].cs.resize(params.SSP[0].NPts[0]);
         params.SSP[0].beta[0] = 0.0;
         params.SSP[0].ft[0] = 0.0;
         params.SSP[0].NMesh[0] = 0;

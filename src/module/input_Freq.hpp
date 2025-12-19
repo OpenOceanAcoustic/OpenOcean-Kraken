@@ -8,7 +8,6 @@ public:
 
     virtual void Init(parameters &params) const override 
     {
-        params.freqinfo = new FreqInfo();
     }
 
     virtual void Default(parameters &params) const override
