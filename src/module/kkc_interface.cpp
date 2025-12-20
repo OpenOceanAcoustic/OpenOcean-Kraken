@@ -329,16 +329,16 @@ void kkc_interface::set_SurfaceLine(double zTemp, double alphaR, double alphaI, 
     impl->INPUT_BOUNDARY.setSurfaceLine(params, zTemp, alphaR, alphaI, betaR, betaI, rho, iprof); // 设置表面半空间
 }
 
-void kkc_interface::set_Clow(double Clow) // 设置最低频率
+void kkc_interface::set_Clow(double cLow) // 设置最低频率
 {
     auto &params = this->getParams(); // 获取参数
-    impl->INPUT_FREQ.set_Clow(params, Clow); // 设置最低频率
+    impl->INPUT_FREQ.set_Clow(params, cLow); // 设置最低频率
 }
 
-void kkc_interface::set_Chigh(double Chigh) // 设置最高频率
+void kkc_interface::set_Chigh(double cHigh) // 设置最高频率
 {
     auto &params = this->getParams(); // 获取参数
-    impl->INPUT_FREQ.set_Chigh(params, Chigh); // 设置最高频率
+    impl->INPUT_FREQ.set_Chigh(params, cHigh); // 设置最高频率
 }
 
 

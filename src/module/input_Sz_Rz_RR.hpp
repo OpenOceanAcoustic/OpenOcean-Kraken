@@ -16,30 +16,27 @@ public:
         pos->NSz = 1;
         pos->NSx = 1;
         pos->NSy = 1;
-        pos->NRz = 11;
-        pos->NRr = 10;
+        pos->NRz = 201;
+        pos->NRr = 300;
+
+        pos->Sz.resize(pos->NSz);
+        pos->Sz(0) = 25;
+
         // 默认水平接收
         pos->Rr.resize(pos->NRr);
         for (int32_t i = 0; i < pos->NRr; ++i)
         {
-            pos->Rr[i] = float(5.0) * (double)(i + 1);
+            pos->Rr[i] = 100.0 * (double)(i + 1);
         }
 
         pos->Rz.resize(pos->NRz);
-        for (int32_t i = 0; i < pos->NRz; ++i)
-        {
-            pos->Rz[i] = 500.0 * i;
-        }
-
         pos->Ro.resize(pos->NRz);
         for (int32_t i = 0; i < pos->NRz; ++i)
         {
+            pos->Rz[i] = i;
             pos->Ro[i] = 0;
         }
-
-        pos->Sz.resize(pos->NSz);
-        pos->Sz(0) = 100;
-
+        
         pos->is_Linspace_Rr = false;
         pos->is_Linspace_Rz = false;
         pos->is_Linspace_Sz = false;

@@ -14,16 +14,17 @@ public:
     {
         auto &freqinfo = params.freqinfo;
         freqinfo->Nfreq = 1;
-        freqinfo->freq = 100;
+        freqinfo->freq = 200;
         freqinfo->freqvec.resize(1);
-        freqinfo->freqvec[0] = 100;
-        params.Title = "Default";
+        freqinfo->freqvec[0] = freqinfo->freq;
+        params.Title = "Pekeris";
         params.RProf.resize(params.NProf);
         params.RProf[0] = 0;
         params.SourceType = Source_Mode::MODE_R_Point;
         params.runMode = Run_Mode::MODE_B_Both;
-        params.Clow = 1300.0;
-        params.Chigh = 1800.0;
+        params.cLow = 0.0;
+        params.cHigh = 20000;
+        params.Rmax = 0;
     }
 
     virtual void Preprocess(parameters &params) const override
@@ -77,14 +78,14 @@ public:
         params.runMode = mode;
     }
 
-    void set_Clow(parameters &params, double Clow)
+    void set_Clow(parameters &params, double cLow)
     {
-        params.Clow = Clow;
+        params.cLow = cLow;
     }
 
-    void set_Chigh(parameters &params, double Chigh)
+    void set_Chigh(parameters &params, double cHigh)
     {
-        params.Chigh = Chigh;
+        params.cHigh = cHigh;
     }
 
     double get_freq(const parameters &params) const

@@ -28,7 +28,7 @@ void SolveEp(const int &iset, const size_t &iprof, const int &NSets, EigenParams
     //           << eigen.EVMat.segment(start_idx, eigen.M) << std::endl;
 
     // 查找满足条件的最小位置
-    double threshold = omega2 / SQ(params.Chigh);
+    double threshold = omega2 / SQ(trid.cHigh);
 
     int Min_Loc = 0;
 
@@ -110,7 +110,7 @@ void Solve1(const int &iset, const size_t &iprof, const int &NSets, EigenParams 
     int modeCount = 0;
 
     // 确定模态数量
-    xMin = 1.00001 * omega2 / SQ(params.Chigh);
+    xMin = 1.00001 * omega2 / SQ(trid.cHigh);
 
     FUNCT(iset, iprof, mode, xMin, Delta, iPower, trid, params, eigen.EVMat, eigen.firstM, isCountMode, modeCount);
     int M = modeCount;
@@ -120,7 +120,7 @@ void Solve1(const int &iset, const size_t &iprof, const int &NSets, EigenParams 
     xL.resize(M + 1);
     xR.resize(M + 1);
 
-    xMax = omega2 / SQ(params.Clow); // 最大波数的平方
+    xMax = omega2 / SQ(trid.cLow); // 最大波数的平方
     FUNCT(iset, iprof, mode, xMax, Delta, iPower, trid, params, eigen.EVMat, eigen.firstM, isCountMode, modeCount);
 
     M = M - modeCount;
@@ -176,7 +176,7 @@ void Solve1(const int &iset, const size_t &iprof, const int &NSets, EigenParams 
 void Solve2(const int &iset, const size_t &iprof, EigenParams &eigen, TridMtx &trid, const parameters &params)
 {
     double omega2 = SQ(2 * pi * params.freqinfo->freq), x1, x2, Tolerance, Delta;
-    double x = omega2 / SQ(params.Clow);
+    double x = omega2 / SQ(trid.cLow);
     int Iteration, MaxIteration = 2000, iPower = 0, modeCount = 0;
     string ErrorMessage;
 
@@ -213,7 +213,7 @@ void Solve2(const int &iset, const size_t &iprof, EigenParams &eigen, TridMtx &t
         Tolerance = abs(x) * trid.B1.size() * pow(10.0, (1.0 - std::numeric_limits<double>::digits10));
         ZSecantX(x, Tolerance, Iteration, MaxIteration, iset, iprof, mode, Delta, iPower, trid, params, eigen.EVMat, eigen.firstM, isCountMode, modeCount, ErrorMessage, FUNCT);
         eigen.EVMat(iset * eigen.firstM + mode) = x;
-        if (omega2 / SQ(params.Chigh) > x)
+        if (omega2 / SQ(trid.cHigh) > x)
         {
             eigen.M = mode;
             return;
@@ -236,7 +236,7 @@ void Solve3(const int &iset, const size_t &iprof, EigenParams &eigen, TridMtx &t
     int modeCount = 0;
 
     // 确定模态数量
-    xMin = 1.00001 * omega2 / SQ(params.Chigh);
+    xMin = 1.00001 * omega2 / SQ(trid.cHigh);
 
     FUNCT(iset, iprof, mode, xMin, Delta, iPower, trid, params, eigen.EVMat, eigen.firstM, isCountMode, modeCount);
     int M = modeCount;
@@ -254,7 +254,7 @@ void Solve3(const int &iset, const size_t &iprof, EigenParams &eigen, TridMtx &t
 
         eigen.EVMat(iset * eigen.firstM + modeIdx) = x;
 
-        if (omega2 / SQ(params.Chigh) > x)
+        if (omega2 / SQ(trid.cHigh) > x)
         {
             eigen.M = modeIdx; // 调整为当前索引
             return;
@@ -273,9 +273,9 @@ void TridPreprocess(int &iset, size_t iprof, const parameters &params, TridMtx &
     double omega2 = SQ(2 * pi * params.freqinfo->freq);
 
     // 初始化变量
-    double Clow = params.Clow;
+    double cLow = params.cLow;
     double cMin = 1e8;
-    double cHigh = params.Chigh;
+    double cHigh = params.cHigh;
     trid.Loc[0] = 0; // C++使用0-based索引
 
     for (int i = 0; i < params.SSP[iprof].NMedia; ++i)
@@ -391,7 +391,8 @@ void TridPreprocess(int &iset, size_t iprof, const parameters &params, TridMtx &
     {
         cMin = 0.85 * cMin;
     }
-    Clow = std::max(Clow, cMin);
+    trid.cLow = std::max(cLow, cMin);
+    trid.cHigh = cHigh;
 }
 
 // FUNCT函数：计算色散关系

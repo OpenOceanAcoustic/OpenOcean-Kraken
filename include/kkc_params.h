@@ -574,8 +574,8 @@ struct parameters
     kkc_Log *log;             // 日志
 
     // 核心参数
-    double Clow;            // 最小相速度
-    double Chigh;           // 最大相速度
+    double cLow;            // 最小相速度
+    double cHigh;           // 最大相速度
     double Rmax;            // 最大距离
     Source_Mode SourceType; // 声源模式
 
@@ -629,6 +629,10 @@ struct TridMtx
     VectorXd h;   // 各层的网格步长
     VectorXd hV;  // 网格步长向量
     VectorXi Loc; // 各层的网格点索引
+
+    // @brief 相速度范围
+    double cLow;
+    double cHigh;
 
     void resize(size_t Maxsize, size_t NMediaMax, int NSets)
     {

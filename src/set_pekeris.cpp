@@ -32,8 +32,8 @@ void set_pekeris(parameters& params)
     params.HSBot[0].sigma = 0;
 
     // 相速度范围
-    params.Chigh = 20000;
-    params.Clow = 0;
+    params.cHigh = 20000;
+    params.cLow = 0;
 
     // 绝热模式
     params.modeType = ModeType::Adiabatic;
@@ -150,8 +150,8 @@ void set_pekeris_2_mediums(parameters& params)
     params.HSBot[0].sigma = 0;
 
     // 相速度范围
-    params.Chigh = 2000;
-    params.Clow = 1200;
+    params.cHigh = 2000;
+    params.cLow = 1200;
 
     // 绝热模式
     params.modeType = ModeType::Adiabatic;
@@ -272,8 +272,8 @@ void set_pekeris_2_profs(parameters& params)
     params.HSBot[1].sigma = 0;
 
     // 相速度范围
-    params.Chigh = 2000;
-    params.Clow = 1200;
+    params.cHigh = 2000;
+    params.cLow = 1200;
 
     // 绝热模式
     params.modeType = ModeType::Adiabatic;
@@ -406,8 +406,8 @@ void set_Munk(parameters& params)
     params.HSBot[0].sigma = 0.0;  // 对应env中海底参数的0.8
 
     // 相速度范围（参考声速剖面范围设置）
-    params.Chigh = 20000;
-    params.Clow = 0;
+    params.cHigh = 20000;
+    params.cLow = 0;
 
     // 绝热模式
     params.modeType = ModeType::Adiabatic;
@@ -538,8 +538,8 @@ void set_Dickins(parameters& params)
     params.HSBot[0].sigma = 0;
 
     // 相速度范围
-    params.Chigh = 1600;
-    params.Clow = 1400;
+    params.cHigh = 1600;
+    params.cLow = 1400;
 
     // 绝热模式
     params.modeType = ModeType::Adiabatic;

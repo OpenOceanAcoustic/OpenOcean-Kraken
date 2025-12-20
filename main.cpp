@@ -10,6 +10,8 @@ int main()
     // run();
     kkc_interface kkc;
     kkc.run();
+    std::string baseFilename = "result";
+    kkc.export_result(baseFilename);
 
     return 0;
 }

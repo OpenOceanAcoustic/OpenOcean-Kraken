@@ -44,8 +44,8 @@ public:
     void set_bottom_Type(BC_Mode bc, size_t iprof);                                                          // 设置底部边界条件类型
     void set_BottomLine(double zTemp, double alphaR, double alphaI, double betaR, double betaI, double rho, size_t iprof);  // 设置底部半空间
     void set_SurfaceLine(double zTemp, double alphaR, double alphaI, double betaR, double betaI, double rho, size_t iprof); // 设置表面半空间
-    void set_Clow(double Clow); // 设置最低相速度
-    void set_Chigh(double Chigh); // 设置最高相速度
+    void set_Clow(double cLow); // 设置最低相速度
+    void set_Chigh(double cHigh); // 设置最高相速度
     void set_GridType(Grid_Mode type);                                                                        // 设置网格类型
 
     void set_SourceType(Source_Mode type);                          // 设置源类型
