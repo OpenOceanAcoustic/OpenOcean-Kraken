@@ -71,8 +71,8 @@ void Evaluate(EigenParams &eigen, const parameters &params, int isz,
     Eigen::MatrixXcd Cmat_vz(eigen.M, params.Pos->NRz);
     for (int iz = 0; iz < params.Pos->NRz; ++iz)
     {                                                                 // 0-based索引
-        Eigen::VectorXcd exp_terms = ik.array() * params.Pos->Rz(iz); // ik * Rz(iz)
-        exp_terms = exp_terms.array().exp();                          // e^(ik * Rz(iz))
+        Eigen::VectorXcd exp_terms = ik.array() * params.Pos->Ro(iz); // ik * Ro(iz)
+        exp_terms = exp_terms.array().exp();                          // e^(ik * Ro(iz))
         Cmat.col(iz) = constants.array() * PsiR.col(iz).array() * exp_terms.array();
         Cmat_vr.col(iz) = constants_vr.array() * PsiR.col(iz).array() * exp_terms.array();
         Cmat_vz.col(iz) = constants_vz.array() * dPsiRdz.col(iz).array() * exp_terms.array();

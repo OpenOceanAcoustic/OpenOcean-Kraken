@@ -22,6 +22,7 @@ public:
         params.RProf[0] = 0;
         params.SourceType = Source_Mode::MODE_R_Point;
         params.runMode = Run_Mode::MODE_B_Both;
+        params.AttenUnit = Atten_Mode::MODE_W_db_per_lambda;
         params.cLow = 0.0;
         params.cHigh = 20000;
         params.Rmax = 0;
@@ -78,13 +79,9 @@ public:
         params.runMode = mode;
     }
 
-    void set_Clow(parameters &params, double cLow)
+    void set_cPhase(parameters &params, double cLow, double cHigh)
     {
         params.cLow = cLow;
-    }
-
-    void set_Chigh(parameters &params, double cHigh)
-    {
         params.cHigh = cHigh;
     }
 

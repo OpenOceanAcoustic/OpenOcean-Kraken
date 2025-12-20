@@ -617,7 +617,7 @@ void VectorSolve(size_t iprof, TridMtx &trid, const parameters &params, EigenPar
     Weight_dble(z, NTotal1, params.Pos->Rz, params.Pos->NRz, WTR, IRzTab);
     Weight_dble(z, NTotal1, zTab, NzTab, WTZ, IZzTab);
 
-    for (int mode = 0; mode < eigen.firstM; mode++)
+    for (int mode = 0; mode < eigen.M; mode++)
     {
         x = eigen.EVMat(mode);
         BCImpedance(iprof, x, isTop, fTop, gTop, iPower, isComplex, trid,

@@ -44,8 +44,7 @@ public:
     void set_bottom_Type(BC_Mode bc, size_t iprof);                                                          // 设置底部边界条件类型
     void set_BottomLine(double zTemp, double alphaR, double alphaI, double betaR, double betaI, double rho, size_t iprof);  // 设置底部半空间
     void set_SurfaceLine(double zTemp, double alphaR, double alphaI, double betaR, double betaI, double rho, size_t iprof); // 设置表面半空间
-    void set_Clow(double cLow); // 设置最低相速度
-    void set_Chigh(double cHigh); // 设置最高相速度
+    void set_cPhase(double cLow, double cHigh); // 设置最低频率
     void set_GridType(Grid_Mode type);                                                                        // 设置网格类型
 
     void set_SourceType(Source_Mode type);                          // 设置源类型
@@ -71,6 +70,7 @@ public:
     std::complex<float> *get_v_AllSources();                        // 获取全部声源的垂直振速
     std::complex<float> *get_h_AllSources();                        // 获取全部声源的水平振速
     void export_result(std::string filename);                       // 导出结果到文件
+    void export_mod(std::string filename);                          // 导出本征值和本征函数到文件
     void export_shd(std::string filename, int dataType);
     parameters &getParams();                         // 获取参数的引用
     parameters getParams_Copy() const;               // 获取参数的副本

@@ -188,8 +188,7 @@ void kkc_interface::free() // 释放内存
 void kkc_interface::runSolveV()
 {
     auto &paramsRef = this->getParams_const(); // 获取参数
-    auto &output = this->getOutput(); // 获取输出
-
+    auto &output = this->getOutput();          // 获取输出
 
     for (size_t iprof = 0; iprof < paramsRef.NProf; iprof++)
     {
@@ -329,19 +328,11 @@ void kkc_interface::set_SurfaceLine(double zTemp, double alphaR, double alphaI, 
     impl->INPUT_BOUNDARY.setSurfaceLine(params, zTemp, alphaR, alphaI, betaR, betaI, rho, iprof); // 设置表面半空间
 }
 
-void kkc_interface::set_Clow(double cLow) // 设置最低频率
+void kkc_interface::set_cPhase(double cLow, double cHigh) // 设置最低频率
 {
-    auto &params = this->getParams(); // 获取参数
-    impl->INPUT_FREQ.set_Clow(params, cLow); // 设置最低频率
+    auto &params = this->getParams();                 // 获取参数
+    impl->INPUT_FREQ.set_cPhase(params, cLow, cHigh); // 设置最低频率
 }
-
-void kkc_interface::set_Chigh(double cHigh) // 设置最高频率
-{
-    auto &params = this->getParams(); // 获取参数
-    impl->INPUT_FREQ.set_Chigh(params, cHigh); // 设置最高频率
-}
-
-
 
 void kkc_interface::set_GridType(Grid_Mode type) // 设置网格类型
 {
@@ -480,6 +471,7 @@ void kkc_interface::export_result(std::string filename) // 导出结果到文件
     // std::cout << "导出声压场数据..." << std::endl;
     std::string filename_P = filename + "_P";
     // this->export_Pressure(filename_P); // 导出声压场数据
+    this->export_mod(filename_P);
     this->export_shd(filename_P, 1);
     if (input.is_Velocity)
     {
@@ -488,6 +480,130 @@ void kkc_interface::export_result(std::string filename) // 导出结果到文件
         this->export_shd(filename_V, 2); // 导出垂直振速
         this->export_shd(filename_H, 3); // 导出水平振速
     }
+}
+
+void kkc_interface::export_mod(std::string filename) // 导出模型到文件
+{
+    auto &output = this->getOutput(); // 获取输出
+    auto &params = this->getParams(); // 获取输入
+    auto &eigen = output.eigen[0];
+    int LRecl, iRecProf = 0;
+    int NzTab = params.Pos->NRz;
+    std::ofstream MODFile = std::ofstream(filename + ".mod", std::ios::binary);
+    if (!MODFile.is_open())
+    {
+        std::cerr << "无法打开MOD文件: " << filename << ".mod" << std::endl;
+        return;
+    }
+
+    int ifreq = 0, iprof = 0;
+    // if (ifreq == 0 && iprof == 0)
+    // {
+    LRecl = std::max(2 * params.freqinfo->Nfreq, std::max(2 * NzTab, std::max(32, 3 * (params.SSP[0].LastAcoustic - params.SSP[0].FirstAcoustic + 1))));
+    // }
+    if (ifreq == 0)
+    {
+        iRecProf = 0;
+        MODFile.seekp(iRecProf * 4 * LRecl, std::ios::beg);
+        MODFile.write(reinterpret_cast<char *>(&LRecl), sizeof(int));
+        // 固定title为80个char
+        char title[80] = {0};
+        strncpy(title, params.Title.c_str(), params.Title.size());
+        MODFile.write(title, sizeof(title));
+        MODFile.write(reinterpret_cast<char *>(&params.freqinfo->Nfreq), sizeof(int));
+        int numAcoustic = params.SSP[0].LastAcoustic - params.SSP[0].FirstAcoustic + 1;
+        MODFile.write(reinterpret_cast<char *>(&numAcoustic), sizeof(int));
+        MODFile.write(reinterpret_cast<char *>(&NzTab), sizeof(int));
+        MODFile.write(reinterpret_cast<char *>(&NzTab), sizeof(int));
+
+        MODFile.seekp((iRecProf + 1) * 4 * LRecl, std::ios::beg);
+        for (int im = params.SSP[iprof].FirstAcoustic; im <= params.SSP[iprof].LastAcoustic; im++)
+        {
+            MODFile.write(reinterpret_cast<char *>(&params.SSP[iprof].NMesh(im)), sizeof(int));
+            MODFile.write(reinterpret_cast<char *>(&params.SSP[iprof].Material[im]), sizeof(params.SSP[iprof].Material[im])); // fortran是字符串，这里是整数。而且只有一层，应该是params.SSP->Material[im]?
+        }
+
+        MODFile.seekp((iRecProf + 2) * 4 * LRecl, std::ios::beg);
+        for (int im = params.SSP[iprof].FirstAcoustic; im <= params.SSP[iprof].LastAcoustic; im++)
+        {
+            float depth = static_cast<float>(params.SSP[iprof].depth[im]); // 转换double为float
+            MODFile.write(reinterpret_cast<char *>(&depth), sizeof(float));
+            float rho = static_cast<float>(params.SSP[iprof].rho[params.SSP[iprof].get_media_start(im)]); // 转换double为float
+            MODFile.write(reinterpret_cast<char *>(&rho), sizeof(float));
+        }
+        MODFile.seekp((iRecProf + 3) * 4 * LRecl, std::ios::beg);
+        MODFile.write(reinterpret_cast<char *>(params.freqinfo->freqvec.data()), params.freqinfo->Nfreq * sizeof(double));
+        MODFile.seekp((iRecProf + 4) * 4 * LRecl, std::ios::beg);
+        // zTab转为float输出
+        VectorXf zTabf = params.Pos->Rz.cast<float>();
+        MODFile.write(reinterpret_cast<char *>(zTabf.data()), NzTab * sizeof(float));
+        // for (int isz = 0; isz < params.Pos->NSz; isz++)
+        // {
+        //     params.MODFile.write(reinterpret_cast<char*>(&params.Pos->Sz(isz)), sizeof(double));
+        // }
+        // for (int irz = 0; irz < params.Pos->NRz; irz++)
+        // {
+        //     params.MODFile.write(reinterpret_cast<char*>(&params.Pos->Rz(irz)), sizeof(double));
+        // }
+        iRecProf += 5;
+    }
+    MODFile.seekp((iRecProf + 1) * 4 * LRecl, std::ios::beg);
+    MODFile.write(reinterpret_cast<char *>(&params.HSTop[iprof].BC), sizeof(params.HSTop[iprof].BC)); // 这也是整数而不是字符串
+    MODFile.write(reinterpret_cast<char *>(&params.HSTop[iprof].cp), sizeof(std::complex<double>));
+    MODFile.write(reinterpret_cast<char *>(&params.HSTop[iprof].cs), sizeof(std::complex<double>));
+    float HSToprho = static_cast<float>(params.HSTop[iprof].rho); // 转换double为float
+    MODFile.write(reinterpret_cast<char *>(&HSToprho), sizeof(float));
+    float SSPz0 = static_cast<float>(params.SSP[iprof].z(0)); // 转换double为float
+    MODFile.write(reinterpret_cast<char *>(&SSPz0), sizeof(float));
+    MODFile.write(reinterpret_cast<char *>(&params.HSBot[iprof].BC), sizeof(params.HSBot[iprof].BC)); // 这也是整数而不是字符串
+    MODFile.write(reinterpret_cast<char *>(&params.HSBot[iprof].cp), sizeof(std::complex<double>));
+    MODFile.write(reinterpret_cast<char *>(&params.HSBot[iprof].cs), sizeof(std::complex<double>));
+    float HSBotrho = static_cast<float>(params.HSBot[iprof].rho); // 转换double为float
+    MODFile.write(reinterpret_cast<char *>(&HSBotrho), sizeof(float));
+    float SSPzn = static_cast<float>(params.SSP[iprof].z(params.SSP[iprof].z.size() - 1)); // 转换double为float
+    MODFile.write(reinterpret_cast<char *>(&SSPzn), sizeof(float));
+    for (int mode = 0; mode < eigen.M; mode++)
+    {
+        MODFile.seekp((iRecProf + 2 + mode) * 4 * LRecl, std::ios::beg);
+        for (int irz = 0; irz < params.Pos->NRz; irz++)
+        {
+            std::complex<float> phiR = static_cast<std::complex<float>>(eigen.PsiR(mode, irz)); // 转换double为float
+            MODFile.write(reinterpret_cast<char *>(&phiR), sizeof(std::complex<float>));
+        }
+    }
+
+    // 写入模态数 M
+    MODFile.seekp(iRecProf * 4 * LRecl, std::ios::beg);
+    MODFile.write(reinterpret_cast<const char *>(&eigen.M), sizeof(int));
+
+    // 写入复本征值 k
+    int IFirst = 0; // C++ 从 0 开始
+    for (int IREC = 0; IREC < (2 * eigen.M - 1) / LRecl + 1; ++IREC)
+    {
+        int ILast = std::min(int(eigen.M), IFirst + LRecl / 2) - 1;
+        int segLen = ILast - IFirst + 1;
+
+        // 定位到对应记录
+        MODFile.seekp((iRecProf + 2 + eigen.M + IREC) * 4 * LRecl, std::ios::beg);
+
+        // 将 eigen.k 中 IFirst 到 ILast 的复数写出
+        // 转换为complex float输出
+
+        for (int i = 0; i < segLen; i++)
+        {
+            complex<float> kf;
+            kf = std::complex<float>(eigen.k(IFirst + i).real(), eigen.k(IFirst + i).imag());
+            MODFile.write(reinterpret_cast<const char *>(&kf),
+                          sizeof(std::complex<float>));
+        }
+
+        IFirst = ILast + 1;
+    }
+
+    // 更新下一段起始记录号
+    iRecProf += 3 + eigen.M + (2 * eigen.M - 1) / LRecl;
+
+    MODFile.close();
 }
 
 void kkc_interface::export_shd(std::string filename, int dataType)

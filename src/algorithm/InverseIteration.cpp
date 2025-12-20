@@ -60,8 +60,6 @@ void InverseIterationD(int N,
     // 反迭代主循环
     for (int iter = 0; iter < MAXIT; ++iter) {
         // 回代过程
-        u = 0.0;
-        v = 0.0;
         for (int i = N-1; i >= 0; --i) {  // 从最后一个元素向前
             double temp = PhiVector(i) - u * RV2(i) - v * RV3(i);
             PhiVector(i) = temp / RV1(i);
