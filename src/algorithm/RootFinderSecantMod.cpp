@@ -2,7 +2,7 @@
 
 void ZSecantX(double &x2, const double &Tolerance, int &Iteration, const int &MaxIteration,
               const int &iset, const size_t iprof, int &mode, double &Delta, int &iPower, TridMtx &trid,
-              parameters &params, VectorXd &EVMat, const int &firstM, const bool &isCountMode, int &modeCount,
+              const parameters &params, VectorXd &EVMat, const int &firstM, const bool &isCountMode, int &modeCount,
               std::string &ErrorMessage, RealFunctType Funct)
 {
     int iPower0, iPower1;
@@ -61,7 +61,7 @@ void ZSecantX(double &x2, const double &Tolerance, int &Iteration, const int &Ma
 
 void ZSecantCX(std::complex<double> &x2, const double Tolerance, int &Iteration, const int MaxIteration,
                const int &iset, const size_t &iprof, const int &mode, double &Delta, int &iPower, TridMtx &trid,
-               parameters &params, VectorXd &EVMat, const int &firstM, const bool &isCountMode, int &modeCount,
+               const parameters &params, VectorXd &EVMat, const int &firstM, const bool &isCountMode, int &modeCount,
                std::string &ErrorMessage, ComplexFunctType Funct)
 {
 

@@ -22,8 +22,9 @@ public:
     virtual void Preprocess(parameters &params) const override
     {
         double freq = params.freqinfo->freq;
-        VectorXi NMeshMaxVec(params.NProf, 0);
-        VectorXi NMediaVec(params.NProf, 0);
+        VectorXi NMeshMaxVec(params.NProf);
+        VectorXi NMediaVec(params.NProf);
+        NMeshMaxVec.setZero();
 
         for (size_t iprof = 0; iprof < params.NProf; iprof++)
         {
@@ -51,6 +52,7 @@ public:
             size_t ilay = 0;
             size_t NMeshAll = 0;
             NMediaVec[iprof] = ssp.NMedia;
+            ssp.Material.resize(ssp.NMedia);
             for (int imedia = 0; imedia < ssp.NMedia; imedia++)
             {
                 if (imedia > 0)
@@ -65,9 +67,9 @@ public:
                 }
                 ssp.LastAcoustic = imedia;
                 ilay += ssp.NPts[imedia];
-                double h = ssp.z[imedia] / ssp.NMesh[imedia];
+                double h = ssp.depth[imedia] / ssp.NMesh[imedia];
                 double lambda_1_20 = ssp.alphaR[ilay - 1] / params.freqinfo->freq / 20.0; // 最后一个声速计算波长
-                int Nneeded = int((ssp.z[imedia]) / lambda_1_20);
+                int Nneeded = int((ssp.depth[imedia]) / lambda_1_20);
                 Nneeded = std::max(Nneeded, 10); // require a minimum of 10 points				要求每一层媒质至少有10个点
 
                 if (ssp.NMesh[imedia] == 0) // 网格数为0时，将网格数调整为Nneeded

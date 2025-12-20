@@ -1,13 +1,13 @@
 #include "run.h"
 
 // 计算本征值和本征函数
-void EigenVWorker(size_t iprof, parameters &params, TridMtx& trid, kkc_output &output)
+void EigenVWorker(size_t iprof, const parameters &params, TridMtx& trid, kkc_output &output)
 {
     double freq = params.freqinfo->freq;
     auto &ssp = params.SSP[iprof];
-    auto HSTop = params.HSTop[iprof];
-    auto HSBot = params.HSBot[iprof];
-    auto eigen = output.eigen[iprof];
+    auto &HSTop = params.HSTop[iprof];
+    auto &HSBot = params.HSBot[iprof];
+    auto &eigen = output.eigen[iprof];
     double error;
 
     for (int iset = 0; iset < params.mesh.NSets; iset++)
@@ -39,8 +39,8 @@ void EigenVWorker(size_t iprof, parameters &params, TridMtx& trid, kkc_output &o
     }
 }
 
-// 计算声压
-void ComputePressure(const size_t& iprof, parameters &params, kkc_output &output)
+// 计算声场
+void FieldWorker(const size_t& iprof, const parameters &params, kkc_output &output)
 {
     auto eigen = output.eigen[iprof];
     for (int isz = 0; isz < params.Pos->NSz; isz++)

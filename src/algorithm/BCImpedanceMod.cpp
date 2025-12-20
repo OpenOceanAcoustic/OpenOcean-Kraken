@@ -1,8 +1,8 @@
 #include "BCImpedanceMod.h"
 
 // 计算边界条件阻抗
-void BCImpedance(size_t iprof, const double& x,  bool& isTop, complex<double> &f, complex<double> &g,
-                 int &iPower, const bool& isComplex, KrakenMatrix &kramtrx, parameters& params, 
+void BCImpedance(const size_t& iprof, const double& x, const bool& isTop, complex<double> &f, complex<double> &g,
+                 int &iPower, const bool& isComplex, TridMtx &trid, const parameters& params, 
                  int& modeCount)
 {
     int iTop = 0, iBot = 0;
@@ -14,7 +14,7 @@ void BCImpedance(size_t iprof, const double& x,  bool& isTop, complex<double> &f
     ReflectionCoef RInt;
     double omega = 2 * pi * params.freqinfo->freq;
     double omega2 = SQ(omega);
-    double hFirstAcoustic = params.mesh.h(0);
+    double hFirstAcoustic = trid.h(0);
     double hFirstAcoustic2 = SQ(hFirstAcoustic);
     HSInfo HS = params.HSTop[iprof];
 
@@ -26,20 +26,20 @@ void BCImpedance(size_t iprof, const double& x,  bool& isTop, complex<double> &f
 
         if (params.SSP[iprof].FirstAcoustic > -1)
         {
-            iTop      = params.mesh.Loc( params.SSP[iprof].FirstAcoustic ) + params.mesh.N( params.SSP[iprof].FirstAcoustic );
-            rhoInside = kramtrx.rho(iTop);
+            iTop      = trid.Loc( params.SSP[iprof].FirstAcoustic ) + trid.N( params.SSP[iprof].FirstAcoustic );
+            rhoInside = trid.rho(iTop);
             cInside = std::sqrt(omega2 * hFirstAcoustic2) /
-                      (2.0 + kramtrx.B1(0));
+                      (2.0 + trid.B1(0));
         }
     }
     else
     {
         if (params.SSP[iprof].LastAcoustic > -1)
         {
-            iBot      = params.mesh.Loc( params.SSP[iprof].LastAcoustic ) + params.mesh.N( params.SSP[iprof].LastAcoustic );
-            rhoInside = kramtrx.rho(iBot);
+            iBot      = trid.Loc( params.SSP[iprof].LastAcoustic ) + trid.N( params.SSP[iprof].LastAcoustic );
+            rhoInside = trid.rho(iBot);
             cInside = std::sqrt(omega2 * hFirstAcoustic2 /
-                      (2.0 + kramtrx.B1(kramtrx.B1.size() - 1)));
+                      (2.0 + trid.B1(trid.B1.size() - 1)));
         }
         HS = params.HSBot[iprof];
     }
@@ -153,7 +153,7 @@ void BCImpedance(size_t iprof, const double& x,  bool& isTop, complex<double> &f
         { // 从顶部向下传播
             for (int im = 0; im < params.SSP[iprof].FirstAcoustic; ++im)
             {
-                ElasticDN(x, yV, iPower, im, kramtrx, params);
+                ElasticDN(x, yV, iPower, im, trid, params);
             }
 
             f = omega2 * yV(3);
@@ -166,7 +166,7 @@ void BCImpedance(size_t iprof, const double& x,  bool& isTop, complex<double> &f
         { // 从底部向上传播
             for (int im = params.SSP[iprof].NMedia - 1; im > params.SSP[iprof].LastAcoustic; --im)
             {
-                ElasticUP(x, yV, iPower, im, kramtrx, params);
+                ElasticUP(x, yV, iPower, im, trid, params);
             }
 
             f = omega2 * yV(3);
@@ -176,26 +176,26 @@ void BCImpedance(size_t iprof, const double& x,  bool& isTop, complex<double> &f
 }
 
 // 向上传播通过弹性层
-void ElasticUP(const double& x, VectorXd &yV, int &iPower, const int& Medium, KrakenMatrix &kramtrx, parameters& params)
+void ElasticUP(const double& x, VectorXd &yV, int &iPower, const int& Medium, TridMtx &trid, const parameters& params)
 {
     VectorXd xV(5), zV(5);
 
-    double h = params.mesh.h(Medium);
+    double h = trid.h(Medium);
     // 第一步使用欧拉法
     double two_x = 2.0 * x;
     double two_h = 2.0 * h;
     double four_h_x = 4.0 * h * x;
-    int j = params.mesh.Loc(Medium) + params.mesh.N(Medium); // C++是0-based
-    double xB3 = x * kramtrx.B3(j) - kramtrx.B1(j);
+    int j = trid.Loc(Medium) + trid.N(Medium); // C++是0-based
+    double xB3 = x * trid.B3(j) - trid.B1(j);
 
-    zV(0) = yV(0) - 0.5 * (kramtrx.B1(j) * yV(3) - kramtrx.B2(j) * yV(4));
-    zV(1) = yV(1) - 0.5 * (-kramtrx.rho(j) * yV(3) - xB3 * yV(4));
-    zV(2) = yV(2) - 0.5 * (two_h * yV(3) + kramtrx.B4(j) * yV(4));
-    zV(3) = yV(3) - 0.5 * (xB3 * yV(0) + kramtrx.B2(j) * yV(1) - two_x * kramtrx.B4(j) * yV(2));
-    zV(4) = yV(4) - 0.5 * (kramtrx.rho(j) * yV(0) - kramtrx.B1(j) * yV(1) - four_h_x * yV(2));
+    zV(0) = yV(0) - 0.5 * (trid.B1(j) * yV(3) - trid.B2(j) * yV(4));
+    zV(1) = yV(1) - 0.5 * (-trid.rho(j) * yV(3) - xB3 * yV(4));
+    zV(2) = yV(2) - 0.5 * (two_h * yV(3) + trid.B4(j) * yV(4));
+    zV(3) = yV(3) - 0.5 * (xB3 * yV(0) + trid.B2(j) * yV(1) - two_x * trid.B4(j) * yV(2));
+    zV(4) = yV(4) - 0.5 * (trid.rho(j) * yV(0) - trid.B1(j) * yV(1) - four_h_x * yV(2));
 
     // 改进的中点法
-    for (size_t ii = params.mesh.N(Medium) - 1; ii >= 0; --ii)
+    for (size_t ii = trid.N(Medium) - 1; ii >= 0; --ii)
     {
         j--;
 
@@ -211,13 +211,13 @@ void ElasticUP(const double& x, VectorXd &yV, int &iPower, const int& Medium, Kr
             yV(k) = zV(k);
         }
 
-        xB3 = x * kramtrx.B3(j) - kramtrx.B1(j);
+        xB3 = x * trid.B3(j) - trid.B1(j);
 
-        zV(0) = xV(0) - (kramtrx.B1(j) * yV(3) - kramtrx.B2(j) * yV(4));
-        zV(1) = xV(1) - (-kramtrx.rho(j) * yV(3) - xB3 * yV(4));
-        zV(2) = xV(2) - (two_h * yV(3) + kramtrx.B4(j) * yV(4));
-        zV(3) = xV(3) - (xB3 * yV(0) + kramtrx.B2(j) * yV(1) - two_x * kramtrx.B4(j) * yV(2));
-        zV(4) = xV(4) - (kramtrx.rho(j) * yV(0) - kramtrx.B1(j) * yV(1) - four_h_x * yV(2));
+        zV(0) = xV(0) - (trid.B1(j) * yV(3) - trid.B2(j) * yV(4));
+        zV(1) = xV(1) - (-trid.rho(j) * yV(3) - xB3 * yV(4));
+        zV(2) = xV(2) - (two_h * yV(3) + trid.B4(j) * yV(4));
+        zV(3) = xV(3) - (xB3 * yV(0) + trid.B2(j) * yV(1) - two_x * trid.B4(j) * yV(2));
+        zV(4) = xV(4) - (trid.rho(j) * yV(0) - trid.B1(j) * yV(1) - four_h_x * yV(2));
 
         // 必要时进行缩放
         if (ii != 0)
@@ -252,25 +252,25 @@ void ElasticUP(const double& x, VectorXd &yV, int &iPower, const int& Medium, Kr
 }
 
 // 向下传播通过弹性层
-void ElasticDN(const double x, VectorXd &yV, int &iPower, const int& Medium, KrakenMatrix &kramtrx, parameters& params)
+void ElasticDN(const double x, VectorXd &yV, int &iPower, const int& Medium, TridMtx &trid, const parameters& params)
 {
     VectorXd xV(5), zV(5);
 
     // 第一步使用欧拉法
     double two_x = 2.0 * x;
-    double two_h = 2.0 * params.mesh.h(Medium);
-    double four_h_x = 4.0 * params.mesh.h(Medium) * x;
-    int j = params.mesh.Loc(Medium); // C++是0-based
-    double xB3 = x * kramtrx.B3(j) - kramtrx.B1(j);
+    double two_h = 2.0 * trid.h(Medium);
+    double four_h_x = 4.0 * trid.h(Medium) * x;
+    int j = trid.Loc(Medium); // C++是0-based
+    double xB3 = x * trid.B3(j) - trid.B1(j);
 
-    zV(0) = yV(0) + 0.5 * (kramtrx.B1(j) * yV(3) - kramtrx.B2(j) * yV(4));
-    zV(1) = yV(1) + 0.5 * (-kramtrx.rho(j) * yV(3) - xB3 * yV(4));
-    zV(2) = yV(2) + 0.5 * (two_h * yV(3) + kramtrx.B4(j) * yV(4));
-    zV(3) = yV(3) + 0.5 * (xB3 * yV(0) + kramtrx.B2(j) * yV(1) - two_x * kramtrx.B4(j) * yV(2));
-    zV(4) = yV(4) + 0.5 * (kramtrx.rho(j) * yV(0) - kramtrx.B1(j) * yV(1) - four_h_x * yV(2));
+    zV(0) = yV(0) + 0.5 * (trid.B1(j) * yV(3) - trid.B2(j) * yV(4));
+    zV(1) = yV(1) + 0.5 * (-trid.rho(j) * yV(3) - xB3 * yV(4));
+    zV(2) = yV(2) + 0.5 * (two_h * yV(3) + trid.B4(j) * yV(4));
+    zV(3) = yV(3) + 0.5 * (xB3 * yV(0) + trid.B2(j) * yV(1) - two_x * trid.B4(j) * yV(2));
+    zV(4) = yV(4) + 0.5 * (trid.rho(j) * yV(0) - trid.B1(j) * yV(1) - four_h_x * yV(2));
 
     // 改进的中点法
-    for (size_t ii = 0; ii < params.mesh.N(Medium); ++ii)
+    for (size_t ii = 0; ii < trid.N(Medium); ++ii)
     {
         j++;
 
@@ -286,16 +286,16 @@ void ElasticDN(const double x, VectorXd &yV, int &iPower, const int& Medium, Kra
             yV(k) = zV(k);
         }
 
-        xB3 = x * kramtrx.B3(j) - kramtrx.B1(j);
+        xB3 = x * trid.B3(j) - trid.B1(j);
 
-        zV(0) = xV(0) + (kramtrx.B1(j) * yV(3) - kramtrx.B2(j) * yV(4));
-        zV(1) = xV(1) + (-kramtrx.rho(j) * yV(3) - xB3 * yV(4));
-        zV(2) = xV(2) + (two_h * yV(3) + kramtrx.B4(j) * yV(4));
-        zV(3) = xV(3) + (xB3 * yV(0) + kramtrx.B2(j) * yV(1) - two_x * kramtrx.B4(j) * yV(2));
-        zV(4) = xV(4) + (kramtrx.rho(j) * yV(0) - kramtrx.B1(j) * yV(1) - four_h_x * yV(2));
+        zV(0) = xV(0) + (trid.B1(j) * yV(3) - trid.B2(j) * yV(4));
+        zV(1) = xV(1) + (-trid.rho(j) * yV(3) - xB3 * yV(4));
+        zV(2) = xV(2) + (two_h * yV(3) + trid.B4(j) * yV(4));
+        zV(3) = xV(3) + (xB3 * yV(0) + trid.B2(j) * yV(1) - two_x * trid.B4(j) * yV(2));
+        zV(4) = xV(4) + (trid.rho(j) * yV(0) - trid.B1(j) * yV(1) - four_h_x * yV(2));
 
         // 必要时进行缩放
-        if (ii != params.mesh.N(Medium) - 1)
+        if (ii != trid.N(Medium) - 1)
         {
             if (std::abs(zV(1)) < BCIFloor)
             {

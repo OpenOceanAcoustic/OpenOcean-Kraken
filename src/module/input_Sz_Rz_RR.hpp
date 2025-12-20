@@ -31,6 +31,12 @@ public:
             pos->Rz[i] = 500.0 * i;
         }
 
+        pos->Ro.resize(pos->NRz);
+        for (int32_t i = 0; i < pos->NRz; ++i)
+        {
+            pos->Ro[i] = 0;
+        }
+
         pos->Sz.resize(pos->NSz);
         pos->Sz(0) = 100;
 

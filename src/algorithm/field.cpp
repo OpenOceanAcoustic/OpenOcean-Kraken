@@ -15,10 +15,10 @@
 // - Nz, Nr: 深度和距离网格数量
 // - MinExp, TINY: 数值计算参数（根据实际定义补充）
 
-void Evaluate(EigenParams &eigen, parameters &params, int isz,
+void Evaluate(EigenParams &eigen, const parameters &params, int isz,
               std::complex<float> *uAllSources,
-              std::complex<float> *uAllSources_vr,
-              std::complex<float> *uAllSources_vz)
+              std::complex<float> *v_AllSources,
+              std::complex<float> *h_AllSources)
 {
     // 如果没有模态，返回零压力场
     if (eigen.M <= 0)
@@ -26,6 +26,7 @@ void Evaluate(EigenParams &eigen, parameters &params, int isz,
         return;
     }
 
+    VectorXcd krm = eigen.k.segment(0, eigen.M);
     MatrixXcd PsiR = eigen.PsiR.block(0, 0, eigen.M, eigen.PsiR.cols());
     MatrixXcd dPsiRdz = eigen.dPsidzR.block(0, 0, eigen.M, eigen.dPsidzR.cols());
     MatrixXcd PsiS = eigen.PsiS.block(0, 0, eigen.M, eigen.PsiS.cols());
@@ -46,19 +47,19 @@ void Evaluate(EigenParams &eigen, parameters &params, int isz,
     // 根据选项计算常数向量
     if (params.SourceType == Source_Mode::MODE_X_Line) // Cylindrical coordinates
     {
-        constants = factor * col_vec.array() / eigen.k.array();
-        constants_vr = factor * col_vec.array() * eigen.k.array() / omega *c0;
-        constants_vz = factor * col_vec.array() * c0 / (eigen.k.array() * omega * I1D);
+        constants = factor * col_vec.array() / krm.array();
+        constants_vr = factor * col_vec.array() * krm.array() / omega * c0;
+        constants_vz = factor * col_vec.array() * c0 / (krm.array() * omega * I1D);
     }
     else
     {
-        constants = factor * col_vec.array() / eigen.k.array().sqrt();
-        constants_vr = factor * col_vec.array() * eigen.k.array().sqrt() / omega * c0;
-        constants_vz = factor * col_vec.array() * c0 / (eigen.k.array().sqrt() * omega * I1D);
+        constants = factor * col_vec.array() / krm.array().sqrt();
+        constants_vr = factor * col_vec.array() * krm.array().sqrt() / omega * c0;
+        constants_vz = factor * col_vec.array() * c0 / (krm.array().sqrt() * omega * I1D);
     }
 
     // 计算ik向量（波数相关项）
-    Eigen::VectorXcd ik = -I1D * eigen.k.array();
+    Eigen::VectorXcd ik = -I1D * krm.array();
     if (params.coherenceType == CoherenceType::Incoherent)
     { // 非相干情况（取实部）
         ik = ik.real().cast<std::complex<double>>();
@@ -70,7 +71,7 @@ void Evaluate(EigenParams &eigen, parameters &params, int isz,
     Eigen::MatrixXcd Cmat_vz(eigen.M, params.Pos->NRz);
     for (int iz = 0; iz < params.Pos->NRz; ++iz)
     {                                                                 // 0-based索引
-        Eigen::VectorXcd exp_terms = ik.array() * params.Pos->Ro(iz); // ik * Rz(iz)
+        Eigen::VectorXcd exp_terms = ik.array() * params.Pos->Rz(iz); // ik * Rz(iz)
         exp_terms = exp_terms.array().exp();                          // e^(ik * Rz(iz))
         Cmat.col(iz) = constants.array() * PsiR.col(iz).array() * exp_terms.array();
         Cmat_vr.col(iz) = constants_vr.array() * PsiR.col(iz).array() * exp_terms.array();
@@ -102,15 +103,18 @@ void Evaluate(EigenParams &eigen, parameters &params, int isz,
                 complex<double> data = (col_vec1.array() * Hank.array()).sum();
                 uAllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = data;
 
-                // 计算水平振速vr
-                VectorXcd col_vec_vr = Cmat_vr.col(iz);
-                complex<double> data_vr = (col_vec_vr.array() * Hank.array()).sum();
-                uAllSources_vr[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = data_vr;
+                if (params.is_Velocity)
+                {
+                    // 计算水平振速vr
+                    VectorXcd col_vec_vr = Cmat_vr.col(iz);
+                    complex<double> data_vr = (col_vec_vr.array() * Hank.array()).sum();
+                    v_AllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = data_vr;
 
-                // 计算垂直振速vz
-                VectorXcd col_vec_vz = Cmat_vz.col(iz);
-                complex<double> data_vz = (col_vec_vz.array() * Hank.array()).sum();
-                uAllSources_vz[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = data_vz;
+                    // 计算垂直振速vz
+                    VectorXcd col_vec_vz = Cmat_vz.col(iz);
+                    complex<double> data_vz = (col_vec_vz.array() * Hank.array()).sum();
+                    h_AllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = data_vz;
+                }
             }
         }
         else
@@ -122,14 +126,17 @@ void Evaluate(EigenParams &eigen, parameters &params, int isz,
                 uAllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = std::sqrt(uAllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])]); // 开平方
 
                 // 计算水平振速vr
+                if (params.is_Velocity)
+                {
                 Eigen::VectorXcd temp_vr = Cmat_vr.col(iz).array() * Hank.array();
-                uAllSources_vr[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = temp_vr.array().abs2().sum();                                         // 模平方和
-                uAllSources_vr[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = std::sqrt(uAllSources_vr[GetFieldAddr(isz, iz, ir, &params.Pos[0])]); // 开平方
+                v_AllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = temp_vr.array().abs2().sum();                                       // 模平方和
+                v_AllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = std::sqrt(v_AllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])]); // 开平方
 
                 // 计算垂直振速vz
                 Eigen::VectorXcd temp_vz = Cmat_vz.col(iz).array() * Hank.array();
-                uAllSources_vz[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = temp_vz.array().abs2().sum();                                         // 模平方和
-                uAllSources_vz[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = std::sqrt(uAllSources_vz[GetFieldAddr(isz, iz, ir, &params.Pos[0])]); // 开平方
+                h_AllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = temp_vz.array().abs2().sum();                                       // 模平方和
+                h_AllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = std::sqrt(h_AllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])]); // 开平方
+                }
             }
         }
 
@@ -142,15 +149,18 @@ void Evaluate(EigenParams &eigen, parameters &params, int isz,
                 if (std::abs(denom) > 1e-3)
                 { // 避免除零
                     uAllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] /= std::sqrt(denom);
-                    uAllSources_vr[GetFieldAddr(isz, iz, ir, &params.Pos[0])] /= std::sqrt(denom);
-                    uAllSources_vz[GetFieldAddr(isz, iz, ir, &params.Pos[0])] /= std::sqrt(denom);
+                    if (params.is_Velocity)
+                    {
+                        v_AllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] /= std::sqrt(denom);
+                        h_AllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] /= std::sqrt(denom);
+                    }
                 }
             }
         }
     }
 }
 
-void field(EigenParams &eigen, parameters &params, std::complex<float> *uAllSources, int isz)
+void field(EigenParams &eigen, const parameters &params, std::complex<float> *uAllSources, int isz)
 {
     VectorXcd constt, sumk;
     constt.resize(eigen.M);
@@ -208,7 +218,7 @@ void field(EigenParams &eigen, parameters &params, std::complex<float> *uAllSour
     }
 }
 
-void export_shd(std::string filename, parameters &params, std::complex<float> *uAllSources)
+void export_shd(std::string filename, const parameters &params, std::complex<float> *uAllSources)
 {
     // std::cout << "开始导出SHD文件: " << filename << ", 数据类型: " << dataType << std::endl;
     int LRecl;

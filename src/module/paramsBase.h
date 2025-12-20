@@ -4,6 +4,7 @@
 #include "kkc_params.h"
 #include "AttenMod.h"
 #include "pchipMod.h"
+#include "sspMod.h"
 #include "util.h"
 
 class paramsBase

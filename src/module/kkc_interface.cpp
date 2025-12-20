@@ -7,7 +7,7 @@
 #include "input_reflcoef.hpp"
 #include "input_sbp.hpp"
 #include "input_Freq.hpp"
-
+#include "output_eigen.hpp"
 #include "output_field.hpp"
 #include "run.h"
 
@@ -34,6 +34,7 @@ public:
     input_reflcoef INPUT_REFLCOEF;
     input_sbp INPUT_SBP;
 
+    output_Eigen OUTPUT_EIGEN;
     output_Field OUTPUT_FIELD;
     kkc_interface_PIMPL()
     {
@@ -67,6 +68,7 @@ void kkc_interface::init() // 初始化
     }
 
     // 初始化params的各个成员变量
+    params->NProf = 1;
     params->freqinfo = new FreqInfo();
     params->SSP = new SSPStructure[params->NProf];
     params->HSTop = new HSInfo[params->NProf];
@@ -147,8 +149,7 @@ void kkc_interface::output_setup() // 设置输出参数
 {
     auto &params = this->getParams(); // 获取参数
     auto &output = this->getOutput(); // 获取输出
-    output.eigen = new EigenParams[params.NProf];
-
+    impl->OUTPUT_EIGEN.Preprocess(params, output);
     impl->OUTPUT_FIELD.Preprocess(params, output);
 }
 
@@ -186,13 +187,13 @@ void kkc_interface::free() // 释放内存
 
 void kkc_interface::runSolveV()
 {
-    auto &params = this->getParams(); // 获取参数
+    auto &paramsRef = this->getParams_const(); // 获取参数
     auto &output = this->getOutput(); // 获取输出
 
 
-    for (size_t iprof = 0; iprof < params.NProf; iprof++)
+    for (size_t iprof = 0; iprof < paramsRef.NProf; iprof++)
     {
-        EigenVWorker(iprof, params, this->intm_TridMtx[0], output);
+        EigenVWorker(iprof, paramsRef, this->intm_TridMtx[0], output);
     }
 }
 
@@ -203,7 +204,7 @@ void kkc_interface::runField()
     auto &output = this->getOutput(); // 获取输出
     for (size_t iprof = 0; iprof < params.NProf; iprof++)
     {
-        ComputePressure(iprof, params, output);
+        FieldWorker(iprof, params, output);
     }
 }
 
@@ -327,6 +328,20 @@ void kkc_interface::set_SurfaceLine(double zTemp, double alphaR, double alphaI, 
     auto &params = this->getParams();                                                             // 获取参数
     impl->INPUT_BOUNDARY.setSurfaceLine(params, zTemp, alphaR, alphaI, betaR, betaI, rho, iprof); // 设置表面半空间
 }
+
+void kkc_interface::set_Clow(double Clow) // 设置最低频率
+{
+    auto &params = this->getParams(); // 获取参数
+    impl->INPUT_FREQ.set_Clow(params, Clow); // 设置最低频率
+}
+
+void kkc_interface::set_Chigh(double Chigh) // 设置最高频率
+{
+    auto &params = this->getParams(); // 获取参数
+    impl->INPUT_FREQ.set_Chigh(params, Chigh); // 设置最高频率
+}
+
+
 
 void kkc_interface::set_GridType(Grid_Mode type) // 设置网格类型
 {

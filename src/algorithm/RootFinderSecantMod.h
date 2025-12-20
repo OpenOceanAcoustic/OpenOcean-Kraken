@@ -5,11 +5,11 @@
 
 // 定义函数类型，对应Fortran中的FUNCT子例程
 typedef void (*RealFunctType)(const int &iset, const size_t &iprof, const int &mode, double &x, double &Delta, int &iPower, TridMtx &trid,
-                              parameters &params, VectorXd &EVMat, const int &firstM, const bool &isCountMode, int &modeCount);
+                              const parameters &params, VectorXd &EVMat, const int &firstM, const bool &isCountMode, int &modeCount);
 
 // 复数形式待补充
 typedef void (*ComplexFunctType)(const int &iset, const size_t &iprof, const int &mode, complex<double> &x, complex<double> &Delta, int &iPower, TridMtx &trid,
-                                 parameters &params, VectorXd &EVMat, const int &firstM, const bool &isCountMode, int &modeCount);
+                                 const parameters &params, VectorXd &EVMat, const int &firstM, const bool &isCountMode, int &modeCount);
 
 /**
  * 使用割线法查找实数函数的根
@@ -23,7 +23,7 @@ typedef void (*ComplexFunctType)(const int &iset, const size_t &iprof, const int
  */
 void ZSecantX(double &x2, const double &Tolerance, int &Iteration, const int &MaxIteration,
               const int &iset, const size_t iprof, int &mode, double &Delta, int &iPower, TridMtx &trid,
-              parameters &params, VectorXd &EVMat, const int &firstM, const bool &isCountMode, int &modeCount,
+              const parameters &params, VectorXd &EVMat, const int &firstM, const bool &isCountMode, int &modeCount,
               std::string &ErrorMessage, RealFunctType Funct);
 
 /**
@@ -38,7 +38,7 @@ void ZSecantX(double &x2, const double &Tolerance, int &Iteration, const int &Ma
  */
 void ZSecantCX(std::complex<double> &x2, const double Tolerance, int &Iteration, const int MaxIteration,
                const int &iset, const size_t &iprof, const int &mode, double &Delta, int &iPower, TridMtx &trid,
-               parameters &params, VectorXd &EVMat, const int &firstM, const bool &isCountMode, int &modeCount,
+               const parameters &params, VectorXd &EVMat, const int &firstM, const bool &isCountMode, int &modeCount,
                std::string &ErrorMessage, ComplexFunctType Funct);
 
 #endif // ROOT_FINDER_SECANT_MOD_H

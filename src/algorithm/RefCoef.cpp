@@ -1,6 +1,6 @@
 #include "RefCoef.h"
 
-void InterpolateReflectionCoefficient(ReflectionCoef &RInt, Matrix<ReflectionCoef, 1, Dynamic> &R)
+void InterpolateReflectionCoefficient(ReflectionCoef &RInt, const Matrix<ReflectionCoef, 1, Dynamic> &R)
 {
 
     int iLeft = 1;

@@ -5,7 +5,7 @@ void ERROUT() {
 
 };
 
-void SolveEp(const int &iset, const size_t &iprof, const int &NSets, EigenParams &eigen, TridMtx &trid, parameters &params, double &Error)
+void SolveEp(const int &iset, const size_t &iprof, const int &NSets, EigenParams &eigen, TridMtx &trid, const parameters &params, double &Error)
 {
     double omega2 = SQ(2 * pi * params.freqinfo->freq);
     if (iprof > 0 && iset < 2 && params.modeType == ModeType::Couple)
@@ -20,11 +20,6 @@ void SolveEp(const int &iset, const size_t &iprof, const int &NSets, EigenParams
     {
         Solve2(iset, iprof, eigen, trid, params);
     }
-    if (iset == 0)
-    {
-        eigen.firstM = eigen.M;
-        eigen.Extrap.resize(NSets * eigen.M);
-    }
 
     int start_idx = iset * eigen.firstM;
     eigen.Extrap.segment(start_idx, eigen.M) = eigen.EVMat.segment(start_idx, eigen.M);
@@ -33,13 +28,11 @@ void SolveEp(const int &iset, const size_t &iprof, const int &NSets, EigenParams
     //           << eigen.EVMat.segment(start_idx, eigen.M) << std::endl;
 
     // 查找满足条件的最小位置
-    // Extrap(1, 1:M)对应索引为0到M-1
-    VectorXd Ex1 = eigen.Extrap.segment(0, eigen.M);
     double threshold = omega2 / SQ(params.Chigh);
 
     int Min_Loc = 0;
 
-    while (Min_Loc < eigen.M && Ex1(Min_Loc) > threshold)
+    while (Min_Loc < eigen.M && eigen.Extrap(Min_Loc) > threshold)
     {
         Min_Loc++;
     }
@@ -105,7 +98,7 @@ void SolveEp(const int &iset, const size_t &iprof, const int &NSets, EigenParams
 }
 
 // Solve1函数：使用Sturm序列分离本征值以及用Brent求根法求得本征值
-void Solve1(const int &iset, const size_t &iprof, const int &NSets, EigenParams &eigen, TridMtx &trid, parameters &params)
+void Solve1(const int &iset, const size_t &iprof, const int &NSets, EigenParams &eigen, TridMtx &trid, const parameters &params)
 {
     int iPower = 0, NTotal, mode = 0; // NzTab = 0,
     double x, x1, x2, xMin, xMax, Eps, Delta;
@@ -126,16 +119,6 @@ void Solve1(const int &iset, const size_t &iprof, const int &NSets, EigenParams 
     // 分配xL和xR的内存
     xL.resize(M + 1);
     xR.resize(M + 1);
-
-    if (iset == 0)
-    {
-        // 分配EVMat等的内存
-        eigen.EVMat.resize(NSets * M);
-        eigen.Extrap.resize(NSets * M);
-        eigen.k.resize(M);
-        eigen.VG.resize(M);
-        // 检查内存分配（在C++中vector会自动处理内存分配错误）
-    }
 
     xMax = omega2 / SQ(params.Clow); // 最大波数的平方
     FUNCT(iset, iprof, mode, xMax, Delta, iPower, trid, params, eigen.EVMat, eigen.firstM, isCountMode, modeCount);
@@ -178,7 +161,7 @@ void Solve1(const int &iset, const size_t &iprof, const int &NSets, EigenParams 
         x1 = xL(modeIdx);
         x2 = xR(modeIdx);
         Eps = std::abs(x2) * std::pow(10.0, 2.0 - std::numeric_limits<double>::digits10);
-        ZBRENTX(x, x1, x2, Eps, iset, iprof, mode, Delta, iPower, trid, params, eigen.EVMat, eigen.firstM, modeCount,
+        ZBRENTX(x, x1, x2, Eps, iset, iprof, mode, Delta, iPower, trid, params, eigen.EVMat, eigen.firstM, isCountMode, modeCount,
                 ErrorMessage, FUNCT); // Brent求根法
 
         if (!ErrorMessage.empty())
@@ -190,7 +173,7 @@ void Solve1(const int &iset, const size_t &iprof, const int &NSets, EigenParams 
     }
 }
 
-void Solve2(const int &iset, const size_t& iprof, EigenParams &eigen, TridMtx &trid, parameters &params)
+void Solve2(const int &iset, const size_t &iprof, EigenParams &eigen, TridMtx &trid, const parameters &params)
 {
     double omega2 = SQ(2 * pi * params.freqinfo->freq), x1, x2, Tolerance, Delta;
     double x = omega2 / SQ(params.Clow);
@@ -238,7 +221,7 @@ void Solve2(const int &iset, const size_t& iprof, EigenParams &eigen, TridMtx &t
     }
 }
 
-void Solve3(const int &iset, const size_t &iprof, EigenParams &eigen, TridMtx &trid, parameters &params)
+void Solve3(const int &iset, const size_t &iprof, EigenParams &eigen, TridMtx &trid, const parameters &params)
 {
     int IT, MaxIT, iPower = 0, mode = 0; // NzTab = 0,
     double x, xMin, Tolerance, Delta;
@@ -280,7 +263,7 @@ void Solve3(const int &iset, const size_t &iprof, EigenParams &eigen, TridMtx &t
 }
 
 // 初始化有限差分方程
-void TridPreprocess(int &iset, size_t iprof, parameters &params, TridMtx &trid, int ntimes)
+void TridPreprocess(int &iset, size_t iprof, const parameters &params, TridMtx &trid, int ntimes)
 {
     bool ElasticFlag = false;
     int NPoints = 0;
@@ -290,16 +273,20 @@ void TridPreprocess(int &iset, size_t iprof, parameters &params, TridMtx &trid, 
     double omega2 = SQ(2 * pi * params.freqinfo->freq);
 
     // 初始化变量
-    double &Clow = params.Clow;
+    double Clow = params.Clow;
     double cMin = 1e8;
-    double &cHigh = params.Chigh;
-    params.SSP[iprof].FirstAcoustic = -1;
+    double cHigh = params.Chigh;
     trid.Loc[0] = 0; // C++使用0-based索引
 
     for (int i = 0; i < params.SSP[iprof].NMedia; ++i)
     {
         trid.N(i) = params.SSP[iprof].NMesh(i) * ntimes;
         trid.h(i) = params.SSP[iprof].depth(i) / trid.N(i);
+        // 计算当前层的起始位置
+        if (i != 0)
+        {
+            trid.Loc(i) = trid.Loc(i - 1) + trid.N(i - 1) + 1;
+        }
         NPoints += trid.N(i);
         if (i == 0)
         {
@@ -310,13 +297,7 @@ void TridPreprocess(int &iset, size_t iprof, parameters &params, TridMtx &trid, 
 
     // 处理每个介质层
     for (int im = 0; im < params.SSP[iprof].NMedia; ++im)
-    { // C++使用0-based索引
-        // 计算当前层的起始位置
-        if (im != 0)
-        {
-            trid.Loc(im) = trid.Loc(im - 1) + trid.N(im - 1) + 1;
-        }
-
+    { 
         int ii = trid.Loc(im); // C++使用0-based索引，不需要+1
         Two_h = 2.0 * trid.h(im);
 
@@ -415,7 +396,7 @@ void TridPreprocess(int &iset, size_t iprof, parameters &params, TridMtx &trid, 
 
 // FUNCT函数：计算色散关系
 void FUNCT(const int &iset, const size_t &iprof, const int &mode, double &x, double &Delta, int &iPower, TridMtx &trid,
-           parameters &params, VectorXd &EVMat, const int &firstM, const bool &isCountMode, int &modeCount)
+           const parameters &params, VectorXd &EVMat, const int &firstM, const bool &isCountMode, int &modeCount)
 {
     int iPowerBot;
     double f, g;
@@ -471,7 +452,7 @@ void FUNCT(const int &iset, const size_t &iprof, const int &mode, double &x, dou
 }
 
 // AcousticLayers函数：穿过声学层
-void AcousticLayers(const size_t &iprof, double x, double &f, double &g, int &iPower, TridMtx &trid, parameters &params, const bool &isCountMode, int &modeCount)
+void AcousticLayers(const size_t &iprof, double x, double &f, double &g, int &iPower, TridMtx &trid, const parameters &params, const bool &isCountMode, int &modeCount)
 {
     double p0 = 0.0, p1, p2, h2k2;
 
@@ -524,7 +505,7 @@ void AcousticLayers(const size_t &iprof, double x, double &f, double &g, int &iP
 
 // Bisection函数：返回每个本征值的隔离区间
 void Bisection(const int &iset, const size_t &iprof, int &mode, double xMin, double xMax, VectorXd &xL, VectorXd &xR,
-               TridMtx &trid, parameters &params, EigenParams &eigen)
+               TridMtx &trid, const parameters &params, EigenParams &eigen)
 {
     int j, NZeros, NZer1, iPower, modeCount;
     double x, x1, x2, Delta;
@@ -597,7 +578,7 @@ void Bisection(const int &iset, const size_t &iprof, int &mode, double xMin, dou
     }
 }
 
-void VectorSolve(size_t iprof, TridMtx &trid, parameters &params, EigenParams &eigen,
+void VectorSolve(size_t iprof, TridMtx &trid, const parameters &params, EigenParams &eigen,
                  int &NTotal, int &NTotal1)
 {
     int j = 0, NzTab, iPower, modeCount = 0, L, ITP, IErr;
@@ -712,15 +693,15 @@ void VectorSolve(size_t iprof, TridMtx &trid, parameters &params, EigenParams &e
             {
                 if (index == 0)
                 {
-                    dPsidz(mode, index) = (Psi(index + 1) - Psi(index)) / h;
+                    dPsidz(index) = (Psi(index + 1) - Psi(index)) / h;
                 }
                 else if (index == NTotal)
                 {
-                    dPsidz(mode, index) = (Psi(index) - Psi(index - 1)) / h;
+                    dPsidz(index) = (Psi(index) - Psi(index - 1)) / h;
                 }
                 else
                 {
-                    dPsidz(mode, index) = (Psi(index + 1) - Psi(index - 1)) / (2 * h);
+                    dPsidz(index) = (Psi(index + 1) - Psi(index - 1)) / (2 * h);
                 }
                 index++;
             }
@@ -743,7 +724,7 @@ void VectorSolve(size_t iprof, TridMtx &trid, parameters &params, EigenParams &e
             {
                 int index = ISzTab(isz);
                 eigen.PsiS(mode, isz) = complex<double>(Psi(index)) + WTS(isz) * complex<double>(Psi(index + 1) - Psi(index));
-                eigen.dPsidzS(mode, isz) = complex<double>(dPsidz(mode, index)) + WTS(isz) * complex<double>(dPsidz(mode, index + 1) - dPsidz(mode, index));
+                eigen.dPsidzS(mode, isz) = complex<double>(dPsidz(index)) + WTS(isz) * complex<double>(dPsidz(index + 1) - dPsidz(index));
             }
         }
         for (int irz = 0; irz < params.Pos->NRz; irz++)
@@ -758,7 +739,7 @@ void VectorSolve(size_t iprof, TridMtx &trid, parameters &params, EigenParams &e
             {
                 int index = IRzTab(irz);
                 eigen.PsiR(mode, irz) = complex<double>(Psi(index)) + WTR(irz) * complex<double>(Psi(index + 1) - Psi(index));
-                eigen.dPsidzR(mode, irz) = complex<double>(dPsidz(mode, index)) + WTR(irz) * complex<double>(dPsidz(mode, index + 1) - dPsidz(mode, index));
+                eigen.dPsidzR(mode, irz) = complex<double>(dPsidz(index)) + WTR(irz) * complex<double>(dPsidz(index + 1) - dPsidz(index));
             }
         }
         for (int izz = 0; izz < NzTab; izz++)
@@ -784,7 +765,7 @@ void VectorSolve(size_t iprof, TridMtx &trid, parameters &params, EigenParams &e
     }
 }
 
-void Normalize(const size_t &iprof, const int &mode, const int &firstM, VectorXd &Phi, const int &ITP, const int &NTotal1, double &x, TridMtx &trid, parameters &params, EigenParams &eigen)
+void Normalize(const size_t &iprof, const int &mode, const int &firstM, VectorXd &Phi, int &ITP, int &NTotal1, double &x, TridMtx &trid, const parameters &params, EigenParams &eigen)
 {
     int iPower, modeCount = 0, j, j1, L, L1;
     double omega = (2 * pi * params.freqinfo->freq);
@@ -900,7 +881,7 @@ void Normalize(const size_t &iprof, const int &mode, const int &firstM, VectorXd
     ScatterLoss(iprof, mode, Perturbation_k, Phi, x, trid, params, eigen);
 }
 
-void ScatterLoss(const size_t& iprof, const int &mode, complex<double> &Perturbation_k, VectorXd &Psi, double &x, TridMtx &trid, parameters &params, EigenParams &eigen)
+void ScatterLoss(const size_t &iprof, const int &mode, complex<double> &Perturbation_k, VectorXd &Psi, double &x, TridMtx &trid, const parameters &params, EigenParams &eigen)
 {
     double omega = 2 * pi * params.freqinfo->freq;
     double omega2 = SQ(omega);

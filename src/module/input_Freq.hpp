@@ -12,7 +12,6 @@ public:
 
     virtual void Default(parameters &params) const override
     {
-        params.NProf = 1;
         auto &freqinfo = params.freqinfo;
         freqinfo->Nfreq = 1;
         freqinfo->freq = 100;
@@ -23,6 +22,8 @@ public:
         params.RProf[0] = 0;
         params.SourceType = Source_Mode::MODE_R_Point;
         params.runMode = Run_Mode::MODE_B_Both;
+        params.Clow = 1300.0;
+        params.Chigh = 1800.0;
     }
 
     virtual void Preprocess(parameters &params) const override
@@ -74,6 +75,16 @@ public:
     void set_RunMode(parameters &params, Run_Mode mode)
     {
         params.runMode = mode;
+    }
+
+    void set_Clow(parameters &params, double Clow)
+    {
+        params.Clow = Clow;
+    }
+
+    void set_Chigh(parameters &params, double Chigh)
+    {
+        params.Chigh = Chigh;
     }
 
     double get_freq(const parameters &params) const

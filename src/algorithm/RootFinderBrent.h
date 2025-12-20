@@ -5,7 +5,7 @@
 
 // 定义函数类型，对应Fortran中的FUNCT子例程
 typedef void (*FunctType)(const int &iset, const size_t &iprof, const int &mode, double &x, double &Delta, int &iPower, TridMtx &trid,
-                          parameters &params, VectorXd &EVMat, const int &firstM, const bool &isCountMode, int &modeCount);
+                          const parameters &params, VectorXd &EVMat, const int &firstM, const bool &isCountMode, int &modeCount);
 
 /**
  * 使用Brent方法在给定区间[A, B]内查找函数的零点X
@@ -19,9 +19,9 @@ typedef void (*FunctType)(const int &iset, const size_t &iprof, const int &mode,
  *              函数形式：void funct(double x, double &g, int &ipow)，其中g * 10^ipow给出函数值
  */
 
-void ZBRENTX(double &x, double &a, double &b, const double t,
+void ZBRENTX(double &x, double &a, double &b, const double& t,
              const int &iset, const size_t &iprof, const int &mode, double &Delta, int &iPower, TridMtx &trid,
-             parameters &params, VectorXd &EVMat, const int &firstM, int &modeCount,
+             const parameters &params, VectorXd &EVMat, const int &firstM, const bool &isCountMode, int &modeCount,
              std::string &errorMessage, FunctType funct);
 
 #endif // ROOT_FINDER_BRENT_H

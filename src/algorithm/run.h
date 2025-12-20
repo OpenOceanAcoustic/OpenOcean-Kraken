@@ -7,8 +7,8 @@
 #include "algorithm/solve.h"
 #include "algorithm/field.h"
 
-void EigenVWorker(size_t iprof, parameters &params, TridMtx& trid, kkc_output &output);
-void ComputePressure(const size_t& iprof, parameters &params, kkc_output &output);
+void EigenVWorker(size_t iprof, const parameters &params, TridMtx& trid, kkc_output &output);
+void FieldWorker(const size_t& iprof, const parameters &params, kkc_output &output);
 
 
 #endif
