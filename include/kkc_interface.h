@@ -29,7 +29,8 @@ public:
     void set_freqvec(VectorXd freqvec);           // 设置频率向量
     void set_RProf(const VectorXd &RProf);        // 设置距离剖面
     void set_RProf(const double &start, const double &end, const int &NProf); // 设置距离剖面（插值）
-    void set_SSP(SSP_1D *sspInput, size_t NProf); // 设置SSP
+    void set_SSP(const std::vector<SSP_1D> &sspInput); // 设置SSP
+
     void set_AttenUnit(Atten_Mode mode);          // 设置衰减单位
 
     void set_Sz(const VectorXd &Sz);
@@ -53,13 +54,14 @@ public:
     void set_ReflCoef_Top(std::vector<ReflectionCoef> ReflCoef);    // 设置顶部反射系数
     void set_ReflCoef_Bottom(std::vector<ReflectionCoef> ReflCoef); // 设置底部反射系数
     void set_SBP(const VectorXd &pat, const VectorXd &theta);       // 设置指向性
+    
     VectorXd get_BottomLine(size_t iprof);                          // 获取底部半空间
     VectorXd get_SurfaceLine(size_t iprof);                         // 获取表面半空间
     double get_freq();                                              // 获取频率
     std::vector<ReflectionCoef> get_ReflCoef_Top();                 // 获取顶部反射系数
     std::vector<ReflectionCoef> get_ReflCoef_Bottom();              // 获取底部反射系数
     std::pair<VectorXd, VectorXd> get_SBP();                        // 获取指向性
-    SSP_1D get_SSP(size_t iprof);                                   // 获取1D SSP
+    //SSP_1D get_SSP(size_t iprof);                                   // 获取1D SSP
     VectorXd get_Sz();                                              // 获取声源深度
     VectorXd get_Rr();                                              // 获取水平接收
     VectorXd get_Rz();                                              // 获取垂直接收
@@ -73,7 +75,6 @@ public:
     void export_mod(std::string filename);                          // 导出本征值和本征函数到文件
     void export_shd(std::string filename, int dataType);
     parameters &getParams();                         // 获取参数的引用
-    parameters getParams_Copy() const;               // 获取参数的副本
     const parameters &getParams_const() const;       // 获取参数的副本
     kkc_output &getOutput() const;                   // 获取输出的引用
     kkc_output getOutput_Copy() const;               // 获取输出的副本

@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # 添加debug选项
-option(BUILD_DEBUG "Build with debug information" OFF)
+option(BUILD_DEBUG "Build with debug information" ON)
 
 if(BUILD_DEBUG)
     message(STATUS "Building in debug mode")
@@ -43,6 +43,9 @@ file(GLOB SOURCES "src/*.cpp" "src/algorithm/*.cpp" "src/module/*.cpp" "src/util
 # 创建可执行文件
 add_executable(${PROJECT_NAME} ${SOURCES})
 
+target_link_libraries(${PROJECT_NAME} PUBLIC -static-libgcc -static-libstdc++)
+
+
 # 设置编译选项
 if(MSVC)
     if(BUILD_DEBUG)
@@ -52,8 +55,8 @@ if(MSVC)
     endif()
 else()
     if(BUILD_DEBUG)
-        target_compile_options(${PROJECT_NAME} PRIVATE -O0 -g -Wall -Wextra)
+        target_compile_options(${PROJECT_NAME} PRIVATE -O0 -g -Wextra)
     else()
-        target_compile_options(${PROJECT_NAME} PRIVATE -O3 -Wall -Wextra)
+        target_compile_options(${PROJECT_NAME} PRIVATE -O3 -Wextra)
     endif()
 endif()

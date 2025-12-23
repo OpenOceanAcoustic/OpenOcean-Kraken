@@ -170,7 +170,7 @@ struct SSPStructure
 
     // @brief 声速三次样条系数矩阵
     // 默认行大小
-    size_t row_size = 4;
+    int row_size = 4;
     // @brief 声速三次样条系数矩阵
     MatrixXcd cspline;
     // @brief PCHIP 系数
@@ -229,21 +229,201 @@ struct SSPStructure
 
 
 // 输入的SSP
-struct SSP_1D
-{
-    int NMedia;
-    SSP_Mode SSPType;
-    VectorXi NPts;
-    VectorXd beta;
-    VectorXd ft;
-    VectorXd sigma;
-    VectorXi NMesh;
-    VectorXd z;
-    VectorXd rho;
-    VectorXd alphaR;
-    VectorXd alphaI;
-    VectorXd betaR;
-    VectorXd betaI;
+struct SSPLayer {
+    // --- 成员变量 ---
+    int npts = 0;           // 该层原始数据点数
+    int nmesh = 0;          // 该层网格点数（插值用）
+    double beta = 0.0;
+    double ft = 0.0;
+    double sigma = 0.0;
+    Media_Mode Material = Media_Mode::MODE_A_Acoustic;
+    // 物理量向量（长度应等于 npts）
+    Eigen::VectorXd z;
+    Eigen::VectorXd rho;
+    Eigen::VectorXd alphaR; // 纵波速度实部
+    Eigen::VectorXd alphaI; // 纵波速度虚部（或衰减）
+    Eigen::VectorXd betaR;  // 横波速度实部
+    Eigen::VectorXd betaI;  // 横波速度虚部
+
+    // --- 默认构造函数 ---
+    SSPLayer() = default;
+
+    // --- 主构造函数（推荐使用）---
+    SSPLayer(
+        int np,
+        int nm,
+        double b,
+        double f,
+        double s,
+        const Eigen::Ref<const Eigen::VectorXd>& _z,
+        const Eigen::Ref<const Eigen::VectorXd>& _rho,
+        const Eigen::Ref<const Eigen::VectorXd>& _aR,
+        const Eigen::Ref<const Eigen::VectorXd>& _aI,
+        const Eigen::Ref<const Eigen::VectorXd>& _bR,
+        const Eigen::Ref<const Eigen::VectorXd>& _bI,
+        Media_Mode media
+    )
+        : npts(np)
+        , nmesh(nm)
+        , beta(b)
+        , ft(f)
+        , sigma(s)
+        , z(_z)
+        , rho(_rho)
+        , alphaR(_aR)
+        , alphaI(_aI)
+        , betaR(_bR)
+        , betaI(_bI)
+        , Material(media)
+    {
+        // 断言：所有向量长度必须等于 npts
+        assert(npts >= 0 && "npts must be non-negative");
+        assert(nmesh >= 0 && "nmesh must be non-negative");
+        assert(z.size() == npts);
+        assert(rho.size() == npts);
+        assert(alphaR.size() == npts);
+        assert(alphaI.size() == npts);
+        assert(betaR.size() == npts);
+        assert(betaI.size() == npts);
+    }
+
+    // --- 移动构造函数（可选，但推荐）---
+    SSPLayer(SSPLayer&& other) noexcept
+        : npts(other.npts)
+        , nmesh(other.nmesh)
+        , beta(other.beta)
+        , ft(other.ft)
+        , sigma(other.sigma)
+        , z(std::move(other.z))
+        , rho(std::move(other.rho))
+        , alphaR(std::move(other.alphaR))
+        , alphaI(std::move(other.alphaI))
+        , betaR(std::move(other.betaR))
+        , betaI(std::move(other.betaI))
+        , Material(other.Material)
+    {
+        // 可选：将 other 置为有效但空状态
+        other.npts = 0;
+        other.nmesh = 0;
+    }
+
+    // --- 拷贝构造函数（默认即可，但显式声明更清晰）---
+    SSPLayer(const SSPLayer& other) = default;
+
+    // --- 赋值运算符 ---
+    SSPLayer& operator=(const SSPLayer& other) = default;
+    SSPLayer& operator=(SSPLayer&& other) noexcept = default;
+
+    // --- 辅助函数：检查是否为空 ---
+    bool empty() const {
+        return npts == 0;
+    }
+
+    // --- 辅助函数：验证内部一致性（可用于调试）---
+    bool is_valid() const {
+        return
+            npts >= 0 &&
+            nmesh >= 0 &&
+            z.size() == npts &&
+            rho.size() == npts &&
+            alphaR.size() == npts &&
+            alphaI.size() == npts &&
+            betaR.size() == npts &&
+            betaI.size() == npts;
+    }
+};
+
+
+struct SSP_1D {
+    SSP_Mode SSPType = SSP_Mode::MODE_C_cLinear;
+    std::vector<SSPLayer> layers;  // 核心存储！
+    
+
+    void add(const SSPLayer& layer) {
+        layers.push_back(layer);
+    }
+
+    void insert(size_t i, const SSPLayer& layer) {
+        assert(i <= layers.size());
+        layers.insert(layers.begin() + i, layer);
+    }
+
+    void remove(size_t i) {
+        assert(i < layers.size());
+        layers.erase(layers.begin() + i);
+    }
+
+    void clear() {
+        layers.clear();
+    }
+
+    int NMedia() const { return static_cast<int>(layers.size()); }
+
+    // ----------------------------
+    // 惰性 flatten：按需生成连续向量（用于计算）
+    // ----------------------------
+    struct FlattenedData {
+        Eigen::VectorXi NPts;
+        Eigen::VectorXi NMesh;
+        Eigen::VectorXd beta, ft, sigma;
+
+        Eigen::VectorXd z, rho, alphaR, alphaI, betaR, betaI;
+    };
+
+    FlattenedData flatten() const {
+        if (layers.empty()) return {};
+
+        int nmedia = layers.size();
+        FlattenedData flat;
+        
+        // 1. 层元数据
+        flat.NPts.resize(nmedia);
+        flat.NMesh.resize(nmedia);
+        flat.beta.resize(nmedia);
+        flat.ft.resize(nmedia);
+        flat.sigma.resize(nmedia);
+
+        int total_pts = 0;
+        for (int i = 0; i < nmedia; ++i) {
+            flat.NPts[i] = layers[i].npts;
+            flat.NMesh[i] = layers[i].nmesh;
+            flat.beta[i] = layers[i].beta;
+            flat.ft[i] = layers[i].ft;
+            flat.sigma[i] = layers[i].sigma;
+            total_pts += layers[i].npts;
+        }
+
+        // 2. 全局物理量
+        flat.z.resize(total_pts);
+        flat.rho.resize(total_pts);
+        flat.alphaR.resize(total_pts);
+        flat.alphaI.resize(total_pts);
+        flat.betaR.resize(total_pts);
+        flat.betaI.resize(total_pts);
+
+        int offset = 0;
+        for (const auto& layer : layers) {
+            flat.z.segment(offset, layer.npts) = layer.z;
+            flat.rho.segment(offset, layer.npts) = layer.rho;
+            flat.alphaR.segment(offset, layer.npts) = layer.alphaR;
+            flat.alphaI.segment(offset, layer.npts) = layer.alphaI;
+            flat.betaR.segment(offset, layer.npts) = layer.betaR;
+            flat.betaI.segment(offset, layer.npts) = layer.betaI;
+            offset += layer.npts;
+        }
+
+        return flat;
+    }
+
+    // ----------------------------
+    // 如果旧接口需要直接访问连续向量（兼容 legacy code）
+    // 可提供只读视图（但不推荐频繁调用）
+    // ----------------------------
+    Eigen::Map<const Eigen::VectorXd> view_z() const {
+        static thread_local Eigen::VectorXd cache; // 或由外部管理
+        cache = flatten().z;
+        return Eigen::Map<const Eigen::VectorXd>(cache.data(), cache.size());
+    }
 };
 
 // @brief 半空间属性结构体
@@ -437,15 +617,15 @@ struct ReflectionCoefInfo
 // 有限差分网格参数
 struct MeshParams
 {
-    size_t NSets = 5;                // 网格集数量
+    int NSets = 5;                // 网格集数量
     int NV[5] = {1, 2, 4, 8, 16}; // Richardson外推系数数组
 };
 
 // 本征值相关参数
 struct EigenParams
 {
-    size_t M;             // 模式数量
-    size_t firstM;        // iset=0时的模式个数，决定了矩阵维度大小 2 D f / cmin * 1.1
+    int M;             // 模式数量
+    int firstM;        // iset=0时的模式个数，决定了矩阵维度大小 2 D f / cmin * 1.1
     VectorXd EVMat;    // 本征值矩阵(一维向量化)
     VectorXd Extrap;   // 外推矩阵
     VectorXcd k;       // 波数向量
@@ -456,7 +636,7 @@ struct EigenParams
     MatrixXcd dPsidzS; // 声源深度本征函数值对深度微分
     // VectorXi modes;    // 模式索引
 
-    void resize(size_t firstM, size_t NSz, size_t NRz, size_t NMeshMax, size_t NSets)
+    void resize(int firstM, int NSz, int NRz, int NMeshMax, int NSets)
     {
         EVMat.resize(firstM*NSets);
         Extrap.resize(firstM*NSets);
@@ -510,17 +690,17 @@ struct parameters
     std::string Title;
 
     // @brief 任务数（声源*发射声线个数）
-    size_t totalTasks;
+    int totalTasks;
 
     // 距离剖面个数
-    size_t NProf;
+    int NProf;
     // @brief 距离剖面向量
     VectorXd RProf;
-    size_t NMeshMax; // 最大网格数
-    size_t NMediaMax;   // 最大媒质数
+    int NMeshMax; // 最大网格数
+    int NMediaMax;   // 最大媒质数
 
     // @brief 频率信息
-    FreqInfo *freqinfo;
+    std::unique_ptr<FreqInfo> freqinfo;
 
     // // @brief 媒质数
     // int NMedia;
@@ -529,13 +709,13 @@ struct parameters
     Atten_Mode AttenUnit;
 
     // @brief 声源位置
-    Position *Pos;
+    std::unique_ptr<Position> Pos;
 
     // @brief 声速剖面参数
-    SSPStructure *SSP;
+    std::unique_ptr<SSPStructure []> SSP;
 
     // @brief 边界参数
-    BdryType *Bdry;
+    std::unique_ptr<BdryType> Bdry;
 
     // @brief 边界形状参数
     // Matrix<BdryPt, 1, Dynamic> Top, Bot;
@@ -551,7 +731,7 @@ struct parameters
     // bool isTopSet, isBotSet; // @brief 是否设置了顶部和底部边界
 
     // @brief 实例化SrcBmPat为SBP
-    SrcBmPat *SBP;
+    std::unique_ptr<SrcBmPat> SBP;
 
     // @brief 半空间为'g'时吸声系数单位
     Atten_Mode BG_AttenUnit;
@@ -560,15 +740,6 @@ struct parameters
 
     // @brief epsilon
     std::complex<double> epsilon;
-
-    // @brief iBeamWindow2
-    // double iBeamWindow2;
-
-    // @brief RadMax
-    // double RadMax;
-
-    // @brief ft
-    // double ft;
 
     bool is_Velocity = false; // @brief 是否计算振速
     kkc_Log *log;             // 日志
@@ -583,8 +754,8 @@ struct parameters
     MeshParams mesh; // 网格参数
 
     // 半空间参数
-    HSInfo *HSTop; // 顶部半空间
-    HSInfo *HSBot; // 底部半空间
+    std::unique_ptr<HSInfo []> HSTop; // 顶部半空间
+    std::unique_ptr<HSInfo []> HSBot; // 底部半空间
 
     // 运行模式
     Run_Mode runMode; // Kraken运行模式
@@ -634,7 +805,7 @@ struct TridMtx
     double cLow;
     double cHigh;
 
-    void resize(size_t Maxsize, size_t NMediaMax, int NSets)
+    void resize(int Maxsize, int NMediaMax, int NSets)
     {
         z.resize(Maxsize);
         cp_int.resize(Maxsize);

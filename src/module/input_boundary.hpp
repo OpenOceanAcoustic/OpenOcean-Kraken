@@ -18,7 +18,7 @@ public:
     virtual void Preprocess(parameters &params) const override
     {
         double freq = params.freqinfo->freq;
-        for (size_t iprof = 0; iprof < params.NProf; iprof++)
+        for (int iprof = 0; iprof < params.NProf; iprof++)
         {
             UpdateHSLoss(freq, freq, params.AttenUnit, params.HSTop[iprof], params.HSBot[iprof]);
         }

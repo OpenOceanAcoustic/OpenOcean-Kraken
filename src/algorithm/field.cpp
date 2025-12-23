@@ -101,19 +101,19 @@ void Evaluate(EigenParams &eigen, const parameters &params, int isz,
                 // complex<double> data = (Cmat.col(iz).array() * Hank.array()).sum();
                 VectorXcd col_vec1 = Cmat.col(iz);
                 complex<double> data = (col_vec1.array() * Hank.array()).sum();
-                uAllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = data;
+                uAllSources[GetFieldAddr(isz, iz, ir, params.Pos.get())] = data;
 
                 if (params.is_Velocity)
                 {
                     // 计算水平振速vr
                     VectorXcd col_vec_vr = Cmat_vr.col(iz);
                     complex<double> data_vr = (col_vec_vr.array() * Hank.array()).sum();
-                    v_AllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = data_vr;
+                    v_AllSources[GetFieldAddr(isz, iz, ir, params.Pos.get())] = data_vr;
 
                     // 计算垂直振速vz
                     VectorXcd col_vec_vz = Cmat_vz.col(iz);
                     complex<double> data_vz = (col_vec_vz.array() * Hank.array()).sum();
-                    h_AllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = data_vz;
+                    h_AllSources[GetFieldAddr(isz, iz, ir, params.Pos.get())] = data_vz;
                 }
             }
         }
@@ -122,20 +122,20 @@ void Evaluate(EigenParams &eigen, const parameters &params, int isz,
             for (int iz = 0; iz < params.Pos->NRz; ++iz)
             {
                 Eigen::VectorXcd temp = Cmat.col(iz).array() * Hank.array();
-                uAllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = temp.array().abs2().sum();                                         // 模平方和
-                uAllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = std::sqrt(uAllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])]); // 开平方
+                uAllSources[GetFieldAddr(isz, iz, ir, params.Pos.get())] = temp.array().abs2().sum();                                         // 模平方和
+                uAllSources[GetFieldAddr(isz, iz, ir, params.Pos.get())] = std::sqrt(uAllSources[GetFieldAddr(isz, iz, ir, params.Pos.get())]); // 开平方
 
                 // 计算水平振速vr
                 if (params.is_Velocity)
                 {
                 Eigen::VectorXcd temp_vr = Cmat_vr.col(iz).array() * Hank.array();
-                v_AllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = temp_vr.array().abs2().sum();                                       // 模平方和
-                v_AllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = std::sqrt(v_AllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])]); // 开平方
+                v_AllSources[GetFieldAddr(isz, iz, ir, params.Pos.get())] = temp_vr.array().abs2().sum();                                       // 模平方和
+                v_AllSources[GetFieldAddr(isz, iz, ir, params.Pos.get())] = std::sqrt(v_AllSources[GetFieldAddr(isz, iz, ir, params.Pos.get())]); // 开平方
 
                 // 计算垂直振速vz
                 Eigen::VectorXcd temp_vz = Cmat_vz.col(iz).array() * Hank.array();
-                h_AllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = temp_vz.array().abs2().sum();                                       // 模平方和
-                h_AllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] = std::sqrt(h_AllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])]); // 开平方
+                h_AllSources[GetFieldAddr(isz, iz, ir, params.Pos.get())] = temp_vz.array().abs2().sum();                                       // 模平方和
+                h_AllSources[GetFieldAddr(isz, iz, ir, params.Pos.get())] = std::sqrt(h_AllSources[GetFieldAddr(isz, iz, ir, params.Pos.get())]); // 开平方
                 }
             }
         }
@@ -148,11 +148,11 @@ void Evaluate(EigenParams &eigen, const parameters &params, int isz,
                 double denom = params.Pos->Rr(ir) + params.Pos->Ro(iz);
                 if (std::abs(denom) > 1e-3)
                 { // 避免除零
-                    uAllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] /= std::sqrt(denom);
+                    uAllSources[GetFieldAddr(isz, iz, ir, params.Pos.get())] /= std::sqrt(denom);
                     if (params.is_Velocity)
                     {
-                        v_AllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] /= std::sqrt(denom);
-                        h_AllSources[GetFieldAddr(isz, iz, ir, &params.Pos[0])] /= std::sqrt(denom);
+                        v_AllSources[GetFieldAddr(isz, iz, ir, params.Pos.get())] /= std::sqrt(denom);
+                        h_AllSources[GetFieldAddr(isz, iz, ir, params.Pos.get())] /= std::sqrt(denom);
                     }
                 }
             }
@@ -209,7 +209,7 @@ void field(EigenParams &eigen, const parameters &params, std::complex<float> *uA
         // For each receiver, add up modal contributions
         for (int irz = 0; irz < params.Pos->NRz; irz++)
         {
-            size_t base = GetFieldAddr(isz, irz, irr, &params.Pos[0]);
+            size_t base = GetFieldAddr(isz, irz, irr, params.Pos.get());
             for (int i = 0; i < eigen.M; i++)
             {
                 uAllSources[base] += eigen.PsiR(i, irz) * Hank(i);
@@ -305,7 +305,7 @@ void export_shd(std::string filename, const parameters &params, std::complex<flo
             SHDFile.seekp(recnum * 4 * LRecl, std::ios::beg);
             for (int ir = 0; ir < params.Pos->NRr; ++ir)
             {
-                std::complex<float> &P = uAllSources[GetFieldAddr(isz, irz, ir, params.Pos)];
+                std::complex<float> &P = uAllSources[GetFieldAddr(isz, irz, ir, params.Pos.get())];
                 SHDFile.write(reinterpret_cast<const char *>(&P), sizeof(P));
             }
         }

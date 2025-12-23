@@ -50,7 +50,7 @@ public:
     {
         auto &RTop = params.ReflectionCoef.RTop;
         RTop.resize(ReflCoef.size());
-        for (int i = 0; i < ReflCoef.size(); ++i)
+        for (size_t i = 0; i < ReflCoef.size(); ++i)
         {
             RTop(i).R = ReflCoef[i].R;
             RTop(i).theta = ReflCoef[i].theta;
@@ -64,7 +64,7 @@ public:
     {
         auto &RBot = params.ReflectionCoef.RBot;
         RBot.resize(ReflCoef.size());
-        for (int i = 0; i < ReflCoef.size(); ++i)
+        for (size_t i = 0; i < ReflCoef.size(); ++i)
         {
             RBot(i).R = ReflCoef[i].R;
             RBot(i).theta = ReflCoef[i].theta;

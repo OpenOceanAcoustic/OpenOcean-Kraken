@@ -16,7 +16,7 @@ void print_header()
     std::cout << " - OpenOcean-Kraken: A parallel underwater acoustic nomal modes simulator with pybind11 Python and C++ interfaces\n"
                  "\n"
                  "Copyright (C) 2024-2025 OpenOceanAcoustic\n"
-                 "Authors: Liang Yi, Qian Peng, Dai Nuoge, Luo Shixiong, Liu Ruihang, Liu Jiatong, Wang Zhengwei\n"
+                 "Authors: Qian Peng, Dai Nuoge, Liang Yi, Luo Shixiong, Liu Ruihang, Liu Jiatong, Wang Zhengwei\n"
                  "Mail: yingxinliang1@gmail.com\n"
                  "Based on Kraken, which is Copyright (C) 1983-2024 Michael B. Porter\n"
                  "GPL3 licensed, no warranty, see LICENSE or https://www.gnu.org/licenses/\n"
@@ -69,12 +69,12 @@ void kkc_interface::init() // 初始化
 
     // 初始化params的各个成员变量
     params->NProf = 1;
-    params->freqinfo = new FreqInfo();
-    params->SSP = new SSPStructure[params->NProf];
-    params->HSTop = new HSInfo[params->NProf];
-    params->HSBot = new HSInfo[params->NProf];
-    params->Pos = new Position();
-    params->SBP = new SrcBmPat();
+    params->freqinfo = std::make_unique<FreqInfo>();
+    params->SSP = std::make_unique<SSPStructure[]>(params->NProf);
+    params->HSTop = std::make_unique<HSInfo[]>(params->NProf);
+    params->HSBot = std::make_unique<HSInfo[]>(params->NProf);
+    params->Pos = std::make_unique<Position>();
+    params->SBP = std::make_unique<SrcBmPat>();
     params->log = &kkc_Log::get_instance();
     this->field_size = 0; // 场大小初始化为0
 
@@ -172,11 +172,6 @@ void kkc_interface::clearResults() // 清除结果
 void kkc_interface::free() // 释放内存
 {
     // 释放params的各个成员变量的内存
-    delete params->freqinfo;
-    delete params->Pos;
-    delete[] params->SSP;
-    delete[] params->Bdry;
-    delete params->SBP;
     delete params;
 
     // 释放output的各个成员变量的内存
@@ -190,7 +185,7 @@ void kkc_interface::runSolveV()
     auto &paramsRef = this->getParams_const(); // 获取参数
     auto &output = this->getOutput();          // 获取输出
 
-    for (size_t iprof = 0; iprof < paramsRef.NProf; iprof++)
+    for (int iprof = 0; iprof < paramsRef.NProf; iprof++)
     {
         EigenVWorker(iprof, paramsRef, this->intm_TridMtx[0], output);
     }
@@ -201,7 +196,7 @@ void kkc_interface::runField()
     // FieldSolveWorker();
     auto &params = this->getParams(); // 获取参数
     auto &output = this->getOutput(); // 获取输出
-    for (size_t iprof = 0; iprof < params.NProf; iprof++)
+    for (int iprof = 0; iprof < params.NProf; iprof++)
     {
         FieldWorker(iprof, params, output);
     }
@@ -237,11 +232,14 @@ void kkc_interface::set_RProf(const double &start, const double &end, const int 
     impl->INPUT_FREQ.set_RProf(params, start, end, NProf); // 设置 RProf
 }
 
-void kkc_interface::set_SSP(SSP_1D *sspInput, size_t NProf) // 设置SSP
+
+//传vector
+void kkc_interface::set_SSP(const std::vector<SSP_1D> &sspInput) // 设置SSP
 {
     auto &params = this->getParams();                 // 获取参数
-    impl->INPUT_SSP.set_SSP(params, sspInput, NProf); // 设置1D SSP
+    impl->INPUT_SSP.set_SSP(params, sspInput); // 设置1D SSP
 }
+
 
 void kkc_interface::set_AttenUnit(Atten_Mode mode) // 设置衰减单位
 {
@@ -403,10 +401,6 @@ std::pair<VectorXd, VectorXd> kkc_interface::get_SBP()
     return impl->INPUT_SBP.get_SBP(this->getParams_const());
 }
 
-SSP_1D kkc_interface::get_SSP(size_t iprof)
-{
-    return impl->INPUT_SSP.get_SSP(this->getParams_const(), iprof);
-}
 
 VectorXd kkc_interface::get_Sz()
 {
@@ -713,7 +707,7 @@ void kkc_interface::export_shd(std::string filename, int dataType)
             SHDFile.seekp(recnum * 4 * LRecl, std::ios::beg);
             for (int ir = 0; ir < input.Pos->NRr; ++ir)
             {
-                std::complex<float> &P = data[GetFieldAddr(isz, irz, ir, input.Pos)];
+                std::complex<float> &P = data[GetFieldAddr(isz, irz, ir, input.Pos.get())];
                 SHDFile.write(reinterpret_cast<const char *>(&P), sizeof(P));
             }
         }
@@ -732,10 +726,6 @@ parameters &kkc_interface::getParams() // 获取参数的引用
     return *params;
 } // 获取参数
 
-parameters kkc_interface::getParams_Copy() const // 获取参数的副本
-{
-    return *params;
-}
 
 const parameters &kkc_interface::getParams_const() const
 {

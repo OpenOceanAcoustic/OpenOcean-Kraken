@@ -21,7 +21,7 @@ public:
         }
         for (int iprof = 0; iprof < params.NProf; iprof++)
         {
-            double cmin = params.SSP[iprof].alphaR.minCoeff();
+            double cmin = params.SSP[iprof].alphaR.minCoeff();//找元素中最小值
             output.eigen[iprof].firstM = (size_t)(2.0 * params.SSP[iprof].depth.tail(1)(0) * freq / cmin * 1.1 + 10);
             output.eigen[iprof].resize(output.eigen[iprof].firstM, pos->NSz, pos->NRz, params.NMeshMax, params.mesh.NSets);
         }

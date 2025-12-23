@@ -270,7 +270,7 @@ void ElasticDN(const double x, VectorXd &yV, int &iPower, const int& Medium, Tri
     zV(4) = yV(4) + 0.5 * (trid.rho(j) * yV(0) - trid.B1(j) * yV(1) - four_h_x * yV(2));
 
     // 改进的中点法
-    for (size_t ii = 0; ii < trid.N(Medium); ++ii)
+    for (int ii = 0; ii < trid.N(Medium); ++ii)
     {
         j++;
 

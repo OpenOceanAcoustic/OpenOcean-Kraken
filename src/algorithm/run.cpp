@@ -26,7 +26,7 @@ void EigenVWorker(size_t iprof, const parameters &params, TridMtx& trid, kkc_out
         }
     }
 
-    size_t m = 0;
+    int m = 0;
     while (m < eigen.M && eigen.Extrap(m) > SQ(2 * pi * params.freqinfo->freq / trid.cHigh))
     {
         m++;
