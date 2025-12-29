@@ -333,27 +333,31 @@ struct SSPLayer {
     }
 };
 
-
-struct SSP_1D {
+//一个距离无关区域包含SSP和底部与顶部
+struct Range_Independent_Area {
     SSP_Mode SSPType = SSP_Mode::MODE_C_cLinear;
     std::vector<SSPLayer> layers;  // 核心存储！
+    HSInfo HSTop; // 顶层
+    HSInfo HSBot; // 底层 
     
+    void set_Bottom_Line();//顶部半空间
+    void set_Top_Line(); //底部半空间
 
-    void add(const SSPLayer& layer) {
+    void addLayer(const SSPLayer& layer) {
         layers.push_back(layer);
     }
 
-    void insert(size_t i, const SSPLayer& layer) {
+    void insertLayer(size_t i, const SSPLayer& layer) {
         assert(i <= layers.size());
         layers.insert(layers.begin() + i, layer);
     }
 
-    void remove(size_t i) {
+    void removeLayer(size_t i) {
         assert(i < layers.size());
         layers.erase(layers.begin() + i);
     }
 
-    void clear() {
+    void clearLayer() {
         layers.clear();
     }
 
@@ -448,7 +452,6 @@ struct HSInfo
     double Depth;
     // @brief 边界条件类型
     BC_Mode BC;
-    double Mz; // 设置Grain size才需要
     // @brief 界面粗糙度
     double sigma;
 };
@@ -520,59 +523,6 @@ struct Position
     Grid_Mode GridType;
 };
 
-// @brief Struct representing compressional and shear wave speeds/attenuations in user units.
-// @brief 用户单位下的纵波和横波速度/衰减结构体
-struct HSInfo2
-{
-    // @brief 纵波（压缩波P-wave）声速
-    double alphaR;
-    // @brief 纵波吸收系数
-    double alphaI;
-    // @brief 横波（剪切波S-wave）声速
-    double betaR;
-    // @brief 横波吸收系数
-    double betaI;
-    // @brief P-wave速度
-    std::complex<double> cp;
-    // @brief S-wave速度
-    std::complex<double> cs;
-    // @brief 密度
-    double rho;
-    // @brief 深度
-    double Depth;
-    // @brief 边界条件类型
-    char BC;
-};
-
-// @brief 边界形状结构体
-struct BdryPt
-{
-    // @brief 线段的坐标
-    Vector2d x;
-    // @brief 线段的切线
-    Vector2d t;
-    // @brief 线段的外法线
-    Vector2d n;
-    // @brief 节点处的切线（如果使用曲线坐标选项）
-    Vector2d Nodet;
-    // @brief 节点处的法线（如果使用曲线坐标选项）
-    Vector2d Noden;
-    // @brief 线段的长度
-    double Len;
-    // @brief 线段的曲率
-    double Kappa;
-    // @brief 深度的一阶导数
-    double Dx;
-    // @brief 深度的二阶导数
-    double Dxx;
-    // @brief 沿切线方向的二阶导数
-    double Dss;
-    // @brief 实例化HSInfo2为HS
-    HSInfo2 HS;
-};
-
-// @brief 实例化BdryPt为Top和Bot可变数组
-// std::vector<BdryPt> Top, Bot;
 
 // @brief 反射系数结构体
 struct ReflectionCoef
@@ -738,8 +688,6 @@ struct parameters
 
     int Number_to_Echo = 21;
 
-    // @brief epsilon
-    std::complex<double> epsilon;
 
     bool is_Velocity = false; // @brief 是否计算振速
     kkc_Log *log;             // 日志
