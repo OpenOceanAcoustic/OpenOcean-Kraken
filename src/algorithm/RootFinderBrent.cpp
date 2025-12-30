@@ -1,5 +1,5 @@
 #include "RootFinderBrent.h"
-#include "solve.h"
+#include "run.h"
 
 void ZBRENTX(double &x, double &a, double &b, const double &t,
              const int &iset, const size_t &iprof, const int &mode, double &Delta, int &iPower, TridMtx &trid,

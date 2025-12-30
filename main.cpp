@@ -9,6 +9,10 @@ int main()
     #endif
     // run();
     kkc_interface kkc;
+    int numThreads = 1;
+    kkc.setNumThreads(numThreads);
+    ThreadPool threadPool(numThreads);
+    kkc.setThreadPool(threadPool);
     kkc.run();
     std::string baseFilename = "result";
     kkc.export_result(baseFilename);

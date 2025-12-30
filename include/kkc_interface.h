@@ -19,6 +19,11 @@ public:
     void input_setup();              // 设置输入参数
     void intm_setup();               // 设置中间矩阵参数
     void output_setup();             // 设置输出参数
+    void setNumThreads(int numThreads); // 设置线程数
+    void setThreadPool(ThreadPool &pool); // 设置线程池
+    int getNumThreads() const; // 获取线程数
+    int getHardwareThreads() const; //获取硬件线程数
+
     void run();                      // 运行
     void clearResults();             // 清除结果
     void runField();                 // 运行声场

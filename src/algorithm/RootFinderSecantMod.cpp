@@ -1,5 +1,5 @@
 #include "RootFinderSecantMod.h"
-#include "solve.h"
+#include "run.h"
 
 void ZSecantX(double &x2, const double &Tolerance, int &Iteration, const int &MaxIteration,
               const int &iset, const size_t iprof, int &mode, double &Delta, int &iPower, TridMtx &trid,

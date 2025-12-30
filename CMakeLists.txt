@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # 添加debug选项
-option(BUILD_DEBUG "Build with debug information" OFF)
+option(BUILD_DEBUG "Build with debug information" ON)
 
 if(BUILD_DEBUG)
     message(STATUS "Building in debug mode")

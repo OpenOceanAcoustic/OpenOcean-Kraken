@@ -162,6 +162,23 @@ void kkc_interface::output_setup() // 设置输出参数
     impl->OUTPUT_FIELD.Preprocess(params, output);
 }
 
+void kkc_interface::setNumThreads(int numThreads) // 设置线程数
+{
+    this->NumThreads = numThreads;
+}
+void kkc_interface::setThreadPool(ThreadPool &pool) // 设置线程池
+{
+    this->threadPool = &pool;
+}
+int kkc_interface::getNumThreads() const // 获取线程数
+{
+    return this->NumThreads;
+}
+int kkc_interface::getHardwareThreads() const //获取硬件线程数
+{
+    return std::thread::hardware_concurrency();
+}
+
 void kkc_interface::run() // 运行
 {
     print_header();    // 打印头信息
@@ -201,7 +218,7 @@ void kkc_interface::runSolveV()
 
     for (size_t iprof = 0; iprof < paramsRef.NProf; iprof++)
     {
-        EigenVWorker(iprof, paramsRef, this->intm_TridMtx[0], output);
+        EigenVWorker(*this->threadPool, this->NumThreads, iprof, paramsRef, this->intm_TridMtx[0], output);
     }
 }
 
