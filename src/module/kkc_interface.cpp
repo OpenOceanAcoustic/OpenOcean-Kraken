@@ -53,6 +53,15 @@ kkc_interface::kkc_interface()
     this->init(); // 初始化
 }
 
+kkc_interface::kkc_interface(ThreadPool &pool)
+    : params(new parameters()),
+      output(new kkc_output()),
+      impl(std::make_unique<kkc_interface_PIMPL>()),
+      threadPool(&pool) // 初始化传入的线程池引用
+{
+    this->init(); // 初始化
+}
+
 kkc_interface::~kkc_interface()
 {
     // 释放params的各个成员变量的内存

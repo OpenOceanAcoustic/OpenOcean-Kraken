@@ -162,7 +162,7 @@ void Solve1(const int &iset, const size_t &iprof, const int &NSets, EigenParams 
         x2 = xR(modeIdx);
         Eps = std::abs(x2) * std::pow(10.0, 2.0 - std::numeric_limits<double>::digits10);
         ZBRENTX(x, x1, x2, Eps, iset, iprof, mode, Delta, iPower, trid, params, eigen.EVMat, eigen.firstM, isCountMode, modeCount,
-                ErrorMessage, FUNCT); // Brent求根法
+                ErrorMessage); // Brent求根法
 
         if (!ErrorMessage.empty())
         {
@@ -211,7 +211,7 @@ void Solve2(const int &iset, const size_t &iprof, EigenParams &eigen, TridMtx &t
             }
         }
         Tolerance = abs(x) * trid.B1.size() * pow(10.0, (1.0 - std::numeric_limits<double>::digits10));
-        ZSecantX(x, Tolerance, Iteration, MaxIteration, iset, iprof, mode, Delta, iPower, trid, params, eigen.EVMat, eigen.firstM, isCountMode, modeCount, ErrorMessage, FUNCT);
+        ZSecantX(x, Tolerance, Iteration, MaxIteration, iset, iprof, mode, Delta, iPower, trid, params, eigen.EVMat, eigen.firstM, isCountMode, modeCount, ErrorMessage);
         eigen.EVMat(iset * eigen.firstM + mode) = x;
         if (omega2 / SQ(trid.cHigh) > x)
         {
@@ -245,7 +245,7 @@ void Solve3(const int &iset, const size_t &iprof, EigenParams &eigen, TridMtx &t
     {
         x = eigen.EVMat(iset * eigen.firstM + modeIdx);
         Tolerance = std::abs(x) * std::pow(10.0, 2.0 - std::numeric_limits<double>::digits10);
-        ZSecantX(x, Tolerance, IT, MaxIT, iset, iprof, mode, Delta, iPower, trid, params, eigen.EVMat, eigen.firstM, isCountMode, modeCount, ErrorMessage, FUNCT);
+        ZSecantX(x, Tolerance, IT, MaxIT, iset, iprof, mode, Delta, iPower, trid, params, eigen.EVMat, eigen.firstM, isCountMode, modeCount, ErrorMessage);
 
         if (!ErrorMessage.empty())
         {

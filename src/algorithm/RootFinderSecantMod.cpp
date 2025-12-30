@@ -1,9 +1,10 @@
 #include "RootFinderSecantMod.h"
+#include "solve.h"
 
 void ZSecantX(double &x2, const double &Tolerance, int &Iteration, const int &MaxIteration,
               const int &iset, const size_t iprof, int &mode, double &Delta, int &iPower, TridMtx &trid,
               const parameters &params, VectorXd &EVMat, const int &firstM, const bool &isCountMode, int &modeCount,
-              std::string &ErrorMessage, RealFunctType Funct)
+              std::string &ErrorMessage)
 {
     int iPower0, iPower1;
 
@@ -18,7 +19,7 @@ void ZSecantX(double &x2, const double &Tolerance, int &Iteration, const int &Ma
 
     // 初始化第一个点
     x1 = x2 + 10.0 * Tolerance;
-    Funct(iset, iprof, mode, x1, f1, iPower1, trid, params, EVMat, firstM, isCountMode, modeCount);
+    FUNCT(iset, iprof, mode, x1, f1, iPower1, trid, params, EVMat, firstM, isCountMode, modeCount);
 
     // 主迭代循环
     for (Iteration = 1; Iteration <= MaxIteration; ++Iteration)
@@ -30,7 +31,7 @@ void ZSecantX(double &x2, const double &Tolerance, int &Iteration, const int &Ma
         x1 = x2;
 
         // 计算当前点的函数值
-        Funct(iset, iprof, mode, x1, f1, iPower1, trid, params, EVMat, firstM, isCountMode, modeCount);
+        FUNCT(iset, iprof, mode, x1, f1, iPower1, trid, params, EVMat, firstM, isCountMode, modeCount);
 
         // 计算割线法的位移，避免溢出
         cNum = f1 * (x1 - x0);

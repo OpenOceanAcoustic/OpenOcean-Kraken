@@ -3,6 +3,7 @@
 
 #include "kkc_params.h"
 #include <memory>
+#include "ThreadPool.h"
 
 class kkc_interface_PIMPL;
 
@@ -10,42 +11,43 @@ class kkc_interface_PIMPL;
 class kkc_interface
 {
 public:
-    kkc_interface();     // 构造函数
-    ~kkc_interface();    // 析构函数
-    void init();         // 初始化
-    void setup();        // 配置
-    void input_setup();  // 设置输入参数
-    void intm_setup();   // 设置中间矩阵参数
-    void output_setup(); // 设置输出参数
-    void run();          // 运行
-    void clearResults(); // 清除结果
-    void runField();     // 运行声场
-    void runSolveV();    // 运行特征值求解器
-    void free();         // 释放内存
+    kkc_interface();                 // 构造函数
+    kkc_interface(ThreadPool &pool); // 计算前需要传入一个线程池
+    ~kkc_interface();                // 析构函数
+    void init();                     // 初始化
+    void setup();                    // 配置
+    void input_setup();              // 设置输入参数
+    void intm_setup();               // 设置中间矩阵参数
+    void output_setup();             // 设置输出参数
+    void run();                      // 运行
+    void clearResults();             // 清除结果
+    void runField();                 // 运行声场
+    void runSolveV();                // 运行特征值求解器
+    void free();                     // 释放内存
 
     // 参数设置
     void set_Title(std::string &title);
     void set_Freq(double freq);
-    void set_freqvec(VectorXd freqvec);           // 设置频率向量
-    void set_RProf(const VectorXd &RProf);        // 设置距离剖面
+    void set_freqvec(VectorXd freqvec);                                       // 设置频率向量
+    void set_RProf(const VectorXd &RProf);                                    // 设置距离剖面
     void set_RProf(const double &start, const double &end, const int &NProf); // 设置距离剖面（插值）
-    void set_SSP(SSP_1D *sspInput, size_t NProf); // 设置SSP
-    void set_AttenUnit(Atten_Mode mode);          // 设置衰减单位
+    void set_SSP(SSP_1D *sspInput, size_t NProf);                             // 设置SSP
+    void set_AttenUnit(Atten_Mode mode);                                      // 设置衰减单位
 
     void set_Sz(const VectorXd &Sz);
     void set_Sz(const double &start, const double &end, const int &NSz); // 设置声源深度（插值）
 
     void set_Rr(const VectorXd &Rr); // 设置水平接收
 
-    void set_Rr(const double &start, const double &end, const int &NRr);                                      // 设置水平接收（插值）
-    void set_Rz(const VectorXd &Rz);                                                                          // 设置垂直接收
-    void set_Rz(const double &start, const double &end, const int &NRz);                                      // 设置垂直接收（插值）
-    void set_surface_Type(BC_Mode bc, size_t iprof);                                                         // 设置边界条件类型
-    void set_bottom_Type(BC_Mode bc, size_t iprof);                                                          // 设置底部边界条件类型
+    void set_Rr(const double &start, const double &end, const int &NRr);                                                    // 设置水平接收（插值）
+    void set_Rz(const VectorXd &Rz);                                                                                        // 设置垂直接收
+    void set_Rz(const double &start, const double &end, const int &NRz);                                                    // 设置垂直接收（插值）
+    void set_surface_Type(BC_Mode bc, size_t iprof);                                                                        // 设置边界条件类型
+    void set_bottom_Type(BC_Mode bc, size_t iprof);                                                                         // 设置底部边界条件类型
     void set_BottomLine(double zTemp, double alphaR, double alphaI, double betaR, double betaI, double rho, size_t iprof);  // 设置底部半空间
     void set_SurfaceLine(double zTemp, double alphaR, double alphaI, double betaR, double betaI, double rho, size_t iprof); // 设置表面半空间
-    void set_cPhase(double cLow, double cHigh); // 设置最低频率
-    void set_GridType(Grid_Mode type);                                                                        // 设置网格类型
+    void set_cPhase(double cLow, double cHigh);                                                                             // 设置最低频率
+    void set_GridType(Grid_Mode type);                                                                                      // 设置网格类型
 
     void set_SourceType(Source_Mode type);                          // 设置源类型
     void set_RunMode(Run_Mode mode);                                // 运行模式
@@ -83,9 +85,10 @@ public:
     std::string to_json_string() const;              // 将参数写入json字符串
 
 private:
-    kkc_output *output; // 输出
-    TridMtx *intm_TridMtx; // 中间矩阵
-    parameters *params; // 输入
+    kkc_output *output;     // 输出
+    TridMtx *intm_TridMtx;  // 中间矩阵
+    parameters *params;     // 输入
+    ThreadPool *threadPool; // 线程池
     // std::atomic<int> sharedJobID;//共享任务ID
 
     int NumThreads;    // 线程数

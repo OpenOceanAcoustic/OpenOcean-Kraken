@@ -1,9 +1,10 @@
 #include "RootFinderBrent.h"
+#include "solve.h"
 
 void ZBRENTX(double &x, double &a, double &b, const double &t,
              const int &iset, const size_t &iprof, const int &mode, double &Delta, int &iPower, TridMtx &trid,
              const parameters &params, VectorXd &EVMat, const int &firstM, const bool &isCountMode, int &modeCount,
-             std::string &errorMessage, FunctType funct)
+             std::string &errorMessage)
 {
     int iExpA, iExpB, iExpC;
     const double MACHEP = 1.0E-16;
@@ -14,8 +15,8 @@ void ZBRENTX(double &x, double &a, double &b, const double &t,
     errorMessage = "";
 
     // 计算区间端点的函数值
-    funct(iset, iprof, mode, a, fa, iExpA, trid, params, EVMat, firstM, isCountMode, modeCount);
-    funct(iset, iprof, mode, b, fb, iExpB, trid, params, EVMat, firstM, isCountMode, modeCount);
+    FUNCT(iset, iprof, mode, a, fa, iExpA, trid, params, EVMat, firstM, isCountMode, modeCount);
+    FUNCT(iset, iprof, mode, b, fb, iExpB, trid, params, EVMat, firstM, isCountMode, modeCount);
 
     // 检查区间端点函数值是否异号
     if ((fa > 0.0 && fb > 0.0) || (fa < 0.0 && fb < 0.0))
@@ -157,7 +158,7 @@ void ZBRENTX(double &x, double &a, double &b, const double &t,
         }
 
         // 计算新的b点函数值
-        funct(iset, iprof, mode, b, fb, iExpB, trid, params, EVMat, firstM, false, modeCount);
+    FUNCT(iset, iprof, mode, b, fb, iExpB, trid, params, EVMat, firstM, false, modeCount);
 
         // 更新c点
         if ((fb > 0.0) == (fc > 0.0))

@@ -24,7 +24,7 @@ typedef void (*ComplexFunctType)(const int &iset, const size_t &iprof, const int
 void ZSecantX(double &x2, const double &Tolerance, int &Iteration, const int &MaxIteration,
               const int &iset, const size_t iprof, int &mode, double &Delta, int &iPower, TridMtx &trid,
               const parameters &params, VectorXd &EVMat, const int &firstM, const bool &isCountMode, int &modeCount,
-              std::string &ErrorMessage, RealFunctType Funct);
+              std::string &ErrorMessage);
 
 /**
  * 使用割线法查找复数函数的根

@@ -22,6 +22,6 @@ typedef void (*FunctType)(const int &iset, const size_t &iprof, const int &mode,
 void ZBRENTX(double &x, double &a, double &b, const double& t,
              const int &iset, const size_t &iprof, const int &mode, double &Delta, int &iPower, TridMtx &trid,
              const parameters &params, VectorXd &EVMat, const int &firstM, const bool &isCountMode, int &modeCount,
-             std::string &errorMessage, FunctType funct);
+             std::string &errorMessage);
 
 #endif // ROOT_FINDER_BRENT_H
