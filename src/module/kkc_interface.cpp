@@ -183,8 +183,16 @@ void kkc_interface::run() // 运行
 {
     print_header();    // 打印头信息
     this->setup();     // 配置
+    auto start = std::chrono::high_resolution_clock::now(); // 计时开始
     this->runSolveV(); // 求解本征值和本征函数
+    auto end = std::chrono::high_resolution_clock::now(); // 计时结束
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start); // 计算时间差
+    std::cout << "Eigenvalue and Eigenfunction calculation time: " << duration.count() << " ms" << std::endl; // 打印时间差
+    start = std::chrono::high_resolution_clock::now(); // 计时开始
     this->runField();  // 求解声场
+    end = std::chrono::high_resolution_clock::now(); // 计时结束
+    duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start); // 计算时间差
+    std::cout << "Field calculation time: " << duration.count() << " ms" << std::endl; // 打印时间差
 }
 
 void kkc_interface::clearResults() // 清除结果
@@ -201,7 +209,8 @@ void kkc_interface::free() // 释放内存
     delete params->freqinfo;
     delete params->Pos;
     delete[] params->SSP;
-    delete[] params->Bdry;
+    delete[] params->HSTop;
+    delete[] params->HSBot;
     delete params->SBP;
     delete params;
 

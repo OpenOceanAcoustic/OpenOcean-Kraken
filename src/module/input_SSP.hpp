@@ -15,7 +15,7 @@ public:
     // 设置默认值
     virtual void Default(parameters &params) const override
     {
-        setDefaultValues(params);
+        setMunk(params);
     }
 
     // 运行前的预处理
@@ -177,5 +177,70 @@ private:
         params.SSP[0].offset[0] = 0;
         params.SSP[0].depth[0] = 200;
         params.SSP[0].sigma[0] = 0;
+    }
+
+    void setMunk(parameters &params) const
+    {
+        // 介质层数
+        params.SSP[0].NMedia = 1;
+
+        // 声速剖面类型（参考set_Munk，对应env中的'SVW'）
+        params.SSP[0].SSPType = SSP_Mode::MODE_C_cLinear;
+        
+        // 声速剖面（对应env中的声速剖面数据）
+        params.SSP[0].NPts.resize(params.SSP[0].NMedia);
+        params.SSP[0].beta.resize(params.SSP[0].NMedia);
+        params.SSP[0].ft.resize(params.SSP[0].NMedia);
+        params.SSP[0].NMesh.resize(params.SSP[0].NMedia);
+        params.SSP[0].depth.resize(params.SSP[0].NMedia);
+        params.SSP[0].sigma.resize(params.SSP[0].NMedia);
+        params.SSP[0].offset.resize(params.SSP[0].NMedia);
+
+        params.SSP[0].NPts[0] = 27;  // 共27个数据点
+        params.SSP[0].alphaR.resize(27);
+        params.SSP[0].alphaI = VectorXd::Zero(27);  // 假设衰减系数为0
+        params.SSP[0].betaR = VectorXd::Zero(27);  // 横波速度为0
+        params.SSP[0].betaI = VectorXd::Zero(27);  // 横波衰减为0
+        params.SSP[0].rho = VectorXd::Ones(27);  // 水介质密度设为1.0
+        params.SSP[0].z.resize(27);
+        params.SSP[0].cp.resize(params.SSP[0].NPts[0]);
+        params.SSP[0].cs.resize(params.SSP[0].NPts[0]);
+        params.SSP[0].beta[0] = 0.0;
+        params.SSP[0].ft[0] = 0.0;
+        params.SSP[0].NMesh[0] = 0;
+        params.SSP[0].offset[0] = 0;
+        params.SSP[0].depth[0] = 5000.0;  // 最大深度
+        params.SSP[0].sigma[0] = 0;
+
+        // 填充env中的声速剖面数据（z, alphaR）
+        params.SSP->z(0) = 0.0;     params.SSP->alphaR(0) = 1548.52;
+        params.SSP->z(1) = 200.0;   params.SSP->alphaR(1) = 1530.29;
+        params.SSP->z(2) = 250.0;   params.SSP->alphaR(2) = 1526.69;
+        params.SSP->z(3) = 400.0;   params.SSP->alphaR(3) = 1517.78;
+        params.SSP->z(4) = 600.0;   params.SSP->alphaR(4) = 1509.49;
+        params.SSP->z(5) = 800.0;   params.SSP->alphaR(5) = 1504.30;
+        params.SSP->z(6) = 1000.0;  params.SSP->alphaR(6) = 1501.38;
+        params.SSP->z(7) = 1200.0;  params.SSP->alphaR(7) = 1500.14;
+        params.SSP->z(8) = 1400.0;  params.SSP->alphaR(8) = 1500.12;
+        params.SSP->z(9) = 1600.0;  params.SSP->alphaR(9) = 1501.02;
+        params.SSP->z(10) = 1800.0; params.SSP->alphaR(10) = 1502.57;
+        params.SSP->z(11) = 2000.0; params.SSP->alphaR(11) = 1504.62;
+        params.SSP->z(12) = 2200.0; params.SSP->alphaR(12) = 1507.02;
+        params.SSP->z(13) = 2400.0; params.SSP->alphaR(13) = 1509.69;
+        params.SSP->z(14) = 2600.0; params.SSP->alphaR(14) = 1512.55;
+        params.SSP->z(15) = 2800.0; params.SSP->alphaR(15) = 1515.56;
+        params.SSP->z(16) = 3000.0; params.SSP->alphaR(16) = 1518.67;
+        params.SSP->z(17) = 3200.0; params.SSP->alphaR(17) = 1521.85;
+        params.SSP->z(18) = 3400.0; params.SSP->alphaR(18) = 1525.10;
+        params.SSP->z(19) = 3600.0; params.SSP->alphaR(19) = 1528.38;
+        params.SSP->z(20) = 3800.0; params.SSP->alphaR(20) = 1531.70;
+        params.SSP->z(21) = 4000.0; params.SSP->alphaR(21) = 1535.04;
+        params.SSP->z(22) = 4200.0; params.SSP->alphaR(22) = 1538.39;
+        params.SSP->z(23) = 4400.0; params.SSP->alphaR(23) = 1541.76;
+        params.SSP->z(24) = 4600.0; params.SSP->alphaR(24) = 1545.14;
+        params.SSP->z(25) = 4800.0; params.SSP->alphaR(25) = 1548.52;
+        params.SSP->z(26) = 5000.0; params.SSP->alphaR(26) = 1551.91;
+
+        params.Title = "Munk profile, coherent";  // 对应env中的TITLE
     }
 };

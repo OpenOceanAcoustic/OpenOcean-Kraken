@@ -12,7 +12,7 @@ public:
 
     virtual void Default(parameters &params) const override
     {
-        setDefaultValues(params);
+        setMunk(params);
     }
 
     virtual void Preprocess(parameters &params) const override
@@ -104,6 +104,20 @@ private:
         params.HSBot[0].betaI = 0.0;
         params.HSBot[0].betaR = 0.0;
         params.HSBot[0].Depth = 200.0;
+        params.HSBot[0].rho = 1.5;
+        params.HSBot[0].sigma = 0;
+    }
+
+    void setMunk(parameters &params) const
+    {
+        // 第一个剖面 海面、海底参数
+        params.HSTop[0].BC = BC_Mode::MODE_V_Vacuum;
+        params.HSBot[0].BC = BC_Mode::MODE_A_Half_space;
+        params.HSBot[0].alphaI = 0.2;
+        params.HSBot[0].alphaR = 1600.0;
+        params.HSBot[0].betaI = 0.0;
+        params.HSBot[0].betaR = 0.0;
+        params.HSBot[0].Depth = 5000.0;
         params.HSBot[0].rho = 1.5;
         params.HSBot[0].sigma = 0;
     }

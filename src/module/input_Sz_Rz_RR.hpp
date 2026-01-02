@@ -12,35 +12,7 @@ public:
 
     virtual void Default(parameters &params) const override
     {
-        auto &pos = params.Pos;
-        pos->NSz = 1;
-        pos->NSx = 1;
-        pos->NSy = 1;
-        pos->NRz = 201;
-        pos->NRr = 300;
-
-        pos->Sz.resize(pos->NSz);
-        pos->Sz(0) = 25;
-
-        // 默认水平接收
-        pos->Rr.resize(pos->NRr);
-        for (int32_t i = 0; i < pos->NRr; ++i)
-        {
-            pos->Rr[i] = 100.0 * (double)(i + 1);
-        }
-
-        pos->Rz.resize(pos->NRz);
-        pos->Ro.resize(pos->NRz);
-        for (int32_t i = 0; i < pos->NRz; ++i)
-        {
-            pos->Rz[i] = i;
-            pos->Ro[i] = 0;
-        }
-        
-        pos->is_Linspace_Rr = false;
-        pos->is_Linspace_Rz = false;
-        pos->is_Linspace_Sz = false;
-
+        setMunk(params);
         // std::cout<<"input_Sz_Rz_RR::Default() is called"<<std::endl;
     }
 
@@ -53,7 +25,7 @@ public:
             pos->Delta_r = (pos->Rr[pos->NRr - 1] - pos->Rr[pos->NRr - 2]);
         }
 
-        pos->NRz_per_range = (params.Pos->GridType == Grid_Mode::MODE_I_Irregular) ? 1 : pos->NRz;
+        pos->NRz_per_range = (pos->GridType == Grid_Mode::MODE_I_Irregular) ? 1 : pos->NRz;
 
         // std::cout<<"input_Sz_Rz_RR::Preprocess() is called"<<std::endl;
     }
@@ -152,5 +124,73 @@ public:
     // 打印
     virtual void Echo(parameters &params) const override
     {
+    }
+
+private:
+    // 设置默认值的私有方法
+    void setDefaultValues(parameters &params) const
+    {
+        auto &pos = params.Pos;
+        pos->NSz = 1;
+        pos->NSx = 1;
+        pos->NSy = 1;
+        pos->NRz = 201;
+        pos->NRr = 300;
+
+        pos->Sz.resize(pos->NSz);
+        pos->Sz(0) = 25;
+
+        // 默认水平接收
+        pos->Rr.resize(pos->NRr);
+        for (int32_t i = 0; i < pos->NRr; ++i)
+        {
+            pos->Rr[i] = 100.0 * (double)(i + 1);
+        }
+
+        pos->Rz.resize(pos->NRz);
+        pos->Ro.resize(pos->NRz);
+        for (int32_t i = 0; i < pos->NRz; ++i)
+        {
+            pos->Rz[i] = i;
+            pos->Ro[i] = 0;
+        }
+        pos->GridType = Grid_Mode::MODE_R_Rectangular;
+
+        pos->is_Linspace_Rr = false;
+        pos->is_Linspace_Rz = false;
+        pos->is_Linspace_Sz = false;
+    }
+
+    void setMunk(parameters &params) const
+    {
+        // 声源接收设置
+        auto &pos = params.Pos;
+        pos->NSz = 1; // 对应env中的NSD=1
+        pos->Sz.resize(pos->NSz);
+        pos->Sz(0) = 1000.0; // 对应env中的SD(1:NSD)=1000.0 (m)
+
+        pos->NRr = 501; // 对应env中的NR=1001
+        pos->Rr.resize(pos->NRr);
+        for (size_t i = 0; i < pos->NRr; ++i)
+        {
+            // 对应env中的R范围0.0-100.0 km，转换为m并线性分布
+            pos->Rr(i) = 100.0 * i; // 步长100m (100000m / 1000步)
+        }
+
+        pos->NRz = 1001; // 对应env中的NRD=501
+        pos->NRz_per_range = pos->NRz;
+        pos->Rz.resize(pos->NRz);
+        pos->Ro.resize(pos->NRz);
+        for (size_t i = 0; i < pos->NRz; ++i)
+        {
+            // 对应env中的RD范围0.0-5000.0 m，线性分布
+            pos->Rz(i) = 5.0 * (i); // 步长10m (5000m / 500步)
+            pos->Ro(i) = 0;
+        }
+        pos->GridType = Grid_Mode::MODE_R_Rectangular;
+
+        pos->is_Linspace_Rr = false;
+        pos->is_Linspace_Rz = false;
+        pos->is_Linspace_Sz = false;
     }
 };
