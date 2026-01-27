@@ -1,0 +1,111 @@
+#ifndef KKCIFACE_H
+#define KKCIFACE_H
+
+#include "OpenOceanKrakenParams.h"
+#include <memory>
+
+namespace OpenOceanKraken
+{
+    class OpenOceanKraken_PIMPL;
+    // 只作为一个参数表，不涉及具体的计算过程
+    class Interface
+    {
+    public:
+        Interface();  // 构造函数
+        Interface(ThreadPool &pool); // 计算前需要传入一个线程池
+        ~Interface(); // 析构函数
+        
+        void setNumThreads(int num_threads); // 设置线程数
+        void setThreadPool(ThreadPool &pool); // 设置线程池
+        int getNumThreads() const; // 获取线程数
+        int getHardwareThreads() const; //获取硬件线程数
+
+        void run();                   // 运行
+        void clearResults();          // 清除结果
+        void runField();              // 运行声场
+        void runEigen();             // 运行特征值求解器
+        void free();                  // 释放内存
+
+        // 创建参数结构
+        ssp::SSPLayer create_SSPLayer(); // 创建声速剖面层
+        ssp::SSPLayer create_SSPLayer(int npoints,
+                                      int nmesh,
+                                      double beta,
+                                      double ft,
+                                      double sigma,
+                                      const Eigen::Ref<const Eigen::VectorXd> &_z,
+                                      const Eigen::Ref<const Eigen::VectorXd> &_rho,
+                                      const Eigen::Ref<const Eigen::VectorXd> &_aR,
+                                      const Eigen::Ref<const Eigen::VectorXd> &_aI,
+                                      const Eigen::Ref<const Eigen::VectorXd> &_bR,
+                                      const Eigen::Ref<const Eigen::VectorXd> &_bI,
+                                      Media_Mode media);             // 创建声速剖面层
+        ssp::Range_Independent_Area create_Range_Independent_Area(); // 创建距离无关区域
+        
+        // 参数设置
+        void set_Title(std::string &title);
+        void set_Freq(double freq);
+        void set_freqvec(Eigen::VectorXd freqvec);                              // 设置频率向量
+        void set_SSP(const std::vector<ssp::Range_Independent_Area> &sspInput); // 设置SSP
+
+        void set_AttenUnit(Atten_Mode mode); // 设置衰减单位
+
+        void set_Sz(const Eigen::VectorXd &Sz);
+        void set_Sz(const double &start, const double &end, const int &NSz); // 设置声源深度（插值）
+        void set_Rr(const Eigen::VectorXd &Rr); // 设置水平接收
+        void set_Rr(const double &start, const double &end, const int &NRr); // 设置水平接收（插值）
+        void set_Rz(const Eigen::VectorXd &Rz);                              // 设置垂直接收
+        void set_Rz(const double &start, const double &end, const int &NRz); // 设置垂直接收（插值）
+        void set_cPhase(double cLow, double cHigh);                          // 设置最低频率
+        void set_GridType(Grid_Mode type);                                   // 设置网格类型
+
+        void set_SourceType(Source_Mode type);                                  // 设置源类型
+        void set_RunMode(Run_Mode mode);                                        // 运行模式
+        void set_Velocity_enable(bool is_Velocity);                             // 设置是否计算振速
+        void set_ReflCoef_Top(std::vector<ReflectionCoef> ReflCoef);            // 设置顶部反射系数
+        void set_ReflCoef_Bottom(std::vector<ReflectionCoef> ReflCoef);         // 设置底部反射系数
+        void set_SBP(const Eigen::VectorXd &pat, const Eigen::VectorXd &theta); // 设置指向性
+
+
+        std::complex<float> *get_u(int srcIndex); // 获取某个声源复声压指针
+        std::complex<float> *get_v(int srcIndex); // 获取某个声源复垂直振速指针
+        std::complex<float> *get_h(int srcIndex); // 获取某个声源水平振速指针
+        std::complex<float> *get_u_AllSources();  // 获取全部声源的复声压
+        std::complex<float> *get_v_AllSources();  // 获取全部声源的垂直振速
+        std::complex<float> *get_h_AllSources();  // 获取全部声源的水平振速
+        void export_result(std::string filename); // 导出结果到文件
+        void export_mod(std::string filename);    // 导出本征值和本征函数到文件
+        void export_shd(std::string filename, int dataType);
+        OOK_parameters &getParams();                     // 获取参数的引用
+        const OOK_parameters &getParams_const() const;   // 获取参数的副本
+        OOK_output &getOutput() const;                   // 获取输出的引用
+        OOK_output getOutput_Copy() const;               // 获取输出的副本
+        const OOK_output &getOutput_const() const;       // 获取输出的副本
+        bool from_json(const std::string &jsonPath);     // 从json读取参数
+        bool to_json(const std::string &jsonPath) const; // 将参数写入json
+        std::string to_json_string() const;              // 将参数写入json字符串
+
+    private:
+        void init();                  // 初始化
+        void setup();                 // 配置
+        void input_setup();           // 设置输入参数
+        void intm_setup();            // 设置中间矩阵参数
+        void output_setup();          // 设置输出参数
+    private:
+        OOK_output *output;     // 输出
+        TridMtx *intm_TridMtx;  // 中间矩阵
+        OOK_parameters *params; // 输入
+        ThreadPool *threadPool; // 线程池
+
+        int NumThreads;    // 线程数
+        size_t totalTasks; // 任务数
+        size_t field_size; // 场大小
+
+        bool is_setup = false; // 是否设置了参数
+        
+        std::vector<ssp::Range_Independent_Area> sspInput; // SSP输入 方便to_json
+        std::unique_ptr<OpenOceanKraken_PIMPL> impl;
+    };
+}
+
+#endif // KKCIFACE_H

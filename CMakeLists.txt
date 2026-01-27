@@ -4,9 +4,10 @@ project(OpenOcean-Kraken)
 # 设置C++标准
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
+# Release 模式开启 O3 优化
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG")
 # 添加debug选项
-option(BUILD_DEBUG "Build with debug information" ON)
+option(BUILD_DEBUG "Build with debug information" OFF)
 
 if(BUILD_DEBUG)
     message(STATUS "Building in debug mode")
@@ -45,18 +46,3 @@ add_executable(${PROJECT_NAME} ${SOURCES})
 
 target_link_libraries(${PROJECT_NAME} PUBLIC -static-libgcc -static-libstdc++)
 
-
-# 设置编译选项
-if(MSVC)
-    if(BUILD_DEBUG)
-        target_compile_options(${PROJECT_NAME} PRIVATE /Od /Zi /W4)
-    else()
-        target_compile_options(${PROJECT_NAME} PRIVATE /O2 /W4)
-    endif()
-else()
-    if(BUILD_DEBUG)
-        target_compile_options(${PROJECT_NAME} PRIVATE -O0 -g -Wextra)
-    else()
-        target_compile_options(${PROJECT_NAME} PRIVATE -O3 -Wextra)
-    endif()
-endif()

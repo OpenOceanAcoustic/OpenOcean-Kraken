@@ -1,22 +1,26 @@
 #include "BCImpedanceMod.h"
 
 // 计算边界条件阻抗
-void BCImpedance(const size_t& iprof, const double& x, const bool& isTop, complex<double> &f, complex<double> &g,
-                 int &iPower, const bool& isComplex, TridMtx &trid, const parameters& params, 
+namespace OpenOceanKraken
+{
+
+
+void BCImpedance(const size_t& iprof, const double& x, const bool& isTop, std::complex<double> &f, std::complex<double> &g,
+                 int &iPower, const bool& isComplex, TridMtx &trid, const OOK_parameters& params, 
                  int& modeCount)
 {
     int iTop = 0, iBot = 0;
-    VectorXd yV = VectorXd::Zero(5);
+    Eigen::VectorXd yV = Eigen::VectorXd::Zero(5);
     double mu;
     double rhoInside = 1.0;
     std::complex<double> gammaS, gammaP, gammaS2, gammaP2;
     std::complex<double> kx, kz, RCmplx, cInside(1500.0, 0.0);
     ReflectionCoef RInt;
-    double omega = 2 * pi * params.freqinfo->freq;
+    double omega = 2 * pi * params.freqinfo.freq;
     double omega2 = SQ(omega);
     double hFirstAcoustic = trid.h(0);
     double hFirstAcoustic2 = SQ(hFirstAcoustic);
-    HSInfo HS = params.HSTop[iprof];
+    HSInfo HS = params.SSP.at(iprof).HSTop;
 
     iPower = 0;
 
@@ -41,31 +45,10 @@ void BCImpedance(const size_t& iprof, const double& x, const bool& isTop, comple
             cInside = std::sqrt(omega2 * hFirstAcoustic2 /
                       (2.0 + trid.B1(trid.B1.size() - 1)));
         }
-        HS = params.HSBot[iprof];
+        HS = params.SSP.at(iprof).HSBot;//获取底部边界条件
     }
 
-    // 根据边界条件类型返回阻抗
-    if (HS.BC == BC_Mode::MODE_V_Vacuum)
-    { // 真空边界
-        f = 1.0;
-        g = 0.0;
-        yV(0) = std::real(f);
-        yV(1) = std::real(g);
-        yV(2) = 0.0;
-        yV(3) = 0.0;
-        yV(4) = 0.0;
-    }
-    else if (HS.BC == BC_Mode::MODE_R_Rigid)
-    { // 刚性边界
-        f = 0.0;
-        g = 1.0;
-        yV(0) = std::real(f);
-        yV(1) = std::real(g);
-        yV(2) = 0.0;
-        yV(3) = 0.0;
-        yV(4) = 0.0;
-    }
-    else if (HS.BC == BC_Mode::MODE_A_Half_space)
+    if (HS.BC == BC_Mode::MODE_A_Half_space) [[likely]]
     { // 声弹性半空间
         if (real(HS.cs) > 0.0)
         {
@@ -100,6 +83,28 @@ void BCImpedance(const size_t& iprof, const double& x, const bool& isTop, comple
             }
         }
     }
+    // 根据边界条件类型返回阻抗
+    else if (HS.BC == BC_Mode::MODE_V_Vacuum)
+    { // 真空边界
+        f = 1.0;
+        g = 0.0;
+        yV(0) = std::real(f);
+        yV(1) = std::real(g);
+        yV(2) = 0.0;
+        yV(3) = 0.0;
+        yV(4) = 0.0;
+    }
+    else if (HS.BC == BC_Mode::MODE_R_Rigid)
+    { // 刚性边界
+        f = 0.0;
+        g = 1.0;
+        yV(0) = std::real(f);
+        yV(1) = std::real(g);
+        yV(2) = 0.0;
+        yV(3) = 0.0;
+        yV(4) = 0.0;
+    }
+    
     else if (HS.BC == BC_Mode::MODE_F_File)
     { // 表格化反射系数
         // 计算掠射角theta
@@ -176,9 +181,9 @@ void BCImpedance(const size_t& iprof, const double& x, const bool& isTop, comple
 }
 
 // 向上传播通过弹性层
-void ElasticUP(const double& x, VectorXd &yV, int &iPower, const int& Medium, TridMtx &trid, const parameters& params)
+void ElasticUP(const double& x, Eigen::VectorXd &yV, int &iPower, const int& Medium, TridMtx &trid, const OOK_parameters& params)
 {
-    VectorXd xV(5), zV(5);
+    Eigen::VectorXd xV(5), zV(5);
 
     double h = trid.h(Medium);
     // 第一步使用欧拉法
@@ -252,9 +257,9 @@ void ElasticUP(const double& x, VectorXd &yV, int &iPower, const int& Medium, Tr
 }
 
 // 向下传播通过弹性层
-void ElasticDN(const double x, VectorXd &yV, int &iPower, const int& Medium, TridMtx &trid, const parameters& params)
+void ElasticDN(const double x, Eigen::VectorXd &yV, int &iPower, const int& Medium, TridMtx &trid, const OOK_parameters& params)
 {
-    VectorXd xV(5), zV(5);
+    Eigen::VectorXd xV(5), zV(5);
 
     // 第一步使用欧拉法
     double two_x = 2.0 * x;
@@ -324,4 +329,5 @@ void ElasticDN(const double x, VectorXd &yV, int &iPower, const int& Medium, Tri
     {
         yV(k) = (xV(k) + 2.0 * yV(k) + zV(k)) / 4.0;
     }
+}
 }

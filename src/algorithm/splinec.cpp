@@ -1,6 +1,7 @@
 #include "splinec.h"
 
-void CSpline(VectorXd &TAU, MatrixXcd &C, int N, int IBCBEG, int IBCEND, int NDIM)
+namespace OpenOceanKraken {
+void CSpline(Eigen::VectorXd &TAU, Eigen::MatrixXcd &C, int N, int IBCBEG, int IBCEND, int NDIM)
 {
     int L = N - 1;
     std::complex<double> G, DTAU, DIVDF1, DIVDF3;
@@ -56,7 +57,7 @@ void CSpline(VectorXd &TAU, MatrixXcd &C, int N, int IBCBEG, int IBCEND, int NDI
             else if ((N == 3 && IBCBEG == 0) || N == 2)
             {
                 C(1,N-1) = 2.0 * C(3,N-1);
-                C(3,N-1) = complex<double>(1.0, 0.0);
+                C(3,N-1) = std::complex<double>(1.0, 0.0);
                 G = -1.0 / C(3,N-2);
             }
             else
@@ -110,7 +111,7 @@ void CSpline(VectorXd &TAU, MatrixXcd &C, int N, int IBCBEG, int IBCEND, int NDI
     C(3,N-1) /= (TAU(N-1) - TAU(0));
 }
 
-void VSpline(VectorXd &TAU, VectorXcd &C, int M, int MDIM, VectorXcd &F, int N)
+void VSpline(Eigen::VectorXd &TAU, Eigen::VectorXcd &C, int M, int MDIM, Eigen::VectorXcd &F, int N)
 {
     int J = 0; // Start J at 0 instead of 1
 
@@ -151,7 +152,7 @@ std::complex<double> spline(const std::complex<double> *C, double H)
 //     return SPLINEXX;
 // }
 
-void SplineALL(MatrixXcd &C, int &iSegz, double &H, std::complex<double> &F, std::complex<double> &FX, std::complex<double> &FXX){
+void SplineALL(Eigen::MatrixXcd &C, int &iSegz, double &H, std::complex<double> &F, std::complex<double> &FX, std::complex<double> &FXX){
     const double HALF = 0.5;
     const double SIXTH = 1.0 / 6.0;
 
@@ -160,3 +161,4 @@ void SplineALL(MatrixXcd &C, int &iSegz, double &H, std::complex<double> &F, std
     FXX=C(2,iSegz) +H*C(3,iSegz);
 
 }
+};

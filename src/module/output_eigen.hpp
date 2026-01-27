@@ -1,42 +1,47 @@
 #include "paramsBase.h"
-
-class output_Eigen : public outputBase
+namespace OpenOceanKraken
 {
-public:
-    output_Eigen() {};
-    virtual ~output_Eigen() {};
 
-    virtual void Init(kkc_output &output) const override
+    class output_Eigen : public outputBase
     {
-        output.eigen = nullptr;
-    }
+    public:
+        output_Eigen() {};
+        virtual ~output_Eigen() {};
 
-    virtual void Preprocess(parameters &params, kkc_output &output) const override
-    {
-        auto &pos = params.Pos;
-        double freq = params.freqinfo->freq;
-        if (!output.eigen)
+        virtual void Init(OOK_output &output) const override
         {
-            output.eigen = new EigenParams[params.NProf];
+            output.eigen = nullptr;
         }
-        for (int iprof = 0; iprof < params.NProf; iprof++)
-        {
-            double cmin = params.SSP[iprof].alphaR.minCoeff();//找元素中最小值
-            output.eigen[iprof].firstM = (size_t)(2.0 * params.SSP[iprof].depth.tail(1)(0) * freq / cmin * 1.1 + 10);
-            output.eigen[iprof].resize(output.eigen[iprof].firstM, pos->NSz, pos->NRz, params.NMeshMax, params.mesh.NSets);
-        }
-    }
 
-    virtual void ClearResults(parameters &params, kkc_output &output) const override
-    {
-        for (int iprof = 0; iprof < params.NProf; iprof++)
+        virtual void Preprocess(OOK_parameters &params, OOK_output &output) const override
         {
-            output.eigen[iprof].setZero();
+            auto &pos = params.Pos;
+            double freq = params.freqinfo.freq;
+            if (!output.eigen){
+                
+                output.eigen = new EigenParams[params.SSP.size()];
+            }
+            for (int iprof = 0; iprof < params.SSP.size(); iprof++)
+            {
+                double cmin = params.SSP.at(iprof).alphaR.minCoeff();
+                output.eigen[iprof].firstM = (size_t)(2.0 * params.SSP.at(iprof).depth.tail(1)(0) * freq / cmin * 1.1 + 10);
+                output.eigen[iprof].resize(output.eigen[iprof].firstM, pos.NSz, pos.NRz, params.NMeshMax, params.mesh.NSets);
+            }
+
+            std::cout << "OpenOcean-Kraken: output eigen processed" << std::endl;
         }
-    }
-    virtual void Finalize(kkc_output &output) const override
-    {
-        delete[] output.eigen;
-        output.eigen = nullptr;
-    }
-};
+
+        virtual void ClearResults(OOK_parameters &params, OOK_output &output) const override
+        {
+            for (int iprof = 0; iprof < params.SSP.size(); iprof++)
+            {
+                output.eigen[iprof].setZero();
+            }
+        }
+        virtual void Finalize(OOK_output &output) const override
+        {
+            delete[] output.eigen;
+            output.eigen = nullptr;
+        }
+    };
+}

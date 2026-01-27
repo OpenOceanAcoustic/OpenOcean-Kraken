@@ -1,11 +1,13 @@
 #ifndef MERGEVECTORS_H
 #define MERGEVECTORS_H
 
-#include "kkc_params.h"
+#include "OpenOceanKrakenParams.h"
 
-void MergeVectors(VectorXd& x, VectorXd& y, VectorXd& z, int& NzTab, VectorXi& Ix, VectorXi& Iy) ;
-void Weight_dble(VectorXd& x, int Nx, 
-                 VectorXd& xTab, int NxTab, 
-                 VectorXd& w, VectorXi& Ix);
-
+namespace OpenOceanKraken
+{
+    void MergeVectors(const Eigen::VectorXd &x, const Eigen::VectorXd &y, Eigen::VectorXd &z, int &NzTab, Eigen::VectorXi &Ix, Eigen::VectorXi &Iy);
+    void Weight_dble(const Eigen::VectorXd &x, const int Nx,
+                     const Eigen::VectorXd &xTab, int NxTab,
+                     Eigen::VectorXd &w, Eigen::VectorXi &Ix);
+}
 #endif // MERGEVECTORS_H

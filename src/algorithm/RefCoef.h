@@ -1,8 +1,11 @@
 #ifndef REFCOEF_H
 #define REFCOEF_H
 
-#include "kkc_params.h"
+#include "OpenOceanKrakenParams.h"
 
-void InterpolateReflectionCoefficient(ReflectionCoef &RInt, const Matrix<ReflectionCoef, 1, Dynamic> &R);
+namespace OpenOceanKraken
+{
+    void InterpolateReflectionCoefficient(ReflectionCoef &RInt, const Eigen::Matrix<ReflectionCoef, 1, Eigen::Dynamic> &R);
+}
 
 #endif // REFCOEF_H

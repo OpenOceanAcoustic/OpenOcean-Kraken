@@ -1,12 +1,14 @@
 #ifndef INVERSEITERATION_H
 #define INVERSEITERATION_H
 
-#include "kkc_params.h"
+#include "OpenOceanKrakenParams.h"
 
+namespace OpenOceanKraken
+{
 void InverseIterationD(int N, 
-                       VectorXd& D, 
-                       VectorXd& E, 
+                       Eigen::VectorXd& D, 
+                       Eigen::VectorXd& E, 
                        int& IERR, 
-                       VectorXd& PhiVector);
-                       
+                       Eigen::VectorXd& PhiVector);
+}
 #endif

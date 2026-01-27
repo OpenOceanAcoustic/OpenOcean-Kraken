@@ -1,12 +1,14 @@
 #pragma once
 
-#include "kkc_params.h"
+#include "OpenOceanKrakenParams.h"
 
-void CSpline(VectorXd &TAU, MatrixXcd &C, int N, int IBCBEG, int IBCEND, int NDIM);
-void VSpline(VectorXd &TAU, VectorXcd &C, int M, int MDIM, VectorXcd &F, int N);
+
+namespace OpenOceanKraken {
+void CSpline(Eigen::VectorXd &TAU, Eigen::MatrixXcd &C, int N, int IBCBEG, int IBCEND, int NDIM);
+void VSpline(Eigen::VectorXd &TAU, Eigen::VectorXcd &C, int M, int MDIM, Eigen::VectorXcd &F, int N);
 std::complex<double> spline(const std::complex<double> *C, double H);
 
-/*这2个函数意义不明，待查*/ 
-// std::complex<double> splinex(const std::complex<double> *C, double H);
-// std::complex<double> splinexx(const std::complex<double> *C, double H);
-void SplineALL(MatrixXcd &C, int &iSegz, double &H, std::complex<double> &F, std::complex<double> &FX, std::complex<double> &FXX);
+
+void SplineALL(Eigen::MatrixXcd &C, int &iSegz, double &H, std::complex<double> &F, std::complex<double> &FX, std::complex<double> &FXX);
+
+};
