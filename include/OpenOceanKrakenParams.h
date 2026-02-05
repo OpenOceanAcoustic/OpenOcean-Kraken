@@ -11,6 +11,15 @@
 #include "nlohmann/json.hpp"
 #include "ThreadPool.h"
 #include <algorithm>
+#include "json_eigen.hpp"
+#define _Order_json 1 // 1表示使用ordered_json，0表示使用json
+#ifdef _Order_json
+#define OpenOcean_json nlohmann::ordered_json
+#else
+#define OpenOcean_json nlohmann::json
+#endif
+
+
 
 namespace OpenOceanKraken
 {
@@ -147,14 +156,6 @@ namespace OpenOceanKraken
         Couple     // 耦合模式
     };
 
-    struct rxyz_vector
-    {
-        Eigen::VectorXd r;
-        Eigen::VectorXd x;
-        Eigen::VectorXd y;
-        Eigen::VectorXd z;
-    };
-
     // @brief 半空间属性结构体
     struct HSInfo
     {
@@ -177,8 +178,8 @@ namespace OpenOceanKraken
         double Depth;
         // @brief 边界条件类型
         BC_Mode BC;
-        // @brief 界面粗糙度
-        // double sigma;
+
+        
     };
     // ssp结构体
     namespace ssp
@@ -324,6 +325,7 @@ namespace OpenOceanKraken
             // --- 成员函数声明 ---
             inline bool empty() const;
             inline bool is_valid() const;
+            // 
         };
 
         // 一个距离无关区域包含SSP和底部与顶部的半空间属性
@@ -346,7 +348,7 @@ namespace OpenOceanKraken
             std::vector<SSPLayer> layers;
             HSInfo HSTop;
             HSInfo HSBot;
-
+            double Range = 0; //距离无关区域在声场中的位置
             // 构造函数（如有）
             Range_Independent_Area() = default;
 
@@ -390,32 +392,19 @@ namespace OpenOceanKraken
 
     struct Position
     {
-        // @brief 声源x坐标点的数量
-        int NSx;
-        // @brief 声源y坐标点的数量
-        int NSy;
+
         // @brief 声源z坐标点的数量
         int NSz;
         // @brief 接收器z坐标点的数量
         int NRz;
         // @brief 接收器r坐标点的数量
         int NRr;
-        // @brief 声源辐射水平方向角数量
-        int Ntheta;
         // @brief 每个距离网格的深度结构个数
         int NRz_per_range;
 
         // @brief 距离间隔
         double Delta_r;
-        // @brief 水平方向角度间隔
-        double Delta_theta;
 
-        // VectorXi iSz;
-        // VectorXi iRz;
-        // @brief 声源点x坐标
-        // VectorXd Sx;
-        // // @brief 声源点y坐标
-        // VectorXd Sy;
         // @brief 声源点z坐标
         Eigen::VectorXd Sz;
 
@@ -425,10 +414,6 @@ namespace OpenOceanKraken
         Eigen::VectorXd Rz;
         // @brief 阵列水平倾斜距离
         Eigen::VectorXd Ro;
-        // // @brief 用于插值的权重ws
-        // VectorXd ws;
-        // // @brief 用于插值的权重wr
-        // VectorXd wr;
         // @brief 接收水平方向角
         Eigen::VectorXd theta;
         bool is_Linspace_Rr = false; // 水平是否等间距
@@ -454,7 +439,7 @@ namespace OpenOceanKraken
         // @brief 声源指向性图向量
         Eigen::VectorXd theta;
         Eigen::VectorXd pat;
-        bool isSet; // 是否设置了指向性图
+        bool isSet = false; // 是否设置了指向性图
     };
 
     struct FreqInfo
@@ -557,6 +542,7 @@ namespace OpenOceanKraken
 
         // @brief 声速剖面参数
         std::vector<ssp::SSPStructure> SSP;
+        std::vector<ssp::Range_Independent_Area> sspInput; // SSP输入 方便to_json
         // @brief 边界参数
         BdryType Bdry;
 
@@ -586,9 +572,6 @@ namespace OpenOceanKraken
         // 模式类型
         ModeType modeType; // 模式类型
 
-        // 输出控制
-        bool outputModes; // 是否输出模式
-        bool outputField; // 是否输出声场
     };
 
     // @brief 三对角矩阵结构体，kraken计算重要的中间变量

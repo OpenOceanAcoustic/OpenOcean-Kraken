@@ -114,7 +114,7 @@ namespace OpenOceanKraken
 
             // 1. 先清理旧内存（防止泄漏）
             params.SSP.clear(); // 清理智能指针
-
+            params.sspInput = sspVec; // 赋值一份
             size_t N = sspVec.size();
             if (N == 0)
                 return;

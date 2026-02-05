@@ -245,7 +245,6 @@ namespace OpenOceanKraken
     void Interface::set_SSP(const std::vector<ssp::Range_Independent_Area> &sspInput) // 设置SSP
     {
         auto &params = this->getParams(); // 获取参数
-        this->sspInput = sspInput;        // 给interface赋值一份
         this->impl->INPUT_SSP.set_SSP(params, sspInput);
     }
 
@@ -460,9 +459,9 @@ namespace OpenOceanKraken
         SHDFile.seekp(4 * 4 * LRecl, std::ios::beg);
         SHDFile.write(reinterpret_cast<char *>(theta.data()), Ntheta * sizeof(float));
         SHDFile.seekp(5 * 4 * LRecl, std::ios::beg);
-        SHDFile.write(reinterpret_cast<char *>(Sx.data()), input.Pos.NSx * sizeof(float));
+        SHDFile.write(reinterpret_cast<char *>(Sx.data()), 1 * sizeof(float));
         SHDFile.seekp(6 * 4 * LRecl, std::ios::beg);
-        SHDFile.write(reinterpret_cast<char *>(Sy.data()), input.Pos.NSy * sizeof(float));
+        SHDFile.write(reinterpret_cast<char *>(Sy.data()), 1 * sizeof(float));
         SHDFile.seekp(7 * 4 * LRecl, std::ios::beg);
         SHDFile.write(reinterpret_cast<char *>(Sz.data()), input.Pos.NSz * sizeof(float));
         SHDFile.seekp(8 * 4 * LRecl, std::ios::beg);

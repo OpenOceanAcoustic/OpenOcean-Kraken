@@ -91,6 +91,8 @@ namespace OpenOceanKraken
         void input_setup();           // 设置输入参数
         void intm_setup();            // 设置中间矩阵参数
         void output_setup();          // 设置输出参数
+
+
     private:
         OOK_output *output;     // 输出
         TridMtx *intm_TridMtx;  // 中间矩阵
@@ -103,7 +105,7 @@ namespace OpenOceanKraken
 
         bool is_setup = false; // 是否设置了参数
         
-        std::vector<ssp::Range_Independent_Area> sspInput; // SSP输入 方便to_json
+        
         std::unique_ptr<OpenOceanKraken_PIMPL> impl;
     };
 }
