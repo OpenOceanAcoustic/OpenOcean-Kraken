@@ -44,18 +44,6 @@ namespace OpenOceanKraken
             freqinfo.freqvec = freqvec;
         }
 
-        // 手动设置全部距离剖面
-        void set_RProf(OOK_parameters &params, const Eigen::VectorXd &RProf)
-        {
-            params.RProf = RProf;
-        }
-
-        // 插值生成距离剖面
-        void set_RProf(OOK_parameters &params, const double &start, const double &end, const int &NProf)
-        {
-            params.RProf.resize(NProf);
-            Util::linspace(start, end, NProf, params.RProf); // 线性插值
-        }
 
         void set_SourceType(OOK_parameters &params, Source_Mode type)
         {
@@ -81,15 +69,15 @@ namespace OpenOceanKraken
             freqinfo.freqvec.resize(1);
             freqinfo.freqvec[0] = freqinfo.freq;
             params.Title = "Munk";
-            params.RProf.resize(1);
-            params.RProf[0] = 0;
+            // params.RProf.resize(1);
+            // params.RProf[0] = 0;
             params.SourceType = Source_Mode::MODE_R_Point;
             params.runMode = Run_Mode::MODE_B_Both;
             params.AttenUnit.absModel = OceanAbsorptionModel::None;
             params.AttenUnit.attnUnit = AttenuationUnit::MODE_W_db_per_lambda;
             params.cLow = 1500;
             params.cHigh = 1600;
-            params.Rmax = 0;
+            params.Rmax = 50e3;
         }
         void set_Velocity_enable(OOK_parameters &params, bool is_Velocity)
         {

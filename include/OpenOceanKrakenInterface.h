@@ -56,8 +56,11 @@ namespace OpenOceanKraken
         void set_Rr(const double &start, const double &end, const int &NRr); // 设置水平接收（插值）
         void set_Rz(const Eigen::VectorXd &Rz);                              // 设置垂直接收
         void set_Rz(const double &start, const double &end, const int &NRz); // 设置垂直接收（插值）
+        void set_Ro(const Eigen::VectorXd &Ro);                              // 设置阵列倾斜
+        void set_Ro(const double &start, const double &end, const int &NRo);                              // 设置阵列倾斜
         void set_cPhase(double cLow, double cHigh);                          // 设置最低频率
         void set_GridType(Grid_Mode type);                                   // 设置网格类型
+        void set_Rmax(double Rmax); // 设置最大计算距离，用于缩放error
 
         void set_SourceType(Source_Mode type);                                  // 设置源类型
         void set_RunMode(Run_Mode mode);                                        // 运行模式

@@ -72,8 +72,8 @@ namespace OpenOceanKraken
         MODE_C_cLinear,  // C-线性插值；                 ——默认
         MODE_P_cPCHIP,   // 分段三次埃尔米特插值多项式
         MODE_S_cCubic,   // 三次样条插值；
-        MODE_A_Analytic,
-        MODE_Q_Quad, // 声速场二次逼近；要输入ssp矩阵
+        MODE_A_Analytic
+
     };
 
     // ssp类型
@@ -399,6 +399,8 @@ namespace OpenOceanKraken
         int NRz;
         // @brief 接收器r坐标点的数量
         int NRr;
+        // @brief 阵列水平倾斜角度点的数量
+        int NRo;
         // @brief 每个距离网格的深度结构个数
         int NRz_per_range;
 
@@ -414,11 +416,10 @@ namespace OpenOceanKraken
         Eigen::VectorXd Rz;
         // @brief 阵列水平倾斜距离
         Eigen::VectorXd Ro;
-        // @brief 接收水平方向角
-        Eigen::VectorXd theta;
         bool is_Linspace_Rr = false; // 水平是否等间距
         bool is_Linspace_Rz = false; // 垂直是否等间距
         bool is_Linspace_Sz = false; // 声源是否等间距
+        bool is_Linspace_Ro = false; // 阵列水平倾斜是否等间距
         Grid_Mode GridType;
     };
     // @brief 反射系数结构体
@@ -434,8 +435,6 @@ namespace OpenOceanKraken
     {
         // @brief 声源指向性图点数
         int NSBPPts;
-        // @brief 声源指向性图标志
-        std::string SBPFlag;
         // @brief 声源指向性图向量
         Eigen::VectorXd theta;
         Eigen::VectorXd pat;
@@ -523,8 +522,6 @@ namespace OpenOceanKraken
         // @brief 任务数（声源*发射声线个数）
         int totalTasks;
 
-        // @brief 距离剖面向量
-        Eigen::VectorXd RProf;
         int NMeshMax;  // 最大网格数
         int NMediaMax; // 最大媒质数
 
@@ -544,7 +541,7 @@ namespace OpenOceanKraken
         std::vector<ssp::SSPStructure> SSP;
         std::vector<ssp::Range_Independent_Area> sspInput; // SSP输入 方便to_json
         // @brief 边界参数
-        BdryType Bdry;
+        //BdryType Bdry;
 
         ReflectionCoefInfo ReflectionCoef; // @brief 反射系数参数
 

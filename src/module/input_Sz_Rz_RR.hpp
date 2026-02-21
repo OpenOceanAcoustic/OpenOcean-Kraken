@@ -90,12 +90,38 @@ namespace OpenOceanKraken
             pos.is_Linspace_Sz = true;
         }
 
+        void set_Ro(OOK_parameters &params, const Eigen::VectorXd &Ro)
+        {
+            auto &pos = params.Pos;
+            pos.NRo = Ro.size();
+            pos.Ro.resize(pos.NRo);
+            pos.Ro = Ro;
+            pos.is_Linspace_Ro = false;
+        }
+        // 插值生成阵列倾斜
+        void set_Ro(OOK_parameters &params, const double &start, const double &end, const int &NRo)
+        {
+            auto &pos = params.Pos;
+            pos.NRo = NRo;
+            pos.Ro.resize(pos.NRo);
+            Util::linspace(start, end, pos.NRo, pos.Ro); // 线性插值
+            pos.is_Linspace_Ro = true;
+        }
+
+
+        //用距离Rmax来计算误差缩放
+        void set_RMax(OOK_parameters &params, const double Rmax)
+        {
+            params.Rmax = Rmax; 
+        }
+
         // 设置网格类型
         void set_GridType(OOK_parameters &params, const Grid_Mode &GridType)
         {
             auto &pos = params.Pos;
             pos.GridType = GridType;
         }
+
 
         // 打印
         virtual void Echo(OOK_parameters &params) const override

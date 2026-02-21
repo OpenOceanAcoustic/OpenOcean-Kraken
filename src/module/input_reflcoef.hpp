@@ -21,7 +21,7 @@ namespace OpenOceanKraken
             auto &RTop = params.ReflectionCoef.RTop;
             auto &RBot = params.ReflectionCoef.RBot;
             bool &isDeg = params.ReflectionCoef.isDeg;
-            if (isDeg)
+            if (!isDeg)
             {
                 for (int i = 0; i < RTop.size(); ++i)
                 {
@@ -47,7 +47,7 @@ namespace OpenOceanKraken
                 RTop(i).theta = ReflCoef[i].theta;
                 RTop(i).phi = ReflCoef[i].phi;
             }
-            params.Bdry.Top.BC = BC_Mode::MODE_F_File; // 边界条件设置为文件读取
+            //params.Bdry.Top.BC = BC_Mode::MODE_F_File; // 边界条件设置为文件读取
         }
 
         // 设置底部反射系数
@@ -61,7 +61,7 @@ namespace OpenOceanKraken
                 RBot(i).theta = ReflCoef[i].theta;
                 RBot(i).phi = ReflCoef[i].phi;
             }
-            params.Bdry.Bot.BC = BC_Mode::MODE_F_File; // 边界条件设置为文件读取
+            //params.Bdry.Bot.BC = BC_Mode::MODE_F_File; // 边界条件设置为文件读取
         }
 
         std::vector<ReflectionCoef> get_ReflCoef_Top(const OOK_parameters &params)

@@ -47,7 +47,7 @@ namespace OpenOceanKraken
         : params(new OOK_parameters()),
           output(new OOK_output()),
           impl(std::make_unique<OpenOceanKraken_PIMPL>())
-    {   
+    {
         this->init(); // 初始化
     }
     Interface::Interface(ThreadPool &pool)
@@ -122,7 +122,7 @@ namespace OpenOceanKraken
         {
             this->intm_TridMtx[i].resize(params.NMeshMax, params.NMediaMax, params.mesh.NSets);
         }
-        std::cout << "OpenOcean-Kraken: intm TridMtx  "  << std::endl;
+        std::cout << "OpenOcean-Kraken: intm TridMtx  " << std::endl;
     }
 
     // 输出配置
@@ -200,7 +200,7 @@ namespace OpenOceanKraken
         print_header();                                                                                           // 打印头信息
         this->setup();                                                                                            // 配置
         auto start = std::chrono::high_resolution_clock::now();                                                   // 计时开始
-        this->runEigen();                                                                                        // 求解本征值和本征函数
+        this->runEigen();                                                                                         // 求解本征值和本征函数
         auto end = std::chrono::high_resolution_clock::now();                                                     // 计时结束
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);                       // 计算时间差
         std::cout << "Eigenvalue and Eigenfunction calculation time: " << duration.count() << " ms" << std::endl; // 打印时间差
@@ -284,6 +284,16 @@ namespace OpenOceanKraken
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SZ_RZ_RR.set_Rz(params, start, end, NRz);
     }
+    void Interface::set_Ro(const Eigen::VectorXd &Ro) // 设置阵列倾斜
+    {
+        auto &params = this->getParams(); // 获取参数
+        this->impl->INPUT_SZ_RZ_RR.set_Ro(params, Ro);
+    }
+    void Interface::set_Ro(const double &start, const double &end, const int &NRo) // 设置阵列倾斜
+    {
+        auto &params = this->getParams(); // 获取参数
+        this->impl->INPUT_SZ_RZ_RR.set_Ro(params, start, end, NRo);
+    }
 
     void Interface::set_cPhase(double cLow, double cHigh) // 设置最低频率
     {
@@ -296,6 +306,11 @@ namespace OpenOceanKraken
         this->impl->INPUT_SZ_RZ_RR.set_GridType(params, type);
     }
 
+    void Interface::set_Rmax(double Rmax) // 设置最大计算距离，用于缩放error
+    {
+        auto &params = this->getParams(); // 获取参数
+        this->impl->INPUT_SZ_RZ_RR.set_RMax(params, Rmax);
+    }
     void Interface::set_SourceType(Source_Mode type) // 设置源类型
     {
         auto &params = this->getParams(); // 获取参数
@@ -325,6 +340,24 @@ namespace OpenOceanKraken
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SBP.set_Pat(params, pat, theta);
+    }
+
+    bool Interface::to_json(const std::string &jsonPath) const // 将参数写入json
+    {
+
+
+    }
+    bool Interface::from_json(const std::string &jsonPath) // 从json读取参数
+    {
+
+
+    }
+
+
+    std::string Interface::to_json_string() const // 将参数写入json字符串
+    {
+
+
     }
 
     std::complex<float> *Interface::get_u(int srcIndex) // 获取某个声源复声压指针
