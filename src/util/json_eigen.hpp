@@ -6,6 +6,7 @@
 #include <type_traits>
 #include <stdexcept>
 
+namespace nlohmann {
 // 辅助 trait：判断是否为 Eigen 稠密矩阵/向量
 namespace details {
     template<typename T>
@@ -80,5 +81,5 @@ void from_json(const BasicJsonType& j,
         throw std::runtime_error("Expected JSON array for Eigen matrix/vector");
     }
 }
-
+}
 #endif // JSON_EIGEN_HPP

@@ -27,20 +27,20 @@ namespace OpenOceanKraken
         void free();                  // 释放内存
 
         // 创建参数结构
-        ssp::SSPLayer create_SSPLayer(); // 创建声速剖面层
-        ssp::SSPLayer create_SSPLayer(int npoints,
-                                      int nmesh,
-                                      double beta,
-                                      double ft,
-                                      double sigma,
-                                      const Eigen::Ref<const Eigen::VectorXd> &_z,
-                                      const Eigen::Ref<const Eigen::VectorXd> &_rho,
-                                      const Eigen::Ref<const Eigen::VectorXd> &_aR,
-                                      const Eigen::Ref<const Eigen::VectorXd> &_aI,
-                                      const Eigen::Ref<const Eigen::VectorXd> &_bR,
-                                      const Eigen::Ref<const Eigen::VectorXd> &_bI,
-                                      Media_Mode media);             // 创建声速剖面层
-        ssp::Range_Independent_Area create_Range_Independent_Area(); // 创建距离无关区域
+        // ssp::SSPLayer create_SSPLayer(); // 创建声速剖面层
+        // ssp::SSPLayer create_SSPLayer(int npoints,
+        //                               int nmesh,
+        //                               double beta,
+        //                               double ft,
+        //                               double sigma,
+        //                               const Eigen::Ref<const Eigen::VectorXd> &_z,
+        //                               const Eigen::Ref<const Eigen::VectorXd> &_rho,
+        //                               const Eigen::Ref<const Eigen::VectorXd> &_aR,
+        //                               const Eigen::Ref<const Eigen::VectorXd> &_aI,
+        //                               const Eigen::Ref<const Eigen::VectorXd> &_bR,
+        //                               const Eigen::Ref<const Eigen::VectorXd> &_bI,
+        //                               Media_Mode media);             // 创建声速剖面层
+        // ssp::Range_Independent_Area create_Range_Independent_Area(); // 创建距离无关区域
         
         // 参数设置
         void set_Title(std::string &title);
@@ -79,7 +79,7 @@ namespace OpenOceanKraken
         void export_result(std::string filename); // 导出结果到文件
         void export_mod(std::string filename);    // 导出本征值和本征函数到文件
         void export_shd(std::string filename, int dataType);
-        OOK_parameters &getParams();                     // 获取参数的引用
+        OOK_parameters &getParams() const;                     // 获取参数的引用
         const OOK_parameters &getParams_const() const;   // 获取参数的副本
         OOK_output &getOutput() const;                   // 获取输出的引用
         OOK_output getOutput_Copy() const;               // 获取输出的副本

@@ -33,6 +33,7 @@ namespace OpenOceanKraken
             throw std::runtime_error("Unknown SSP_Mode value");
         }
     }
+    
     void from_json(const OpenOcean_json &in, SSP_Mode &mode)
     {
         if (!in.is_string())

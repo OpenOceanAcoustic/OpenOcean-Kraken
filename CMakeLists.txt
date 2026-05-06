@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Release 模式开启 O3 优化
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG")
 # 添加debug选项
-option(BUILD_DEBUG "Build with debug information" OFF)
+option(BUILD_DEBUG "Build with debug information" ON)
 
 if(BUILD_DEBUG)
     message(STATUS "Building in debug mode")
@@ -36,10 +36,11 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/src/module
     ${CMAKE_CURRENT_SOURCE_DIR}/src/util
+    ${CMAKE_CURRENT_SOURCE_DIR}/for_test
 )
 
 # 添加源文件
-file(GLOB SOURCES "src/*.cpp" "src/algorithm/*.cpp" "src/module/*.cpp" "src/util/*.cpp" "main.cpp")
+file(GLOB SOURCES "src/*.cpp" "src/algorithm/*.cpp" "src/module/*.cpp" "src/util/*.cpp" "src/bind/*.cpp" "for_test/*.cpp" "main.cpp")
 
 # 创建可执行文件
 add_executable(${PROJECT_NAME} ${SOURCES})

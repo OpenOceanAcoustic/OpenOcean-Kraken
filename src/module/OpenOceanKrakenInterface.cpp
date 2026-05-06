@@ -9,6 +9,7 @@
 #include "output_eigen.hpp"
 #include "output_field.hpp"
 #include "run.h"
+#include "json_in_out.hpp"
 
 namespace OpenOceanKraken
 {
@@ -95,7 +96,7 @@ namespace OpenOceanKraken
         // output初始化
         impl->OUTPUT_FIELD.Init(output);
         impl->OUTPUT_EIGEN.Init(output);
-        std::cout << "OpenOcean-Kraken: Initialized" << std::endl;
+        
     }
 
     void Interface::input_setup()
@@ -344,20 +345,34 @@ namespace OpenOceanKraken
 
     bool Interface::to_json(const std::string &jsonPath) const // 将参数写入json
     {
+        
+        auto &params = this->getParams_const(); // 获取参数
+        std::string jsonStr = this->to_json_string();
+        std::ofstream ofs(jsonPath);
+        if (!ofs.is_open())
+        {
+            std::cerr << "Error: Failed to open file " << jsonPath << std::endl;
+            return false;
+        }
+        ofs << jsonStr << std::endl;
+        ofs.close();
 
+        return true;
 
     }
     bool Interface::from_json(const std::string &jsonPath) // 从json读取参数
     {
 
-
+        return true;
     }
 
 
     std::string Interface::to_json_string() const // 将参数写入json字符串
     {
-
-
+        auto &params = this->getParams_const(); // 获取参数
+        OpenOcean_json json;
+        json = params;
+        return json.dump(4);
     }
 
     std::complex<float> *Interface::get_u(int srcIndex) // 获取某个声源复声压指针
@@ -544,7 +559,7 @@ namespace OpenOceanKraken
         // std::cout << "SHD文件导出完成: " << filename << std::endl;
     }
 
-    OOK_parameters &Interface::getParams() // 获取参数的引用
+    OOK_parameters &Interface::getParams() const // 获取参数的引用
     {
         return *this->params;
     }
