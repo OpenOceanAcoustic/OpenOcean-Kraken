@@ -32,3 +32,5 @@ bin/
 pybind11-master/
 nlohmann/
 eigen/
+tmp.cpp
+default_params.json

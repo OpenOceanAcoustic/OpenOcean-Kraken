@@ -1,4 +1,3 @@
-
 #include "OpenOceanKrakenInterface.h"
 #include "util.h"
 #include "input_SSP.hpp"

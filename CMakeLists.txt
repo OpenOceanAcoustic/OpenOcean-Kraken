@@ -37,6 +37,7 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/module
     ${CMAKE_CURRENT_SOURCE_DIR}/src/util
     ${CMAKE_CURRENT_SOURCE_DIR}/for_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 # 添加源文件
