@@ -523,7 +523,7 @@ namespace OpenOceanKraken
         {
             j["SrcDepth"]["start"] = pos.Sz(0);
             j["SrcDepth"]["end"] = pos.Sz(pos.Sz.size() - 1);
-            j["SrcDepth"]["NSz"] = static_cast<int>(pos.Sz.size());
+            j["SrcDepth"]["NSz"] = pos.NSz;
         }
         else
         {
@@ -535,7 +535,7 @@ namespace OpenOceanKraken
         {
             j["RecvRange"]["start"] = pos.Rr(0);
             j["RecvRange"]["end"] = pos.Rr(pos.Rr.size() - 1);
-            j["RecvRange"]["NRr"] = static_cast<int>(pos.Rr.size());
+            j["RecvRange"]["NRr"] = pos.NRr;
         }
         else
         {
@@ -547,7 +547,7 @@ namespace OpenOceanKraken
         {
             j["RecvDepth"]["start"] = pos.Rz(0);
             j["RecvDepth"]["end"] = pos.Rz(pos.Rz.size() - 1);
-            j["RecvDepth"]["NRz"] = static_cast<int>(pos.Rz.size());
+            j["RecvDepth"]["NRz"] = pos.NRz;
         }
         else
         {
@@ -559,7 +559,7 @@ namespace OpenOceanKraken
         {
             j["RecvAzim"]["start"] = pos.Ro(0);
             j["RecvAzim"]["end"] = pos.Ro(pos.Ro.size() - 1);
-            j["RecvAzim"]["NRo"] = static_cast<int>(pos.Ro.size());
+            j["RecvAzim"]["NRo"] = pos.NRo;
         }
         else
         {

@@ -13,26 +13,15 @@
 
 namespace OpenOceanKraken
 {
-     bool read_sbp_file(const std::string &envPath, OOK_parameters &params)
+    bool read_sbp_file(const std::string &envPath, OOK_parameters &params)
     {
-        std::string sbpPath;
-        size_t dotPos = envPath.find_last_of('.'); // 找到最后一个.的位置
-        
-        if (dotPos != std::string::npos && envPath.substr(dotPos) == ".env")
-        {
-            sbpPath = envPath.substr(0, dotPos) + ".sbp";
-        }
-        else
-        {
-            // 无.env 后缀，直接追加.flp
-            sbpPath = envPath + ".sbp";
-        }
-
-        // 检查sbp文件是否存在
+        std::string sbpPath = envPath.substr(0, envPath.length() - 4) + ".sbp"; //打开同名sbp文件
         std::ifstream sbpFile(sbpPath);
         if (!sbpFile.is_open())
         {
-            std::cerr << "打开 sbp 文件 " << sbpPath << " 失败" << std::endl;
+            std::ostringstream oss;
+            oss << "打开 sbp 文件 " << sbpPath << " 失败"<< std::endl;
+            throw std::runtime_error(oss.str());
             return false;
         }
 
@@ -46,6 +35,7 @@ namespace OpenOceanKraken
         params.SBP.theta = Eigen::Map<Eigen::VectorXd>(theta.data(), theta.size());
         params.SBP.pat = Eigen::Map<Eigen::VectorXd>(pat.data(), pat.size());
         params.SBP.isSet = true;
+        sbpFile.close();
         return true;
     }
     bool read_flp_file(const std::string &envPath, OOK_parameters &params)
@@ -261,7 +251,57 @@ namespace OpenOceanKraken
         return true;
     }
 
-   bool read_env_file(const std::string &envPath, OOK_parameters &params)
+    bool read_refCoef_file(const std::string &envPath, OOK_parameters &params, std::string pattern)
+    {
+        int trc_err_line = 0; //行数计数器，出错时抛出行数
+        std::string refCoefPath = envPath.substr(0, envPath.length() - 4) + pattern; //打开同名trc文件
+        std::ifstream refCoefFile(refCoefPath);
+        if (!refCoefFile.is_open())
+        {
+            std::ostringstream oss;
+            oss << "无法打开" << pattern << "文件: " << refCoefPath;
+            throw std::runtime_error(oss.str());
+        }
+        try
+        {
+            int Npts;
+            refCoefFile >> Npts;
+            std::vector<double> thetas(Npts),Rs(Npts),phis(Npts);
+            if (pattern == ".trc")  
+            {
+                // .trc 文件是顶部反射系数文件
+                params.ReflectionCoef.RTop.resize(Npts);
+                for (int i = 0; i < Npts; i++) {
+                    refCoefFile >> params.ReflectionCoef.RTop(i).theta ;
+                    refCoefFile >> params.ReflectionCoef.RTop(i).R;
+                    refCoefFile >> params.ReflectionCoef.RTop(i).phi;
+                }
+            }
+            else if (pattern == ".brc")
+            {
+                // .brc 文件是底部反射系数文件
+                params.ReflectionCoef.RBot.resize(Npts);
+                for (int i = 0; i < Npts; i++) {
+                    refCoefFile >> params.ReflectionCoef.RBot(i).theta ;
+                    refCoefFile >> params.ReflectionCoef.RBot(i).R;
+                    refCoefFile >> params.ReflectionCoef.RBot(i).phi;
+                }
+            }
+            else
+            {
+                std::cerr << "未知的文件类型: " << pattern << std::endl;
+                return false;
+            }
+        }
+        catch(const std::exception& e)
+        {
+            std::cerr << "反射系数文件时格式错误:" << refCoefPath << std::endl;
+            std::cerr << e.what() << '\n';
+        }
+        refCoefFile.close();
+        return true;
+    }
+    bool read_env_file(const std::string &envPath, OOK_parameters &params)
     {
         std::ifstream file(envPath);
         if (!file.is_open()) {
@@ -305,7 +345,7 @@ namespace OpenOceanKraken
         try {
             size_t line_idx = 0;
 
-            // 初始化 sspInput[0] 和其内部的 layers[0]
+            // 初始化 sspInput[0] 和其内部的 layers[0]（这里存在一定的问题，需要修改一下)
             params.sspInput.resize(1);
             params.sspInput[0].layers.resize(1);
             
@@ -376,6 +416,7 @@ namespace OpenOceanKraken
                         break;
                     case 'F':
                         params.sspInput[0].HSTop.BC = BC_Mode::MODE_F_File;
+                        read_refCoef_file(envPath, params, ".trc");
                         break;
                     case 'G':
                         params.sspInput[0].HSTop.BC = BC_Mode::MODE_G_Grain;
@@ -534,6 +575,7 @@ namespace OpenOceanKraken
                     break;
                 case 'F':
                     params.sspInput[0].HSBot.BC = BC_Mode::MODE_F_File;
+                    read_refCoef_file(envPath, params, ".brc");
                     break;
                 case 'G':
                     params.sspInput[0].HSBot.BC = BC_Mode::MODE_G_Grain;
@@ -543,23 +585,21 @@ namespace OpenOceanKraken
                     break;
                 }
 
-                // 问题二：海底界面粗糙度，好像没有对应设置？还是说这种会设置为第二个SSPlay？
-                // iss >> dummy;
-                // params.sspInput[0].layers[1].sigma = roughness; 
             }
 
-            // 海底界面参数
-            Point bottom_p;
-            if (line_idx < lines.size())
-            {
-                std::istringstream iss(lines[line_idx++]);
-                iss >> bottom_p.z >> bottom_p.alphaR >> bottom_p.betaR >> bottom_p.rho >> bottom_p.alphaI >> bottom_p.betaI;
-                params.sspInput[0].HSBot.Depth = bottom_p.z;
-                params.sspInput[0].HSBot.alphaR = bottom_p.alphaR;
-                params.sspInput[0].HSBot.alphaI = bottom_p.alphaI;
-                params.sspInput[0].HSBot.betaR = bottom_p.betaR;
-                params.sspInput[0].HSBot.betaI = bottom_p.betaI;
-                params.sspInput[0].HSBot.rho = bottom_p.rho;
+            if (params.sspInput[0].HSBot.BC != BC_Mode::MODE_F_File){
+                // 海底界面参数
+                Point bottom_p;
+                if (line_idx < lines.size())
+                {
+                    std::istringstream iss(lines[line_idx++]);
+                    iss >> params.sspInput[0].HSBot.Depth;
+                    iss >> params.sspInput[0].HSBot.alphaR;
+                    iss >> params.sspInput[0].HSBot.alphaI;
+                    iss >> params.sspInput[0].HSBot.betaR;
+                    iss >> params.sspInput[0].HSBot.betaI;
+                    iss >> params.sspInput[0].HSBot.rho;
+                }
             }
 
             // 相速度
@@ -643,6 +683,13 @@ namespace OpenOceanKraken
             {
                 std::cerr << "警告: flp 文件解析失败，使用已解析的 env 参数继续" << std::endl;
             }
+
+            // 如果Rmax<=0（env未赋值或赋值为0），设置为最大接收距离+10000m
+            if (params.Rmax <= 0.0 && params.Pos.Rr.size() > 0)
+            {
+                params.Rmax = params.Pos.Rr.maxCoeff() + 10000.0;
+            }
+
             return true;
         } 
         catch (const std::exception& e) {
