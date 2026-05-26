@@ -9,6 +9,7 @@
 #include "output_field.hpp"
 #include "run.h"
 #include "json_in_out.hpp"
+#include "env_in_out.hpp"
 
 namespace OpenOceanKraken
 {
@@ -46,6 +47,7 @@ namespace OpenOceanKraken
     Interface::Interface()
         : params(new OOK_parameters()),
           output(new OOK_output()),
+          intm_TridMtx(nullptr),  // 初始化为 nullptr，避免释放内存时其为野指针导致内存删除报错
           impl(std::make_unique<OpenOceanKraken_PIMPL>())
     {
         this->init(); // 初始化
@@ -372,6 +374,18 @@ namespace OpenOceanKraken
         OpenOcean_json json;
         json = params;
         return json.dump(4);
+    }
+
+    bool Interface::from_env(const std::string &envPath)
+    {
+        auto &params = this->getParams();
+        if (!read_env_file(envPath, params))
+            return false;
+        if (!read_flp_file(envPath, params))
+        {
+            std::cerr << "警告: flp 文件解析失败" << std::endl;
+        }
+        return true;
     }
 
     std::complex<float> *Interface::get_u(int srcIndex) // 获取某个声源复声压指针

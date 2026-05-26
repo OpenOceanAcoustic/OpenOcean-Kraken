@@ -10,7 +10,7 @@ namespace OpenOceanKraken
 {
 
     // 各类enum
-    inline void to_json(OpenOcean_json &out, const SSP_Mode &mode)
+    void to_json(OpenOcean_json &out, const SSP_Mode &mode)
     {
         switch (mode)
         {
@@ -34,7 +34,7 @@ namespace OpenOceanKraken
         }
     }
     
-    inline void from_json(const OpenOcean_json &in, SSP_Mode &mode)
+    void from_json(const OpenOcean_json &in, SSP_Mode &mode)
     {
         if (!in.is_string())
         {
@@ -69,7 +69,7 @@ namespace OpenOceanKraken
         }
     }
 
-    inline void to_json(OpenOcean_json &out, const Media_Mode &mode)
+    void to_json(OpenOcean_json &out, const Media_Mode &mode)
     {
         switch (mode)
         {
@@ -83,7 +83,7 @@ namespace OpenOceanKraken
             throw std::runtime_error("Unknown Media_Mode value");
         }
     }
-    inline void from_json(const OpenOcean_json &in, Media_Mode &mode)
+    void from_json(const OpenOcean_json &in, Media_Mode &mode)
     {
         if (!in.is_string())
         {
@@ -106,7 +106,7 @@ namespace OpenOceanKraken
         }
     }
 
-    inline void to_json(OpenOcean_json &out, const AttenuationUnit &mode)
+    void to_json(OpenOcean_json &out, const AttenuationUnit &mode)
     {
         switch (mode)
         {
@@ -134,7 +134,7 @@ namespace OpenOceanKraken
         }
     }
 
-    inline void from_json(const OpenOcean_json &in, AttenuationUnit &mode)
+    void from_json(const OpenOcean_json &in, AttenuationUnit &mode)
     {
         if (!in.is_string())
         {
@@ -171,7 +171,7 @@ namespace OpenOceanKraken
         }
     }
 
-    inline void to_json(OpenOcean_json &out, const OceanAbsorptionModel &mode)
+    void to_json(OpenOcean_json &out, const OceanAbsorptionModel &mode)
     {
         switch (mode)
         {
@@ -189,7 +189,7 @@ namespace OpenOceanKraken
         }
     }
 
-    inline void from_json(const OpenOcean_json &in, OceanAbsorptionModel &mode)
+    void from_json(const OpenOcean_json &in, OceanAbsorptionModel &mode)
     {
         if (!in.is_string())
         {
@@ -214,13 +214,13 @@ namespace OpenOceanKraken
         }
     }
 
-    inline void to_json(OpenOcean_json &out, const Atten_Mode &mode)
+    void to_json(OpenOcean_json &out, const Atten_Mode &mode)
     {
         out = OpenOcean_json{
             {"AttenuationUnit", mode.attnUnit},
             {"OceanAbsorptionModel", mode.absModel}};
     }
-    inline void from_json(const OpenOcean_json &in, Atten_Mode &mode)
+    void from_json(const OpenOcean_json &in, Atten_Mode &mode)
     {
         if (!in.is_object())
         {
@@ -230,7 +230,7 @@ namespace OpenOceanKraken
         mode.absModel = in.at("OceanAbsorptionModel").get<OceanAbsorptionModel>();
     }
 
-    inline void to_json(OpenOcean_json &out, const BC_Mode &mode)
+    void to_json(OpenOcean_json &out, const BC_Mode &mode)
     {
         switch (mode)
         {
@@ -256,7 +256,7 @@ namespace OpenOceanKraken
             throw std::runtime_error("Unknown BC_Mode value");
         }
     }
-    inline void from_json(const OpenOcean_json &in, BC_Mode &mode)
+    void from_json(const OpenOcean_json &in, BC_Mode &mode)
     {
         if (!in.is_string())
         {
@@ -293,7 +293,7 @@ namespace OpenOceanKraken
         }
     }
 
-    inline void to_json(OpenOcean_json &out, const Source_Mode &mode)
+    void to_json(OpenOcean_json &out, const Source_Mode &mode)
     {
         switch (mode)
         {
@@ -308,7 +308,7 @@ namespace OpenOceanKraken
         }
     }
 
-    inline void from_json(const OpenOcean_json &in, Source_Mode &mode)
+    void from_json(const OpenOcean_json &in, Source_Mode &mode)
     {
         if (!in.is_string())
         {
@@ -329,7 +329,7 @@ namespace OpenOceanKraken
         }
     }
 
-    inline void to_json(OpenOcean_json &out, const Grid_Mode &mode)
+    void to_json(OpenOcean_json &out, const Grid_Mode &mode)
     {
         switch (mode)
         {
@@ -343,7 +343,7 @@ namespace OpenOceanKraken
             throw std::runtime_error("Unknown Grid_Mode value");
         }
     }
-    inline void from_json(const OpenOcean_json &in, Grid_Mode &mode)
+    void from_json(const OpenOcean_json &in, Grid_Mode &mode)
     {
         if (!in.is_string())
         {
@@ -364,7 +364,7 @@ namespace OpenOceanKraken
         }
     }
 
-    inline void to_json(OpenOcean_json &out, const Run_Mode &mode)
+    void to_json(OpenOcean_json &out, const Run_Mode &mode)
     {
         switch (mode)
         {
@@ -382,7 +382,7 @@ namespace OpenOceanKraken
             throw std::runtime_error("Unknown Run_Mode value");
         }
     }
-    inline void from_json(const OpenOcean_json &in, Run_Mode &mode)
+    void from_json(const OpenOcean_json &in, Run_Mode &mode)
     {
         if (!in.is_string())
         {
@@ -407,7 +407,7 @@ namespace OpenOceanKraken
         }
     }
 
-    inline void to_json(OpenOcean_json &out, const CoherenceType &mode)
+    void to_json(OpenOcean_json &out, const CoherenceType &mode)
     {
         switch (mode)
         {
@@ -421,7 +421,7 @@ namespace OpenOceanKraken
             throw std::runtime_error("Unknown CoherenceType value");
         }
     }
-    inline void from_json(const OpenOcean_json &in, CoherenceType &mode)
+    void from_json(const OpenOcean_json &in, CoherenceType &mode)
     {
         if (!in.is_string())
         {
@@ -442,7 +442,7 @@ namespace OpenOceanKraken
         }
     }
 
-    inline void to_json(OpenOcean_json &out, const ModeType &mode)
+    void to_json(OpenOcean_json &out, const ModeType &mode)
     {
         switch (mode)
         {
@@ -457,7 +457,7 @@ namespace OpenOceanKraken
         }
     }
 
-    inline void from_json(const OpenOcean_json &in, ModeType &mode)
+    void from_json(const OpenOcean_json &in, ModeType &mode)
     {
         if (!in.is_string())
         {
@@ -479,7 +479,7 @@ namespace OpenOceanKraken
     }
 
     // HSInfo
-    inline void to_json(OpenOcean_json &out, const HSInfo &HS)
+    void to_json(OpenOcean_json &out, const HSInfo &HS)
     {
         out = OpenOcean_json{
             {"Depth", HS.Depth},
@@ -493,7 +493,7 @@ namespace OpenOceanKraken
             {"BC", HS.BC} // 假设 BC_Mode 已有 to_json
         };
     }
-    inline void from_json(const OpenOcean_json &in, HSInfo &HS)
+    void from_json(const OpenOcean_json &in, HSInfo &HS)
     {
         if (!in.is_object())
         {
@@ -512,7 +512,7 @@ namespace OpenOceanKraken
     }
 
     // position
-    inline void to_json(OpenOcean_json &out, const Position &pos)
+    void to_json(OpenOcean_json &out, const Position &pos)
     {
         OpenOcean_json j;
 
@@ -568,7 +568,7 @@ namespace OpenOceanKraken
 
         out = std::move(j);
     }
-    inline void from_json(const OpenOcean_json &in, Position &pos)
+    void from_json(const OpenOcean_json &in, Position &pos)
     {
         // GridType
         pos.GridType = in.at("GridType").get<Grid_Mode>();
@@ -650,7 +650,7 @@ namespace OpenOceanKraken
     //     ref.phi = in.at("phi").get<double>();
     // }
     // ReflectionCoefInfo
-    inline void to_json(OpenOcean_json &out, const ReflectionCoefInfo &ref)
+    void to_json(OpenOcean_json &out, const ReflectionCoefInfo &ref)
     {
         int TOP_Size = ref.RTop.size();
         int BOT_Size = ref.RBot.size();
@@ -684,7 +684,7 @@ namespace OpenOceanKraken
         j["RBot"]["theta"] = RBot_theta;
         out = std::move(j);
     }
-    inline void from_json(const OpenOcean_json &in, ReflectionCoefInfo &ref)
+    void from_json(const OpenOcean_json &in, ReflectionCoefInfo &ref)
     {
         auto load_coefs = [&](const OpenOcean_json &obj) -> Eigen::Matrix<ReflectionCoef, 1, Eigen::Dynamic>
         {
@@ -710,7 +710,7 @@ namespace OpenOceanKraken
     }
 
     // SrcBmPat
-    inline void to_json(OpenOcean_json &out, const SrcBmPat &pat)
+    void to_json(OpenOcean_json &out, const SrcBmPat &pat)
     {
         if (pat.isSet)
         {
@@ -719,7 +719,7 @@ namespace OpenOceanKraken
             out["pat"] = pat.pat;
         }
     }
-    inline void from_json(const OpenOcean_json &in, SrcBmPat &pat)
+    void from_json(const OpenOcean_json &in, SrcBmPat &pat)
     {
 
             pat.NSBPPts = in.at("NSBPPts").get<int>();
@@ -729,7 +729,7 @@ namespace OpenOceanKraken
         pat.isSet = true;
     }
     // freqInfo
-    inline void to_json(OpenOcean_json &out, const FreqInfo &freq)
+    void to_json(OpenOcean_json &out, const FreqInfo &freq)
     {
         if (freq.Nfreq > 1)
         {
@@ -742,7 +742,7 @@ namespace OpenOceanKraken
             out["freq"] = freq.freq;
         }
     }
-    inline void from_json(const OpenOcean_json &in, FreqInfo &freq)
+    void from_json(const OpenOcean_json &in, FreqInfo &freq)
     {
 
             freq.Nfreq = in.at("Nfreq").get<int>();
@@ -762,7 +762,7 @@ namespace OpenOceanKraken
     {
 
         // SSPLayer
-        inline void to_json(OpenOcean_json &out, const SSPLayer &Layer)
+        void to_json(OpenOcean_json &out, const SSPLayer &Layer)
         {
             OpenOcean_json j;
             j["npts"] = Layer.npts;
@@ -779,7 +779,7 @@ namespace OpenOceanKraken
             j["Material"] = Layer.Material;
             out = std::move(j);
         }
-        inline void from_json(const OpenOcean_json &in, SSPLayer &Layer)
+        void from_json(const OpenOcean_json &in, SSPLayer &Layer)
         {
 
             Layer.npts = in.at("npts").get<int>();
@@ -797,7 +797,7 @@ namespace OpenOceanKraken
         }
 
         // Range_Independent_Area
-        inline void to_json(OpenOcean_json &out, const Range_Independent_Area &Area)
+        void to_json(OpenOcean_json &out, const Range_Independent_Area &Area)
         {
             OpenOcean_json j;
             j["SSPType"] = Area.SSPType;
@@ -807,7 +807,7 @@ namespace OpenOceanKraken
             j["HSBot"] = Area.HSBot;
             out = std::move(j);
         }
-        inline void from_json(const OpenOcean_json &in, Range_Independent_Area &Area)
+        void from_json(const OpenOcean_json &in, Range_Independent_Area &Area)
         {
             Area.SSPType = in.at("SSPType").get<SSP_Mode>();
             Area.Range = in.at("Range").get<double>();
@@ -818,7 +818,7 @@ namespace OpenOceanKraken
     }
 
     // params
-    inline void to_json(OpenOcean_json &out, const OOK_parameters &params)
+    void to_json(OpenOcean_json &out, const OOK_parameters &params)
     {
         OpenOcean_json j;
         j["Title"] = params.Title;
@@ -839,7 +839,7 @@ namespace OpenOceanKraken
         out = std::move(j);
     }
 
-    inline void from_json(const OpenOcean_json &in, OOK_parameters &params)
+    void from_json(const OpenOcean_json &in, OOK_parameters &params)
     {
         params.Title = in.at("Title").get<std::string>();
         params.freqinfo = in.at("freqinfo").get<FreqInfo>();

@@ -87,6 +87,7 @@ namespace OpenOceanKraken
         bool from_json(const std::string &jsonPath);     // 从json读取参数
         bool to_json(const std::string &jsonPath) const; // 将参数写入json
         std::string to_json_string() const;              // 将参数写入json字符串
+        bool from_env(const std::string &envPath);        // 从env文件读取参数 
 
     private:
         void init();                  // 初始化

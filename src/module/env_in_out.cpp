@@ -1,7 +1,5 @@
 #include "json_eigen.hpp"
 #include "OpenOceanKrakenParams.h"
-#include "json_in_out.hpp"
-
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -347,6 +345,7 @@ namespace OpenOceanKraken
 
             // 初始化 sspInput[0] 和其内部的 layers[0]（这里存在一定的问题，需要修改一下)
             params.sspInput.resize(1);
+            params.sspInput[0].Range = 0.0;
             params.sspInput[0].layers.resize(1);
             
             // 第1行: 标题
@@ -699,11 +698,10 @@ namespace OpenOceanKraken
     }
     
     // 从env文件创建OOK_parameters对象
-    OOK_parameters env_to_params(const std::string &envPath)
-    {
-        OOK_parameters params;
-        read_env_file(envPath, params);
-        return params;
-    }
+    // OOK_parameters env_to_params(const std::string &envPath)
+    // {
+    //     OOK_parameters params;
+    //     read_env_file(envPath, params);
+    //     return params;
+    // }
 }
-
