@@ -13,12 +13,12 @@ namespace OpenOceanKraken
 {
     bool read_sbp_file(const std::string &envPath, OOK_parameters &params)
     {
-        std::string sbpPath = envPath.substr(0, envPath.length() - 4) + ".sbp"; //打开同名sbp文件
+        std::string sbpPath = envPath.substr(0, envPath.length() - 4) + ".sbp"; // 打开同名sbp文件
         std::ifstream sbpFile(sbpPath);
         if (!sbpFile.is_open())
         {
             std::ostringstream oss;
-            oss << "打开 sbp 文件 " << sbpPath << " 失败"<< std::endl;
+            oss << "打开 sbp 文件 " << sbpPath << " 失败" << std::endl;
             throw std::runtime_error(oss.str());
             return false;
         }
@@ -38,10 +38,10 @@ namespace OpenOceanKraken
     }
     bool read_flp_file(const std::string &envPath, OOK_parameters &params)
     {
-         // 生成对应的 flp 文件路径
+        // 生成对应的 flp 文件路径
         std::string flpPath;
         size_t dotPos = envPath.find_last_of('.'); // 找到最后一个.的位置
-        
+
         if (dotPos != std::string::npos && envPath.substr(dotPos) == ".env")
         {
             flpPath = envPath.substr(0, dotPos) + ".flp";
@@ -59,47 +59,52 @@ namespace OpenOceanKraken
             std::cerr << "打开 flp 文件 " << flpPath << " 失败" << std::endl;
             return false;
         }
-        
+
         std::string flp_line;
         int flp_line_num = 0;
         std::vector<std::string> flp_lines;
-        
+
         // 读取所有行并预处理
-        while (std::getline(flpFile, flp_line)) {
+        while (std::getline(flpFile, flp_line))
+        {
             flp_line_num++;
             // 移除注释（通常flp文件以!开头为注释）
             size_t comment_pos = flp_line.find('!');
-            if (comment_pos != std::string::npos) {
+            if (comment_pos != std::string::npos)
+            {
                 flp_line = flp_line.substr(0, comment_pos);
             }
-            
+
             // 去除首尾空白字符
             flp_line.erase(0, flp_line.find_first_not_of(" \t\r\n"));
             flp_line.erase(flp_line.find_last_not_of(" \t\r\n") + 1);
 
-            // 去掉单引号 ' 
+            // 去掉单引号 '
             flp_line.erase(std::remove(flp_line.begin(), flp_line.end(), '\''), flp_line.end());
-            
-            if (!flp_line.empty()) {
+
+            if (!flp_line.empty())
+            {
                 flp_lines.push_back(flp_line);
             }
         }
-        
+
         flpFile.close();
-        if (flp_lines.empty()) {
+        if (flp_lines.empty())
+        {
             std::cerr << "Flp 文件为空或只包含注释: " << flpPath << std::endl;
             return false;
         }
 
         // 解析flp文件
-        try {
+        try
+        {
             size_t line_idx = 0;
             // env的第1行：标题行无需读取
             line_idx++;
             // 第2行：SOURCE OPTION 声源选项
             if (line_idx < flp_lines.size())
             {
-                char option1,option2,option3,option4;
+                char option1, option2, option3, option4;
                 std::istringstream iss(flp_lines[line_idx++]);
                 if (iss >> option1)
                 {
@@ -162,7 +167,6 @@ namespace OpenOceanKraken
             for (int i = 0; i < 3 && line_idx < flp_lines.size(); ++i)
                 line_idx++;
 
-
             // 第6行：接收器水平个数
             if (line_idx < flp_lines.size())
             {
@@ -221,7 +225,7 @@ namespace OpenOceanKraken
             if (Ro.size() == 1 && Ro(0) == 0.0)
             {
                 Ro.resize(2);
-                Ro << 0.0,0.0;
+                Ro << 0.0, 0.0;
                 params.Pos.Ro = Ro;
                 params.Pos.is_Linspace_Ro = true;
             }
@@ -238,7 +242,6 @@ namespace OpenOceanKraken
 
             params.Pos.GridType = Grid_Mode::MODE_R_Rectangular;
             params.runMode = Run_Mode::MODE_B_Both;
-
         }
         catch (const std::exception &e)
         {
@@ -251,8 +254,8 @@ namespace OpenOceanKraken
 
     bool read_refCoef_file(const std::string &envPath, OOK_parameters &params, std::string pattern)
     {
-        int trc_err_line = 0; //行数计数器，出错时抛出行数
-        std::string refCoefPath = envPath.substr(0, envPath.length() - 4) + pattern; //打开同名trc文件
+        int trc_err_line = 0;                                                        // 行数计数器，出错时抛出行数
+        std::string refCoefPath = envPath.substr(0, envPath.length() - 4) + pattern; // 打开同名trc文件
         std::ifstream refCoefFile(refCoefPath);
         if (!refCoefFile.is_open())
         {
@@ -264,13 +267,14 @@ namespace OpenOceanKraken
         {
             int Npts;
             refCoefFile >> Npts;
-            std::vector<double> thetas(Npts),Rs(Npts),phis(Npts);
-            if (pattern == ".trc")  
+            std::vector<double> thetas(Npts), Rs(Npts), phis(Npts);
+            if (pattern == ".trc")
             {
                 // .trc 文件是顶部反射系数文件
                 params.ReflectionCoef.RTop.resize(Npts);
-                for (int i = 0; i < Npts; i++) {
-                    refCoefFile >> params.ReflectionCoef.RTop(i).theta ;
+                for (int i = 0; i < Npts; i++)
+                {
+                    refCoefFile >> params.ReflectionCoef.RTop(i).theta;
                     refCoefFile >> params.ReflectionCoef.RTop(i).R;
                     refCoefFile >> params.ReflectionCoef.RTop(i).phi;
                 }
@@ -279,8 +283,9 @@ namespace OpenOceanKraken
             {
                 // .brc 文件是底部反射系数文件
                 params.ReflectionCoef.RBot.resize(Npts);
-                for (int i = 0; i < Npts; i++) {
-                    refCoefFile >> params.ReflectionCoef.RBot(i).theta ;
+                for (int i = 0; i < Npts; i++)
+                {
+                    refCoefFile >> params.ReflectionCoef.RBot(i).theta;
                     refCoefFile >> params.ReflectionCoef.RBot(i).R;
                     refCoefFile >> params.ReflectionCoef.RBot(i).phi;
                 }
@@ -291,7 +296,7 @@ namespace OpenOceanKraken
                 return false;
             }
         }
-        catch(const std::exception& e)
+        catch (const std::exception &e)
         {
             std::cerr << "反射系数文件时格式错误:" << refCoefPath << std::endl;
             std::cerr << e.what() << '\n';
@@ -299,85 +304,55 @@ namespace OpenOceanKraken
         refCoefFile.close();
         return true;
     }
-    bool read_env_file(const std::string &envPath, OOK_parameters &params)
+
+    // 解析单个环境的所有行
+    static bool parse_single_env(const std::vector<std::string>& lines,
+                                 size_t& line_idx,
+                                 OOK_parameters& params,
+                                 const std::string& envPath)
     {
-        std::ifstream file(envPath);
-        if (!file.is_open()) {
-            std::cerr << "无法打开 env 文件: " << envPath << std::endl;
-            return false;
-        }
-        
-        std::string line;
-        int line_num = 0;
-        std::vector<std::string> lines;
-        
-        // 读取所有行并预处理
-        while (std::getline(file, line)) {
-            line_num++;
-            
-            // 移除注释（通常env文件以!开头为注释）
-            size_t comment_pos = line.find('!');
-            if (comment_pos != std::string::npos) {
-                line = line.substr(0, comment_pos);
-            }
-            
-            // 去除首尾空白字符
-            line.erase(0, line.find_first_not_of(" \t\r\n"));
-            line.erase(line.find_last_not_of(" \t\r\n") + 1);
-
-            // 去掉单引号 ' 
-            line.erase(std::remove(line.begin(), line.end(), '\''), line.end());
-            
-            if (!line.empty()) {
-                lines.push_back(line);
-            }
-        }
-        
-        file.close();
-        
-        if (lines.empty()) {
-            std::cerr << "Env 文件为空或只包含注释: " << envPath << std::endl;
-            return false;
-        }
-        
-        try {
-            size_t line_idx = 0;
-
-            // 初始化 sspInput[0] 和其内部的 layers[0]（这里存在一定的问题，需要修改一下)
+        try
+        {
+            // 初始化 sspInput[0] 和其内部的 layers[0]
             params.sspInput.resize(1);
             params.sspInput[0].Range = 0.0;
             params.sspInput[0].layers.resize(1);
-            
+
             // 第1行: 标题
-            if (line_idx < lines.size()) {
+            if (line_idx < lines.size())
+            {
                 params.Title = lines[line_idx++];
             }
-            
+
             // 第2行: 频率
-            if (line_idx < lines.size()) {
-                std::istringstream iss(lines[line_idx++]);             
+            if (line_idx < lines.size())
+            {
+                std::istringstream iss(lines[line_idx++]);
                 iss >> params.freqinfo.freq;
                 params.freqinfo.Nfreq = 1;
-                }
-            
+            }
+
             // 第3行: 介质层数
-            if (line_idx < lines.size()) {
+            if (line_idx < lines.size())
+            {
                 std::istringstream iss(lines[line_idx++]);
                 int val;
-                if (iss >> val) {
+                if (iss >> val)
+                {
                     params.NMediaMax = static_cast<int>(val);
                 }
-                else {
+                else
+                {
                     std::cerr << "第3行: 介质层数格式错误" << std::endl;
                     return false;
                 }
             }
 
             // 第4行：海面选项（TOP OPTION）
-            if (line_idx < lines.size()) {
+            if (line_idx < lines.size())
+            {
                 std::istringstream iss(lines[line_idx++]);
-                char option1,option2,option3,option4;
-
+                char option1, option2, option3, option4;
 
                 if (iss >> option1 >> option2 >> option3)
                 {
@@ -492,9 +467,9 @@ namespace OpenOceanKraken
                 double nmesh, roughness, depth;
                 if (iss >> nmesh >> roughness >> depth)
                 {
-                    params.sspInput[0].layers[0].nmesh = static_cast<int>(nmesh);           // 竖直网格层个数
-                    params.sspInput[0].layers[0].sigma = roughness;                         // 界面粗糙度
-                    params.sspInput[0].HSBot.Depth = depth;                                 // 海水深度
+                    params.sspInput[0].layers[0].nmesh = static_cast<int>(nmesh);
+                    params.sspInput[0].layers[0].sigma = roughness;
+                    params.sspInput[0].HSBot.Depth = depth;
                 }
                 else
                 {
@@ -504,28 +479,37 @@ namespace OpenOceanKraken
             }
 
             // 声速剖面
-            struct Point {
-                double z=0, alphaR=0, betaR=0, rho=1, alphaI=0, betaI=0;
+            struct Point
+            {
+                double z = 0, alphaR = 0, betaR = 0, rho = 1, alphaI = 0, betaI = 0;
             };
             std::vector<Point> points;
             Point last_p;
 
-            while (line_idx < lines.size()) {
+            while (line_idx < lines.size())
+            {
                 std::istringstream iss(lines[line_idx++]);
-                Point p = last_p; // 继承上一个点
+                Point p = last_p;
                 int count = 0;
-                if (iss >> p.z) count++;
-                if (iss >> p.alphaR) count++;
-                if (iss >> p.betaR) count++;
-                if (iss >> p.rho) count++;
-                if (iss >> p.alphaI) count++;
-                if (iss >> p.betaI) count++;
+                if (iss >> p.z)
+                    count++;
+                if (iss >> p.alphaR)
+                    count++;
+                if (iss >> p.betaR)
+                    count++;
+                if (iss >> p.rho)
+                    count++;
+                if (iss >> p.alphaI)
+                    count++;
+                if (iss >> p.betaI)
+                    count++;
 
-                if (count < 2) {
-                    if (!iss) line_idx--;
+                if (count < 2)
+                {
+                    if (!iss)
+                        line_idx--;
                     break;
                 }
-                // 有效剖面点
                 points.push_back(p);
                 last_p = p;
             }
@@ -538,7 +522,7 @@ namespace OpenOceanKraken
             params.sspInput[0].layers[0].alphaI.resize(npts);
             params.sspInput[0].layers[0].betaI.resize(npts);
 
-            for (int i = 0; i < npts; ++i) // 赋值
+            for (int i = 0; i < npts; ++i)
             {
                 params.sspInput[0].layers[0].z[i] = points[i].z;
                 params.sspInput[0].layers[0].alphaR[i] = points[i].alphaR;
@@ -548,12 +532,12 @@ namespace OpenOceanKraken
                 params.sspInput[0].layers[0].betaI[i] = points[i].betaI;
             }
 
-            params.sspInput[0].layers[0].npts = npts; // 声速剖面层数
-            if (params.sspInput[0].layers[0].nmesh == 0){
-                params.sspInput[0].layers[0].nmesh = static_cast<int>(points.size()); 
+            params.sspInput[0].layers[0].npts = npts;
+            if (params.sspInput[0].layers[0].nmesh == 0)
+            {
+                params.sspInput[0].layers[0].nmesh = static_cast<int>(points.size());
             }
 
-            
             // 海底半空间
             char bottomType;
             double dummy;
@@ -561,7 +545,7 @@ namespace OpenOceanKraken
             {
                 std::istringstream iss(lines[line_idx++]);
                 iss >> bottomType;
-                switch(bottomType)
+                switch (bottomType)
                 {
                 case 'A':
                     params.sspInput[0].HSBot.BC = BC_Mode::MODE_A_Half_space;
@@ -583,11 +567,10 @@ namespace OpenOceanKraken
                     params.sspInput[0].HSBot.BC = BC_Mode::MODE_P_Precomputed;
                     break;
                 }
-
             }
 
-            if (params.sspInput[0].HSBot.BC != BC_Mode::MODE_F_File){
-                // 海底界面参数
+            if (params.sspInput[0].HSBot.BC != BC_Mode::MODE_F_File)
+            {
                 Point bottom_p;
                 if (line_idx < lines.size())
                 {
@@ -614,7 +597,7 @@ namespace OpenOceanKraken
             {
                 std::istringstream iss(lines[line_idx++]);
                 iss >> Rmax;
-                params.Rmax = Rmax*1e3;
+                params.Rmax = Rmax * 1e3;
             }
 
             // 声源个数
@@ -625,19 +608,17 @@ namespace OpenOceanKraken
             }
 
             // 声源深度
-            // 判断一下，这里的声源深度个数与声源数量是否一致，不一致则进行等间距插值
-            std::vector<double> temp_sz; // 临时存所有声源深度
+            std::vector<double> temp_sz;
             if (line_idx < lines.size())
             {
                 double val;
                 std::istringstream iss(lines[line_idx++]);
                 while (iss >> val)
                 {
-                    temp_sz.push_back(val); // 先把一行所有值读完
+                    temp_sz.push_back(val);
                 }
             }
             params.Pos.Sz = Eigen::Map<Eigen::VectorXd>(temp_sz.data(), temp_sz.size());
-            // 如果声源深度个数与声源数量不一致，进行等间距插值
             if (params.Pos.Sz.size() != params.Pos.NSz)
             {
                 params.Pos.is_Linspace_Sz = true;
@@ -654,20 +635,19 @@ namespace OpenOceanKraken
                 iss >> params.Pos.NRz;
             }
 
-            // 接收器深度，判断同声源深度
-            std::vector<double> temp_rz; // 临时存这一行所有数字
+            // 接收器深度
+            std::vector<double> temp_rz;
             if (line_idx < lines.size())
             {
                 double val;
                 std::istringstream iss(lines[line_idx++]);
                 while (iss >> val)
                 {
-                    temp_rz.push_back(val); // 先把一行所有值读完
+                    temp_rz.push_back(val);
                 }
             }
 
             params.Pos.Rz = Eigen::Map<Eigen::VectorXd>(temp_rz.data(), temp_rz.size());
-            // 如果接收器深度个数与接收器数量不一致，进行等间距插值
             if (params.Pos.Rz.size() != params.Pos.NRz)
             {
                 params.Pos.is_Linspace_Rz = true;
@@ -683,25 +663,84 @@ namespace OpenOceanKraken
                 std::cerr << "警告: flp 文件解析失败，使用已解析的 env 参数继续" << std::endl;
             }
 
-            // 如果Rmax<=0（env未赋值或赋值为0），设置为最大接收距离+10000m
-            if (params.Rmax <= 0.0 && params.Pos.Rr.size() > 0)
-            {
-                params.Rmax = params.Pos.Rr.maxCoeff() + 10000.0;
-            }
-
             return true;
-        } 
-        catch (const std::exception& e) {
-            std::cerr << "解析 env 文件时出错，行号 " << line_num << ": " << e.what() << std::endl;
+        }
+        catch (const std::exception &e)
+        {
+            std::cerr << "解析 env 文件时出错，行号 " << line_idx << ": " << e.what() << std::endl;
             return false;
         }
     }
-    
-    // 从env文件创建OOK_parameters对象
-    // OOK_parameters env_to_params(const std::string &envPath)
-    // {
-    //     OOK_parameters params;
-    //     read_env_file(envPath, params);
-    //     return params;
-    // }
+
+    bool read_env_file(const std::string &envPath, OOK_parameters &params)
+    {
+        std::ifstream file(envPath);
+        if (!file.is_open())
+        {
+            std::cerr << "无法打开 env 文件: " << envPath << std::endl;
+            return false;
+        }
+
+        std::string line;
+        int line_num = 0;
+        std::vector<std::string> lines;
+
+        // 读取所有行并预处理
+        while (std::getline(file, line))
+        {
+            line_num++;
+
+            // 移除注释（通常env文件以!开头为注释）
+            size_t comment_pos = line.find('!');
+            if (comment_pos != std::string::npos)
+            {
+                line = line.substr(0, comment_pos);
+            }
+
+            // 去除首尾空白字符
+            line.erase(0, line.find_first_not_of(" \t\r\n"));
+            line.erase(line.find_last_not_of(" \t\r\n") + 1);
+
+            // 去掉单引号 '
+            line.erase(std::remove(line.begin(), line.end(), '\''), line.end());
+
+            if (!line.empty())
+            {
+                lines.push_back(line);
+            }
+        }
+
+        file.close();
+
+        if (lines.empty())
+        {
+            std::cerr << "Env 文件为空或只包含注释: " << envPath << std::endl;
+            return false;
+        }
+
+        // 解析env文件
+        size_t line_idx = 0;
+        params.sspInput.clear();
+
+        while (line_idx < lines.size())
+        {
+            OOK_parameters single_params;
+            if (!parse_single_env(lines, line_idx, single_params, envPath))
+            {
+                return false;
+            }
+
+            // 第一个环境：拷贝所有字段
+            if (params.sspInput.empty())
+            {
+                params = single_params;
+                params.sspInput.clear();
+            }
+
+            // 每个环境追加 sspInput
+            params.sspInput.push_back(single_params.sspInput[0]);
+        }
+
+        return true;
+    }
 }
