@@ -5,6 +5,8 @@
 
 namespace OpenOceanKraken
 {
+    // 读取 flp 文件（声源/接收器/运行选项）
+    bool read_flp_file(const std::string &envPath, OOK_parameters &params);
     // 读取 env 文件并填充 OOK_parameters
     bool read_env_file(const std::string &envPath, OOK_parameters &params);
 
