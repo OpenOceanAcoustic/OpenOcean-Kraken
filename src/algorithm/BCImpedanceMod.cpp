@@ -18,8 +18,6 @@ void BCImpedance(const size_t& iprof, const double& x, const bool& isTop, std::c
     ReflectionCoef RInt;
     double omega = 2 * pi * params.freqinfo.freq;
     double omega2 = SQ(omega);
-    double hFirstAcoustic = trid.h(0);
-    double hFirstAcoustic2 = SQ(hFirstAcoustic);
     HSInfo HS = params.SSP.at(iprof).HSTop;
 
     iPower = 0;
@@ -30,10 +28,10 @@ void BCImpedance(const size_t& iprof, const double& x, const bool& isTop, std::c
 
         if (params.SSP[iprof].FirstAcoustic > -1)
         {
-            iTop      = trid.Loc( params.SSP[iprof].FirstAcoustic ) + trid.N( params.SSP[iprof].FirstAcoustic );
+            iTop      = trid.Loc( params.SSP[iprof].FirstAcoustic );
             rhoInside = trid.rho(iTop);
-            cInside = std::sqrt(omega2 * hFirstAcoustic2) /
-                      (2.0 + trid.B1(0));
+            cInside = std::sqrt(omega2 * SQ(trid.h(params.SSP[iprof].FirstAcoustic)) /
+                      (2.0 + trid.B1(iTop)));
         }
     }
     else
@@ -42,8 +40,8 @@ void BCImpedance(const size_t& iprof, const double& x, const bool& isTop, std::c
         {
             iBot      = trid.Loc( params.SSP[iprof].LastAcoustic ) + trid.N( params.SSP[iprof].LastAcoustic );
             rhoInside = trid.rho(iBot);
-            cInside = std::sqrt(omega2 * hFirstAcoustic2 /
-                      (2.0 + trid.B1(trid.B1.size() - 1)));
+            cInside = std::sqrt(omega2 * SQ(trid.h(params.SSP[iprof].LastAcoustic)) /
+                      (2.0 + trid.B1(iBot)));
         }
         HS = params.SSP.at(iprof).HSBot;//获取底部边界条件
     }
@@ -154,7 +152,7 @@ void BCImpedance(const size_t& iprof, const double& x, const bool& isTop, std::c
     // 穿过弹性层传播
     if (isTop)
     {
-        if (params.SSP[iprof].FirstAcoustic > 1)
+        if (params.SSP[iprof].FirstAcoustic > 0)
         { // 从顶部向下传播
             for (int im = 0; im < params.SSP[iprof].FirstAcoustic; ++im)
             {
@@ -191,7 +189,7 @@ void ElasticUP(const double& x, Eigen::VectorXd &yV, int &iPower, const int& Med
     double two_h = 2.0 * h;
     double four_h_x = 4.0 * h * x;
     int j = trid.Loc(Medium) + trid.N(Medium); // C++是0-based
-    double xB3 = x * trid.B3(j) - trid.B1(j);
+    double xB3 = x * trid.B3(j) - trid.rho(j);
 
     zV(0) = yV(0) - 0.5 * (trid.B1(j) * yV(3) - trid.B2(j) * yV(4));
     zV(1) = yV(1) - 0.5 * (-trid.rho(j) * yV(3) - xB3 * yV(4));
@@ -200,7 +198,7 @@ void ElasticUP(const double& x, Eigen::VectorXd &yV, int &iPower, const int& Med
     zV(4) = yV(4) - 0.5 * (trid.rho(j) * yV(0) - trid.B1(j) * yV(1) - four_h_x * yV(2));
 
     // 改进的中点法
-    for (size_t ii = trid.N(Medium) - 1; ii >= 0; --ii)
+    for (int ii = trid.N(Medium) - 1; ii >= 0; --ii)
     {
         j--;
 
@@ -216,7 +214,7 @@ void ElasticUP(const double& x, Eigen::VectorXd &yV, int &iPower, const int& Med
             yV(k) = zV(k);
         }
 
-        xB3 = x * trid.B3(j) - trid.B1(j);
+        xB3 = x * trid.B3(j) - trid.rho(j);
 
         zV(0) = xV(0) - (trid.B1(j) * yV(3) - trid.B2(j) * yV(4));
         zV(1) = xV(1) - (-trid.rho(j) * yV(3) - xB3 * yV(4));
@@ -266,7 +264,7 @@ void ElasticDN(const double x, Eigen::VectorXd &yV, int &iPower, const int& Medi
     double two_h = 2.0 * trid.h(Medium);
     double four_h_x = 4.0 * trid.h(Medium) * x;
     int j = trid.Loc(Medium); // C++是0-based
-    double xB3 = x * trid.B3(j) - trid.B1(j);
+    double xB3 = x * trid.B3(j) - trid.rho(j);
 
     zV(0) = yV(0) + 0.5 * (trid.B1(j) * yV(3) - trid.B2(j) * yV(4));
     zV(1) = yV(1) + 0.5 * (-trid.rho(j) * yV(3) - xB3 * yV(4));
@@ -291,7 +289,7 @@ void ElasticDN(const double x, Eigen::VectorXd &yV, int &iPower, const int& Medi
             yV(k) = zV(k);
         }
 
-        xB3 = x * trid.B3(j) - trid.B1(j);
+        xB3 = x * trid.B3(j) - trid.rho(j);
 
         zV(0) = xV(0) + (trid.B1(j) * yV(3) - trid.B2(j) * yV(4));
         zV(1) = xV(1) + (-trid.rho(j) * yV(3) - xB3 * yV(4));

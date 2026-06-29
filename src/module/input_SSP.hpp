@@ -101,7 +101,12 @@ namespace OpenOceanKraken
                 }
                 // 每一层都需要+1
                 NMeshAll += ssp.NMedia;
-                NMeshMaxVec(iprof) = NMeshAll * params.mesh.NV[1]; // iset=1时最大的网格数
+                int maxNV = params.mesh.NV[0];
+                for (int iset = 1; iset < params.mesh.NSets && iset < 5; ++iset)
+                {
+                    maxNV = std::max(maxNV, params.mesh.NV[iset]);
+                }
+                NMeshMaxVec(iprof) = NMeshAll * maxNV;
             }
             params.NMeshMax = NMeshMaxVec.maxCoeff(); // 所有NProf中最大的网格数
             params.NMediaMax = NMediaVec.maxCoeff();  // 所有NProf中最大的媒质数
@@ -184,7 +189,7 @@ namespace OpenOceanKraken
                 // 可选：填 depth 为该层最大深度（假设 z 单调增）
                 if (layer.npts > 0)
                 {
-                    dst.depth[i] = layer.z.maxCoeff(); // 或 layer.z(layer.npts - 1)
+                    dst.depth[i] = layer.z.maxCoeff() - layer.z.minCoeff();
                 }
                 else
                 {

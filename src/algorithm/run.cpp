@@ -47,7 +47,7 @@ namespace OpenOceanKraken
         auto eigen = output.eigen[iprof];
         for (int isz = 0; isz < params.Pos.NSz; isz++)
         {
-            Evaluate(eigen, params, isz, iprof,output.u_AllSources, output.v_AllSources, output.h_AllSources);
+            Evaluate(eigen, params, isz, iprof, output.u_AllSources, output.v_AllSources, output.h_AllSources);
         }
     }
 
@@ -205,37 +205,70 @@ namespace OpenOceanKraken
 
         // 使用ZBRENT精化每个本征值
         isCountMode = false;
-        std::cout << "NumThreads: " << NumThreads << std::endl;
+        // 缓存求解结果（根值和是否成功）
+        std::vector<double> roots(M, 0.0);
+        std::vector<unsigned char> rootOK(M, 0);
 
         // 并行处理每个模态
         for (int threadId = 0; threadId < NumThreads; ++threadId)
         {
-            threadPool.enqueue_with_id("RunZBRENTX", [&NumThreads, &params, &eigen, &trid, &xL, &xR, M, iset, iprof, mode, isCountMode, threadId]()
+            threadPool.enqueue_with_id("RunZBRENTX", [&NumThreads, &params, &eigen, &trid, &xL, &xR, &roots, &rootOK, M, iset, iprof, mode, isCountMode, threadId]()
                                        {
             // 当前线程处理的任务 ID 满足 modeIdx % NumThreads == threadId
             for (int modeIdx = threadId; modeIdx < M; modeIdx += NumThreads)
             {
                 double local_x, local_x1, local_x2, local_Eps, local_Delta;
                 int local_iPower = 0, local_modeCount = 0;
-                std::string local_ErrorMessage;
 
                 local_x1 = xL(modeIdx);
                 local_x2 = xR(modeIdx);
+                local_x = local_x1;
                 local_Eps = std::abs(local_x2) * std::pow(10.0, 2.0 - std::numeric_limits<double>::digits10);
                 
-                ZBRENTX(local_x, local_x1, local_x2, local_Eps, iset, iprof, mode, local_Delta, local_iPower, trid, params, eigen.EVMat, eigen.firstM, isCountMode, local_modeCount); // Brent求根法
+                bool ok = ZBRENTX(local_x, local_x1, local_x2, local_Eps, iset, iprof, mode, local_Delta, local_iPower, trid, params, eigen.EVMat, eigen.firstM, isCountMode, local_modeCount);
 
-                if (!local_ErrorMessage.empty())
+                // 直接判断 ok，不再判断 local_ErrorMessage
+                if (!ok)
                 {
-                    // 输出警告信息
+                    // 构造一个包含上下文的警告信息，因为具体的错误原因拿不到
+                    std::string warningMsg = "ZBRENTX 求解失败 (模态索引: " + std::to_string(modeIdx) +
+                                             ", 区间: [" + std::to_string(local_x1) +
+                                             ", " + std::to_string(local_x2) + "])";
+
+                    // 输出到日志或控制台
+                    std::cerr << "[WARNING] " << warningMsg << std::endl;
+
                 }
-                //std::cout << "EVMat.size() " << eigen.EVMat.size() << " modeIdx " << modeIdx << std::endl;
-                eigen.EVMat(iset * eigen.firstM + modeIdx) = local_x;
+                else
+                {
+                    roots[modeIdx] = local_x;
+                    rootOK[modeIdx] = 1;
+                }
             } });
         }
 
         // 等待所有ZBRENTX任务完成
         threadPool.wait_id("RunZBRENTX");
+
+        int validModes = 0;
+        for (int modeIdx = 0; modeIdx < M; ++modeIdx)
+        {
+            if (rootOK[modeIdx])
+            {
+                eigen.EVMat(iset * eigen.firstM + validModes) = roots[modeIdx];
+                ++validModes;
+            }
+        }
+        for (int modeIdx = validModes; modeIdx < M; ++modeIdx)
+        {
+            eigen.EVMat(iset * eigen.firstM + modeIdx) = 0.0;
+        }
+        if (validModes != M)
+        {
+            std::cout << "Warning in KRAKEN - Solve1 : Brent failed for "
+                      << (M - validModes) << " isolated mode bracket(s)" << std::endl;
+            eigen.M = validModes;
+        }
     }
 
     void Solve2(ThreadPool &threadPool, const int &NumThreads, const int &iset, const size_t &iprof, EigenParams &eigen, TridMtx &trid, const OOK_parameters &params)
@@ -543,7 +576,7 @@ namespace OpenOceanKraken
                 const double h_im = trid.h(im);
                 const double xh2 = x * SQ(h_im);
                 // 注意：rho 索引从 L+1 开始（因 z 从界面开始）
-                h_rho = h_im * trid.rho(L + 1);
+                h_rho = h_im * trid.rho(L);
 
                 if (im > first_ac)
                 {
@@ -680,7 +713,7 @@ namespace OpenOceanKraken
         int iPower, modeCount = 0, j, j1, L, L1;
         double omega = (2 * pi * params.freqinfo.freq);
         double omega2 = SQ(omega);
-        double x1, x2, DrhoDx = 0.0, DetaDx, SqNorm = 0.0, RN, ScaleFactor, Slow = 0.0; // rhoMedium, rho_omega_h2,
+        double x1, x2, DrhoDx = 0.0, DetaDx = 0.0, SqNorm = 0.0, RN, ScaleFactor, Slow = 0.0; // rhoMedium, rho_omega_h2,
         double rhoMedium, rho_omega_h2;
         std::complex<double> Perturbation_k = 0.0, Del, fTop1, gTop1, fTop2, gTop2, fBot1, gBot1, fBot2, gBot2;
         bool isTop = false, isComplex = false;
@@ -726,7 +759,7 @@ namespace OpenOceanKraken
             j += trid.N(im) - 1;
 
             SqNorm += trid.h(im) * Phi.segment(j1, j - j1 + 1).array().square().sum() / rhoMedium;
-            Slow += trid.h(im) * trid.B1.segment(j1, j - j1 + 1).array().square().sum() / rho_omega_h2;
+            Slow += trid.h(im) * ((trid.B1.segment(L1, L - L1 + 1).array() + 2.0) * Phi.segment(j1, j - j1 + 1).array().square()).sum() / rho_omega_h2;
             Perturbation_k += trid.h(im) * I1D * (trid.B1C.segment(L1, L - L1 + 1).array() * Phi.segment(j1, j - j1 + 1).array().square()).sum() / rhoMedium;
 
             // 底部边界：更新索引
@@ -753,11 +786,18 @@ namespace OpenOceanKraken
                         params, modeCount);
             Del = fBot2 / gBot2 - fBot1 / gBot1;
             Perturbation_k -= Del * SQ(Phi(j));
+            if (HSBot.BC == BC_Mode::MODE_A_Half_space)
+            {
+                std::complex<double> cp2 = SQ(HSBot.cp);
+                Slow += SQ(Phi(j)) / (2.0 * std::sqrt(x - std::real(omega2 / cp2))) /
+                        (HSBot.rho * std::real(cp2));
+            }
         }
 
         // Compute derivative of top admitance
         x1 = 0.9999999 * x;
         x2 = 1.0000001 * x;
+        isComplex = false;
         isTop = true;
         BCImpedance(iprof, x1, isTop, fTop1, gTop1, iPower, isComplex, trid,
                     params, modeCount);
@@ -806,10 +846,10 @@ namespace OpenOceanKraken
         auto HSBot = ssp_prof.HSBot;
 
         int j = 0, L = trid.Loc(ssp_prof.FirstAcoustic);
-        for (int im = ssp_prof.FirstAcoustic ; im <= ssp_prof.LastAcoustic; im++) // Loop over media
+        for (int im = ssp_prof.FirstAcoustic; im <= ssp_prof.LastAcoustic; im++) // Loop over media
         {
             // Calculate rho1, eta1Sq, Phi, U
-            if (im == ssp_prof.FirstAcoustic ) // Top properties
+            if (im == ssp_prof.FirstAcoustic) // Top properties
             {
                 switch (HSTop.BC)
                 {
@@ -855,7 +895,7 @@ namespace OpenOceanKraken
                 {
                 case BC_Mode::MODE_A_Half_space: // Acousto-elastic
                     rho2 = HSBot.rho;
-                    eta2Sq = omega2 / HSBot.rho - x;
+                    eta2Sq = omega2 / SQ(HSBot.cp) - x;
                     break;
                 case BC_Mode::MODE_V_Vacuum: // Vacuum
                     rho2 = 1e-9;

@@ -76,9 +76,9 @@ namespace OpenOceanKraken
         std::complex<float> *get_u_AllSources();  // 获取全部声源的复声压
         std::complex<float> *get_v_AllSources();  // 获取全部声源的垂直振速
         std::complex<float> *get_h_AllSources();  // 获取全部声源的水平振速
-        void export_result(std::string filename); // 导出结果到文件
+        void export_result(std::string filename); // 导出振速结果到文件
         void export_mod(std::string filename);    // 导出本征值和本征函数到文件
-        void export_shd(std::string filename, int dataType);
+        void export_shd(std::string filename, int dataType); // 导出声场到文件
         OOK_parameters &getParams() const;                     // 获取参数的引用
         const OOK_parameters &getParams_const() const;   // 获取参数的副本
         OOK_output &getOutput() const;                   // 获取输出的引用

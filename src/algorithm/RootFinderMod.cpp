@@ -60,13 +60,14 @@ namespace OpenOceanKraken
         // ErrorMessage = "Failure to converge in RootFinderSecant";
     }
 
-    void ZBRENTX(double &x, double &a, double &b, const double &t,
+    bool ZBRENTX(double &x, double &a, double &b, const double &t,
                  const int &iset, const size_t &iprof, const int &mode, double &Delta, int &iPower, TridMtx &trid,
                  const OOK_parameters &params, Eigen::VectorXd &EVMat, const int &firstM, const bool &isCountMode, int &modeCount)
     {
         int iExpA, iExpB, iExpC;
         const double MACHEP = 1.0E-16;
         const double TEN = 10.0;
+        const int MaxIteration = 100;
 
         double fa, fb, fc, F1, F2, C, D, E, M, P, Q, R, S, TOL;
 
@@ -78,7 +79,8 @@ namespace OpenOceanKraken
         if ((fa > 0.0 && fb > 0.0) || (fa < 0.0 && fb < 0.0))
         {
             // errorMessage = "Function sign is the same at the interval endpoints";
-            return;
+            x = a;
+            return false;
         }
 
         // 内部根初始化
@@ -99,7 +101,7 @@ namespace OpenOceanKraken
             F2 = fb * std::pow(TEN, iExpB - iExpC);
         }
 
-        while (true)
+        for (int iteration = 0; iteration < MaxIteration; ++iteration)
         {
 
             if (std::abs(F1) < std::abs(F2))
@@ -126,7 +128,8 @@ namespace OpenOceanKraken
             // 检查是否收敛
             if (std::abs(M) <= TOL || fb == 0.0)
             {
-                break;
+                x = b;
+                return true;
             }
 
             // 检查是否需要强制二分法
@@ -241,6 +244,7 @@ namespace OpenOceanKraken
 
         // 返回找到的零点
         x = b;
+        return false;
     }
 
     void AcousticLayers(const size_t &iprof, double x, double &f, double &g, int &iPower, TridMtx &trid, const OOK_parameters &params, const bool &isCountMode, int &modeCount)

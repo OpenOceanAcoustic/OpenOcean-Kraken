@@ -36,7 +36,7 @@ namespace OpenOceanKraken
     constexpr std::complex<float> I1(0, 1);
     constexpr std::complex<double> I1D(0.0, 1.0);
     // 定义最大迭代次数
-    constexpr int MAXIT = 1;
+    constexpr int MAXIT = 8;
 
     // 外推系数
     constexpr int NSet = 5;

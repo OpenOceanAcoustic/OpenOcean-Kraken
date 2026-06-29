@@ -1,5 +1,7 @@
 #include <iostream>
 #include "OpenOceanKrakenInterface.h"
+#include "ThreadPool.h"
+
 int main()
 {
 
@@ -12,8 +14,9 @@ int main()
         OpenOceanKraken::Interface kraken_interface;
 
         // 测试env文件转换功能
-        std::string envFilePath = "E:\\my_project\\env_for_OOKtest\\stepK_rd.env";
-        std::string jsonSavePath = "E:\\my_project\\OOK\\default_params.json";
+        std::string envName = "arcticK";
+        std::string envFilePath = "E:\\my_project\\env_for_OOKtest\\" + envName + ".env";
+        std::string resultSavePath = "E:\\my_project\\test_in_matlab\\env_test_OOK\\";
         std::cout << "正在加载 env 文件: " << envFilePath << std::endl;
         bool success = kraken_interface.from_env(envFilePath);
         if (!success) {
@@ -22,29 +25,27 @@ int main()
         }
 
         // 将 env 参数转为 JSON 并保存
-        kraken_interface.to_json(jsonSavePath);
+        kraken_interface.to_json(resultSavePath + envName + ".json");
+        std::cout << "JSON export successful: " << resultSavePath + envName + ".json" << std::endl;
+
+        // 设置线程池和线程数
+        int numThreads = kraken_interface.getHardwareThreads();
+        kraken_interface.setNumThreads(numThreads);
+        ThreadPool threadPool(numThreads);
+        kraken_interface.setThreadPool(threadPool);
+        // std::cout << "向量：\n" << kraken_interface.getParams().Pos.Rr << std::endl;
+
+        // 运行声场计算
+        kraken_interface.run();
+        std::cout << "环境运行完成" << std::endl;
+        // 导出声场
+        kraken_interface.export_shd(resultSavePath + envName, 1);
+        std::cout << "声场结果导出完成" << std::endl;
 
     } catch (const std::exception& e) {
         std::cerr << "运行出错: " << e.what() << std::endl;
         return 1;
     }
-
-
-    // kraken_interface.run();
-    // kraken_interface.export_result("result");
-    // bool success = kraken_interface.to_json("result.json"); 
-    // if (success)
-    // {
-    //     std::cout << "JSON export successful" << std::endl;
-    // }
-    // else
-    // {
-    //     std::cout << "JSON export failed" << std::endl;
-    // }
-
-    //    创建接口实例
-    // OpenOceanKraken::Interface kraken_interface;
-
 
     return 0;
 }

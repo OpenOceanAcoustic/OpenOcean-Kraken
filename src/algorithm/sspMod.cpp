@@ -48,26 +48,27 @@ namespace OpenOceanKraken
             // 确定介质位置
             int offset_start = SSP.get_media_start(iMedium);
             int offset_end = SSP.get_media_end(iMedium);
+            int offset_last = offset_end - 1;
             int current_medium_Nmesh = SSP.get_media_Nmesh(iMedium); // 当前介质网格点数
             int current_medium_size = SSP.get_media_size(iMedium);   // 当前介质点数
             // 计算当前介质在全局插值数组中的起始位置
             int global_offset = SSP.get_global_interp_offset(iMedium);
             // 计算步长
-            double h = (SSP.z(offset_end) - SSP.z(offset_start)) / current_medium_Nmesh;
+            double h = (SSP.z(offset_last) - SSP.z(offset_start)) / current_medium_Nmesh;
             int Lay = 0; // 层索引
             // trid.cp_int.resize(SSP.N + 1);
             // trid.cs_int.resize(SSP.N + 1);
             // trid.rho_int.resize(SSP.N + 1);
 
             // 遍历每个分层点
-            for (int local_iz = 0; local_iz <= current_medium_Nmesh + 1; local_iz++)
+            for (int local_iz = 0; local_iz <= current_medium_Nmesh; local_iz++)
             {
                 // 计算当前深度
                 double z = SSP.z(offset_start) + local_iz * h;
                 // 确保最后一个点的深度准确
                 if (local_iz == current_medium_Nmesh)
                 {
-                    z = SSP.z(offset_end);
+                    z = SSP.z(offset_last);
                 }
 
                 // 找到当前深度所在的层

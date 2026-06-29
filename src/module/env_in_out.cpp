@@ -175,7 +175,6 @@ namespace OpenOceanKraken
             }
 
             // 第7行：接收器距离范围
-            Eigen::VectorXd Rr;
             std::vector<double> temp_rr; // 临时存所有接收器距离范围
             if (line_idx < flp_lines.size())
             {
@@ -186,16 +185,15 @@ namespace OpenOceanKraken
                     temp_rr.push_back(val); // 先把一行所有值读完
                 }
             }
-            Rr = Eigen::Map<Eigen::VectorXd>(temp_rr.data(), temp_rr.size());
-            if (Rr.size() != params.Pos.NRr)
+            if (temp_rr.size() != params.Pos.NRr)
             {
                 params.Pos.is_Linspace_Rr = true;
-                params.Pos.Rr = Rr * 1e3;
+                params.Pos.Rr = Eigen::VectorXd::LinSpaced(params.Pos.NRr, temp_rr[0], temp_rr[temp_rr.size() - 1]) * 1e3;
             }
             else
             {
                 params.Pos.is_Linspace_Rr = false;
-                params.Pos.Rr = Rr;
+                params.Pos.Rr = Eigen::Map<Eigen::VectorXd>(temp_rr.data(), temp_rr.size()) * 1e3;
             }
 
             // 第8~11行:NSz,Sz,NRz,Rz，均已经赋值过此处跳过
@@ -210,7 +208,6 @@ namespace OpenOceanKraken
             }
 
             // 第13行：接收器在水平方向的偏移（倾斜阵）
-            Eigen::VectorXd Ro;
             std::vector<double> temp_ro; // 临时存所有接收器距离范围
             if (line_idx < flp_lines.size())
             {
@@ -221,23 +218,20 @@ namespace OpenOceanKraken
                     temp_ro.push_back(val); // 先把一行所有值读完
                 }
             }
-            Ro = Eigen::Map<Eigen::VectorXd>(temp_ro.data(), temp_ro.size());
-            if (Ro.size() == 1 && Ro(0) == 0.0)
+            if (temp_ro.size() == 1 && temp_ro[0] == 0.0)
             {
-                Ro.resize(2);
-                Ro << 0.0, 0.0;
-                params.Pos.Ro = Ro;
+                params.Pos.Ro = Eigen::VectorXd::Zero(params.Pos.NRo);
                 params.Pos.is_Linspace_Ro = true;
             }
-            else if (Ro.size() != params.Pos.NRo)
+            else if (temp_ro.size() != params.Pos.NRo)
             {
                 params.Pos.is_Linspace_Ro = true;
-                params.Pos.Ro = Ro;
+                params.Pos.Ro = Eigen::VectorXd::LinSpaced(params.Pos.NRo, temp_ro[0], temp_ro[temp_ro.size() - 1]);
             }
             else
             {
                 params.Pos.is_Linspace_Ro = false;
-                params.Pos.Ro = Ro;
+                params.Pos.Ro = Eigen::Map<Eigen::VectorXd>(temp_ro.data(), temp_ro.size());
             }
 
             params.Pos.GridType = Grid_Mode::MODE_R_Rectangular;
@@ -618,14 +612,15 @@ namespace OpenOceanKraken
                     temp_sz.push_back(val);
                 }
             }
-            params.Pos.Sz = Eigen::Map<Eigen::VectorXd>(temp_sz.data(), temp_sz.size());
-            if (params.Pos.Sz.size() != params.Pos.NSz)
+            if (temp_sz.size() != params.Pos.NSz)
             {
                 params.Pos.is_Linspace_Sz = true;
+                params.Pos.Sz = Eigen::VectorXd::LinSpaced(params.Pos.NSz, temp_sz[0], temp_sz[temp_sz.size() - 1]);
             }
             else
             {
                 params.Pos.is_Linspace_Sz = false;
+                params.Pos.Sz = Eigen::Map<Eigen::VectorXd>(temp_sz.data(), temp_sz.size());
             }
 
             // 接收器深度个数
@@ -646,15 +641,15 @@ namespace OpenOceanKraken
                     temp_rz.push_back(val);
                 }
             }
-
-            params.Pos.Rz = Eigen::Map<Eigen::VectorXd>(temp_rz.data(), temp_rz.size());
-            if (params.Pos.Rz.size() != params.Pos.NRz)
+            if (temp_rz.size() != params.Pos.NRz)
             {
                 params.Pos.is_Linspace_Rz = true;
+                params.Pos.Rz = Eigen::VectorXd::LinSpaced(params.Pos.NRz, temp_rz[0], temp_rz[temp_rz.size() - 1]);
             }
             else
             {
                 params.Pos.is_Linspace_Rz = false;
+                params.Pos.Rz = Eigen::Map<Eigen::VectorXd>(temp_rz.data(), temp_rz.size());
             }
 
             read_flp_file(envPath, params);
@@ -739,8 +734,7 @@ namespace OpenOceanKraken
 
             // 每个环境追加 sspInput
             params.sspInput.push_back(single_params.sspInput[0]);
-        }
-
+        }       
         return true;
     }
 }

@@ -47,7 +47,7 @@ namespace OpenOceanKraken
     Interface::Interface()
         : params(new OOK_parameters()),
           output(new OOK_output()),
-          intm_TridMtx(nullptr),  // 初始化为 nullptr，避免释放内存时其为野指针导致内存删除报错
+          intm_TridMtx(nullptr),  // 初始化为 nullptr
           impl(std::make_unique<OpenOceanKraken_PIMPL>())
     {
         this->init(); // 初始化
@@ -55,6 +55,7 @@ namespace OpenOceanKraken
     Interface::Interface(ThreadPool &pool)
         : params(new OOK_parameters()),
           output(new OOK_output()),
+          intm_TridMtx(nullptr),  // 初始化为 nullptr
           impl(std::make_unique<OpenOceanKraken_PIMPL>()),
           threadPool(&pool) // 初始化传入的线程池引用
     {
@@ -385,6 +386,7 @@ namespace OpenOceanKraken
         {
             std::cerr << "警告: flp 文件解析失败" << std::endl;
         }
+        this->set_SSP(params.sspInput);// 将sspInput转换到SSP中
         return true;
     }
 
@@ -449,6 +451,7 @@ namespace OpenOceanKraken
 
     void Interface::export_mod(std::string filename) // 导出模型到文件
     {
+        
     }
 
     void Interface::export_shd(std::string filename, int dataType)
