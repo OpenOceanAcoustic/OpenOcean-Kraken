@@ -7,10 +7,105 @@
 #include <sstream>
 #include <algorithm>
 #include <cctype>
+#include <stdexcept>
 #include <Eigen/Dense>
 
 namespace OpenOceanKraken
 {
+    static std::string trim_copy(std::string line)
+    {
+        const auto begin = line.find_first_not_of(" \t\r\n");
+        if (begin == std::string::npos)
+        {
+            return "";
+        }
+        const auto end = line.find_last_not_of(" \t\r\n");
+        return line.substr(begin, end - begin + 1);
+    }
+
+    static std::vector<std::string> fortran_tokens(std::string line)
+    {
+        const auto comment_pos = line.find('!');
+        if (comment_pos != std::string::npos)
+        {
+            line = line.substr(0, comment_pos);
+        }
+        std::replace(line.begin(), line.end(), '\'', ' ');
+        std::replace(line.begin(), line.end(), '"', ' ');
+
+        std::string normalized;
+        normalized.reserve(line.size() + 4);
+        for (char ch : line)
+        {
+            if (ch == '/')
+            {
+                normalized += " / ";
+            }
+            else
+            {
+                normalized += ch;
+            }
+        }
+
+        std::vector<std::string> tokens;
+        std::istringstream iss(normalized);
+        std::string token;
+        while (iss >> token)
+        {
+            if (!token.empty() && token[0] == '/')
+            {
+                break;
+            }
+            tokens.push_back(token);
+        }
+        return tokens;
+    }
+
+    static std::vector<double> parse_numbers(const std::string &line)
+    {
+        std::vector<double> values;
+        for (const auto &token : fortran_tokens(line))
+        {
+            values.push_back(std::stod(token));
+        }
+        return values;
+    }
+
+    static double value_or_default(const std::vector<double> &values, size_t index, double fallback)
+    {
+        return index < values.size() ? values[index] : fallback;
+    }
+
+    static void assign_vector_from_line(int count,
+                                        const std::vector<double> &values,
+                                        Eigen::VectorXd &target,
+                                        bool &is_linspace,
+                                        double scale = 1.0)
+    {
+        if (count <= 0)
+        {
+            throw std::runtime_error("Vector count must be greater than zero.");
+        }
+        if (values.empty())
+        {
+            throw std::runtime_error("Vector definition is empty.");
+        }
+        if (static_cast<int>(values.size()) == count)
+        {
+            target = Eigen::Map<const Eigen::VectorXd>(values.data(), values.size()) * scale;
+            is_linspace = false;
+            return;
+        }
+        if (values.size() < 2)
+        {
+            target = Eigen::VectorXd::Constant(count, values.front() * scale);
+            is_linspace = true;
+            return;
+        }
+        target = Eigen::VectorXd::LinSpaced(count, values.front(), values.back()) * scale;
+        is_linspace = true;
+    }
+
     bool read_sbp_file(const std::string &envPath, OOK_parameters &params)
     {
         std::string sbpPath = envPath.substr(0, envPath.length() - 4) + ".sbp"; // 打开同名sbp文件
@@ -19,7 +114,7 @@ namespace OpenOceanKraken
         {
             std::ostringstream oss;
             oss << "打开 sbp 文件 " << sbpPath << " 失败" << std::endl;
-            throw std::runtime_error(oss.str());
+            std::cerr << oss.str() << std::endl;
             return false;
         }
 
@@ -132,7 +227,6 @@ namespace OpenOceanKraken
                 {
                     if (option3 == '*')
                     {
-                        read_sbp_file(envPath, params);
                         if (!read_sbp_file(envPath, params))
                         {
                             std::cerr << "警告: sbp 文件解析失败，使用已解析的 env 参数继续" << std::endl;
@@ -178,27 +272,32 @@ namespace OpenOceanKraken
             std::vector<double> temp_rr; // 临时存所有接收器距离范围
             if (line_idx < flp_lines.size())
             {
-                double val;
-                std::istringstream iss(flp_lines[line_idx++]);
-                while (iss >> val)
-                {
-                    temp_rr.push_back(val); // 先把一行所有值读完
-                }
+                temp_rr = parse_numbers(flp_lines[line_idx++]);
             }
-            if (temp_rr.size() != params.Pos.NRr)
-            {
-                params.Pos.is_Linspace_Rr = true;
-                params.Pos.Rr = Eigen::VectorXd::LinSpaced(params.Pos.NRr, temp_rr[0], temp_rr[temp_rr.size() - 1]) * 1e3;
-            }
-            else
-            {
-                params.Pos.is_Linspace_Rr = false;
-                params.Pos.Rr = Eigen::Map<Eigen::VectorXd>(temp_rr.data(), temp_rr.size()) * 1e3;
-            }
+            assign_vector_from_line(params.Pos.NRr, temp_rr, params.Pos.Rr, params.Pos.is_Linspace_Rr, 1e3);
 
             // 第8~11行:NSz,Sz,NRz,Rz，均已经赋值过此处跳过
-            for (int i = 0; i < 4 && line_idx < flp_lines.size(); ++i)
-                line_idx++;
+            if (line_idx < flp_lines.size())
+            {
+                params.Pos.NSz = std::stoi(fortran_tokens(flp_lines[line_idx++]).at(0));
+            }
+            std::vector<double> temp_sz;
+            if (line_idx < flp_lines.size())
+            {
+                temp_sz = parse_numbers(flp_lines[line_idx++]);
+            }
+            assign_vector_from_line(params.Pos.NSz, temp_sz, params.Pos.Sz, params.Pos.is_Linspace_Sz);
+
+            if (line_idx < flp_lines.size())
+            {
+                params.Pos.NRz = std::stoi(fortran_tokens(flp_lines[line_idx++]).at(0));
+            }
+            std::vector<double> temp_rz;
+            if (line_idx < flp_lines.size())
+            {
+                temp_rz = parse_numbers(flp_lines[line_idx++]);
+            }
+            assign_vector_from_line(params.Pos.NRz, temp_rz, params.Pos.Rz, params.Pos.is_Linspace_Rz);
 
             // 第12行：接收器垂直个数
             if (line_idx < flp_lines.size())
@@ -255,7 +354,8 @@ namespace OpenOceanKraken
         {
             std::ostringstream oss;
             oss << "无法打开" << pattern << "文件: " << refCoefPath;
-            throw std::runtime_error(oss.str());
+            std::cerr << oss.str() << std::endl;
+            return false;
         }
         try
         {
@@ -563,18 +663,20 @@ namespace OpenOceanKraken
                 }
             }
 
-            if (params.sspInput[0].HSBot.BC != BC_Mode::MODE_F_File)
+            if (params.sspInput[0].HSBot.BC == BC_Mode::MODE_A_Half_space ||
+                params.sspInput[0].HSBot.BC == BC_Mode::MODE_G_Grain)
             {
                 Point bottom_p;
                 if (line_idx < lines.size())
                 {
-                    std::istringstream iss(lines[line_idx++]);
-                    iss >> params.sspInput[0].HSBot.Depth;
-                    iss >> params.sspInput[0].HSBot.alphaR;
-                    iss >> params.sspInput[0].HSBot.alphaI;
-                    iss >> params.sspInput[0].HSBot.betaR;
-                    iss >> params.sspInput[0].HSBot.betaI;
-                    iss >> params.sspInput[0].HSBot.rho;
+                    auto values = parse_numbers(lines[line_idx++]);
+                    auto &bottom = params.sspInput[0].HSBot;
+                    bottom.Depth = value_or_default(values, 0, bottom.Depth);
+                    bottom.alphaR = value_or_default(values, 1, bottom.alphaR);
+                    bottom.betaR = value_or_default(values, 2, 0.0);
+                    bottom.rho = value_or_default(values, 3, 1.0);
+                    bottom.alphaI = value_or_default(values, 4, 0.0);
+                    bottom.betaI = value_or_default(values, 5, 0.0);
                 }
             }
 
@@ -605,23 +707,9 @@ namespace OpenOceanKraken
             std::vector<double> temp_sz;
             if (line_idx < lines.size())
             {
-                double val;
-                std::istringstream iss(lines[line_idx++]);
-                while (iss >> val)
-                {
-                    temp_sz.push_back(val);
-                }
+                temp_sz = parse_numbers(lines[line_idx++]);
             }
-            if (temp_sz.size() != params.Pos.NSz)
-            {
-                params.Pos.is_Linspace_Sz = true;
-                params.Pos.Sz = Eigen::VectorXd::LinSpaced(params.Pos.NSz, temp_sz[0], temp_sz[temp_sz.size() - 1]);
-            }
-            else
-            {
-                params.Pos.is_Linspace_Sz = false;
-                params.Pos.Sz = Eigen::Map<Eigen::VectorXd>(temp_sz.data(), temp_sz.size());
-            }
+            assign_vector_from_line(params.Pos.NSz, temp_sz, params.Pos.Sz, params.Pos.is_Linspace_Sz);
 
             // 接收器深度个数
             if (line_idx < lines.size())
@@ -634,29 +722,9 @@ namespace OpenOceanKraken
             std::vector<double> temp_rz;
             if (line_idx < lines.size())
             {
-                double val;
-                std::istringstream iss(lines[line_idx++]);
-                while (iss >> val)
-                {
-                    temp_rz.push_back(val);
-                }
+                temp_rz = parse_numbers(lines[line_idx++]);
             }
-            if (temp_rz.size() != params.Pos.NRz)
-            {
-                params.Pos.is_Linspace_Rz = true;
-                params.Pos.Rz = Eigen::VectorXd::LinSpaced(params.Pos.NRz, temp_rz[0], temp_rz[temp_rz.size() - 1]);
-            }
-            else
-            {
-                params.Pos.is_Linspace_Rz = false;
-                params.Pos.Rz = Eigen::Map<Eigen::VectorXd>(temp_rz.data(), temp_rz.size());
-            }
-
-            read_flp_file(envPath, params);
-            if (!read_flp_file(envPath, params))
-            {
-                std::cerr << "警告: flp 文件解析失败，使用已解析的 env 参数继续" << std::endl;
-            }
+            assign_vector_from_line(params.Pos.NRz, temp_rz, params.Pos.Rz, params.Pos.is_Linspace_Rz);
 
             return true;
         }

@@ -3,6 +3,7 @@
 
 #include "OpenOceanKrakenParams.h"
 #include <memory>
+#include <stdexcept>
 
 namespace OpenOceanKraken
 {
@@ -90,6 +91,23 @@ namespace OpenOceanKraken
         bool from_env(const std::string &envPath);        // 从env文件读取参数 
 
     private:
+        enum class DirtyKind
+        {
+            Field,
+            Eigen,
+            All,
+            Execution
+        };
+
+        void ensureAlive() const;
+        void ensureThreadPool() const;
+        void ensureSetup() const;
+        void releaseFieldOutput();
+        void releaseEigenOutput();
+        void releaseIntermediate();
+        void markDirty(DirtyKind kind);
+        void validateSourceIndex(int srcIndex) const;
+
         void init();                  // 初始化
         void setup();                 // 配置
         void input_setup();           // 设置输入参数

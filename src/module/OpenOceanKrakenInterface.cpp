@@ -10,6 +10,10 @@
 #include "run.h"
 #include "json_in_out.hpp"
 #include "env_in_out.hpp"
+#include <chrono>
+#include <fstream>
+#include <sstream>
+#include <stdexcept>
 
 namespace OpenOceanKraken
 {
@@ -48,6 +52,10 @@ namespace OpenOceanKraken
         : params(new OOK_parameters()),
           output(new OOK_output()),
           intm_TridMtx(nullptr),  // 初始化为 nullptr
+          threadPool(nullptr),
+          NumThreads(1),
+          totalTasks(0),
+          field_size(0),
           impl(std::make_unique<OpenOceanKraken_PIMPL>())
     {
         this->init(); // 初始化
@@ -56,6 +64,9 @@ namespace OpenOceanKraken
         : params(new OOK_parameters()),
           output(new OOK_output()),
           intm_TridMtx(nullptr),  // 初始化为 nullptr
+          NumThreads(1),
+          totalTasks(0),
+          field_size(0),
           impl(std::make_unique<OpenOceanKraken_PIMPL>()),
           threadPool(&pool) // 初始化传入的线程池引用
     {
@@ -103,6 +114,7 @@ namespace OpenOceanKraken
 
     void Interface::input_setup()
     {
+        ensureAlive();
         auto &params = this->getParams(); // 获取参数
         auto &output = this->getOutput(); // 获取输出
         // 预处理
@@ -118,8 +130,14 @@ namespace OpenOceanKraken
     }
     void Interface::intm_setup()
     {
+        ensureAlive();
         auto &params = this->getParams(); // 获取参数
         size_t num_threads = this->NumThreads;
+        if (num_threads == 0)
+        {
+            throw std::runtime_error("NumThreads must be greater than zero.");
+        }
+        releaseIntermediate();
         this->intm_TridMtx = new TridMtx[num_threads];
         for (size_t i = 0; i < num_threads; i++)
         {
@@ -137,6 +155,101 @@ namespace OpenOceanKraken
         impl->OUTPUT_FIELD.Preprocess(params, output);
     }
 
+    void Interface::ensureAlive() const
+    {
+        if (!this->params || !this->output)
+        {
+            throw std::runtime_error("OpenOceanKraken::Interface has already been freed.");
+        }
+    }
+
+    void Interface::ensureThreadPool() const
+    {
+        ensureAlive();
+        if (!this->threadPool)
+        {
+            throw std::runtime_error("ThreadPool is not set. Construct Interface with ThreadPool or call setThreadPool() before run().");
+        }
+        if (this->NumThreads <= 0)
+        {
+            throw std::runtime_error("NumThreads must be greater than zero.");
+        }
+    }
+
+    void Interface::ensureSetup() const
+    {
+        ensureAlive();
+        if (!this->is_setup || !this->intm_TridMtx || !this->output->eigen || !this->output->u_AllSources)
+        {
+            throw std::runtime_error("Interface output is not ready. Call run() before reading field output.");
+        }
+    }
+
+    void Interface::releaseFieldOutput()
+    {
+        if (this->output)
+        {
+            this->impl->OUTPUT_FIELD.Finalize(*this->output);
+        }
+    }
+
+    void Interface::releaseEigenOutput()
+    {
+        if (this->output)
+        {
+            this->impl->OUTPUT_EIGEN.Finalize(*this->output);
+        }
+    }
+
+    void Interface::releaseIntermediate()
+    {
+        delete[] this->intm_TridMtx;
+        this->intm_TridMtx = nullptr;
+    }
+
+    void Interface::markDirty(DirtyKind kind)
+    {
+        if (!this->output)
+        {
+            this->is_setup = false;
+            return;
+        }
+
+        switch (kind)
+        {
+        case DirtyKind::Field:
+            releaseFieldOutput();
+            break;
+        case DirtyKind::Eigen:
+            releaseFieldOutput();
+            releaseEigenOutput();
+            releaseIntermediate();
+            break;
+        case DirtyKind::All:
+            releaseFieldOutput();
+            releaseEigenOutput();
+            releaseIntermediate();
+            break;
+        case DirtyKind::Execution:
+            releaseIntermediate();
+            break;
+        }
+        this->is_setup = false;
+        this->field_size = 0;
+    }
+
+    void Interface::validateSourceIndex(int srcIndex) const
+    {
+        ensureSetup();
+        const auto &input = this->getParams_const();
+        if (srcIndex < 0 || srcIndex >= input.Pos.NSz)
+        {
+            std::ostringstream oss;
+            oss << "Source index " << srcIndex << " is out of range [0, " << input.Pos.NSz << ").";
+            throw std::out_of_range(oss.str());
+        }
+    }
+
     // 配置
     void Interface::setup() // 设置参数
     {
@@ -152,15 +265,26 @@ namespace OpenOceanKraken
 
     void Interface::setNumThreads(int num_threads)
     {
+        ensureAlive();
+        if (num_threads <= 0)
+        {
+            throw std::invalid_argument("NumThreads must be greater than zero.");
+        }
+        if (this->NumThreads != num_threads)
+        {
+            markDirty(DirtyKind::Execution);
+        }
         this->NumThreads = num_threads;
     }
     void Interface::setThreadPool(ThreadPool &pool)
     {
+        ensureAlive();
         this->threadPool = &pool;
     }
 
     int Interface::getNumThreads() const
     {
+        ensureAlive();
         return this->NumThreads;
     }
 
@@ -180,8 +304,17 @@ namespace OpenOceanKraken
     void Interface::runField() // 运行声场
     {
         // FieldSolveWorker();
+        ensureAlive();
+        if (!this->is_setup)
+        {
+            this->setup();
+        }
         auto &params = this->getParams(); // 获取参数
         auto &output = this->getOutput(); // 获取输出
+        if (params.runMode == Run_Mode::MODE_M_Modes)
+        {
+            return;
+        }
         for (size_t iprof = 0; iprof < params.SSP.size(); iprof++)
         {
             FieldWorker(iprof, params, output);
@@ -192,6 +325,12 @@ namespace OpenOceanKraken
     {
         auto &params = this->getParams(); // 获取参数
         auto &output = this->getOutput(); // 获取输出
+        ensureThreadPool();
+        if (!this->is_setup)
+        {
+            this->setup();
+        }
+        this->clearResults();
         for (size_t iprof = 0; iprof < params.SSP.size(); iprof++)
         {
             EigenVWorker(*this->threadPool, this->NumThreads, iprof, params, *this->intm_TridMtx, output);
@@ -217,16 +356,20 @@ namespace OpenOceanKraken
     void Interface::free() // 释放内存
     {
         // 释放output的各个成员变量的内存
-        this->impl->OUTPUT_FIELD.Finalize(*this->output);
-        this->impl->OUTPUT_EIGEN.Finalize(*this->output);
-        delete params;
-        delete this->output;
-        if (this->intm_TridMtx != nullptr)
+        if (!this->params && !this->output && !this->intm_TridMtx)
         {
-            delete[] this->intm_TridMtx;
+            return;
         }
-
-        std::cout << "free memory successfully!" << std::endl;
+        releaseFieldOutput();
+        releaseEigenOutput();
+        releaseIntermediate();
+        delete this->params;
+        delete this->output;
+        this->params = nullptr;
+        this->output = nullptr;
+        this->threadPool = nullptr;
+        this->is_setup = false;
+        this->field_size = 0;
     }
 
     // 参数设置
@@ -234,115 +377,137 @@ namespace OpenOceanKraken
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_FREQ.set_title(params, title);
+        markDirty(DirtyKind::All);
     }
     void Interface::set_Freq(double freq)
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_FREQ.set_freq(params, freq);
+        markDirty(DirtyKind::All);
     }
     void Interface::set_freqvec(Eigen::VectorXd freqvec) // 设置频率向量
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_FREQ.set_freqvec(params, freqvec);
+        markDirty(DirtyKind::All);
     }
     void Interface::set_SSP(const std::vector<ssp::Range_Independent_Area> &sspInput) // 设置SSP
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SSP.set_SSP(params, sspInput);
+        markDirty(DirtyKind::All);
     }
 
     void Interface::set_AttenUnit(Atten_Mode mode) // 设置衰减单位
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SSP.set_AttenUnit(params, mode);
+        markDirty(DirtyKind::All);
     }
 
     void Interface::set_Sz(const Eigen::VectorXd &Sz)
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SZ_RZ_RR.set_Sz(params, Sz);
+        markDirty(DirtyKind::All);
     }
     void Interface::set_Sz(const double &start, const double &end, const int &NSz) // 设置声源深度（插值）
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SZ_RZ_RR.set_Sz(params, start, end, NSz);
+        markDirty(DirtyKind::All);
     }
     void Interface::set_Rr(const Eigen::VectorXd &Rr) // 设置水平接收
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SZ_RZ_RR.set_Rr(params, Rr);
+        markDirty(DirtyKind::All);
     }
     void Interface::set_Rr(const double &start, const double &end, const int &NRr) // 设置水平接收（插值）
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SZ_RZ_RR.set_Rr(params, start, end, NRr);
+        markDirty(DirtyKind::All);
     }
     void Interface::set_Rz(const Eigen::VectorXd &Rz)
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SZ_RZ_RR.set_Rz(params, Rz);
+        markDirty(DirtyKind::All);
     }
     void Interface::set_Rz(const double &start, const double &end, const int &NRz) // 设置接收深度（插值）
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SZ_RZ_RR.set_Rz(params, start, end, NRz);
+        markDirty(DirtyKind::All);
     }
     void Interface::set_Ro(const Eigen::VectorXd &Ro) // 设置阵列倾斜
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SZ_RZ_RR.set_Ro(params, Ro);
+        markDirty(DirtyKind::All);
     }
     void Interface::set_Ro(const double &start, const double &end, const int &NRo) // 设置阵列倾斜
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SZ_RZ_RR.set_Ro(params, start, end, NRo);
+        markDirty(DirtyKind::All);
     }
 
     void Interface::set_cPhase(double cLow, double cHigh) // 设置最低频率
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_FREQ.set_cPhase(params, cLow, cHigh);
+        markDirty(DirtyKind::All);
     }
     void Interface::set_GridType(Grid_Mode type) // 设置网格类型
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SZ_RZ_RR.set_GridType(params, type);
+        markDirty(DirtyKind::All);
     }
 
     void Interface::set_Rmax(double Rmax) // 设置最大计算距离，用于缩放error
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SZ_RZ_RR.set_RMax(params, Rmax);
+        markDirty(DirtyKind::All);
     }
     void Interface::set_SourceType(Source_Mode type) // 设置源类型
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_FREQ.set_SourceType(params, type);
+        markDirty(DirtyKind::All);
     }
     void Interface::set_RunMode(Run_Mode mode)
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_FREQ.set_RunMode(params, mode);
+        markDirty(DirtyKind::Field);
     } // 运行模式
     void Interface::set_Velocity_enable(bool is_Velocity) // 设置是否计算振速
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_FREQ.set_Velocity_enable(params, is_Velocity);
+        markDirty(DirtyKind::Field);
     }
     void Interface::set_ReflCoef_Top(std::vector<ReflectionCoef> ReflCoef)
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_REFLCOEF.set_ReflCoef_Top(params, ReflCoef);
+        markDirty(DirtyKind::All);
     } // 设置顶部反射系数
     void Interface::set_ReflCoef_Bottom(std::vector<ReflectionCoef> ReflCoef)
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_REFLCOEF.set_ReflCoef_Bot(params, ReflCoef);
+        markDirty(DirtyKind::All);
     } // 设置底部反射系数
     void Interface::set_SBP(const Eigen::VectorXd &pat, const Eigen::VectorXd &theta) // 设置指向性
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SBP.set_Pat(params, pat, theta);
+        markDirty(DirtyKind::All);
     }
 
     bool Interface::to_json(const std::string &jsonPath) const // 将参数写入json
@@ -365,7 +530,27 @@ namespace OpenOceanKraken
     bool Interface::from_json(const std::string &jsonPath) // 从json读取参数
     {
 
-        return true;
+        auto &params = this->getParams();
+        std::ifstream ifs(jsonPath);
+        if (!ifs.is_open())
+        {
+            std::cerr << "Error: Failed to open JSON file " << jsonPath << std::endl;
+            return false;
+        }
+        try
+        {
+            OpenOcean_json json;
+            ifs >> json;
+            params = json.get<OOK_parameters>();
+            this->set_SSP(params.sspInput);
+            markDirty(DirtyKind::All);
+            return true;
+        }
+        catch (const std::exception &e)
+        {
+            std::cerr << "Error: Failed to parse JSON file " << jsonPath << ": " << e.what() << std::endl;
+            return false;
+        }
     }
 
 
@@ -394,6 +579,11 @@ namespace OpenOceanKraken
     {
         auto &output = this->getOutput_const(); // 获取输出
         auto &input = this->getParams_const();  // 获取输入
+        validateSourceIndex(srcIndex);
+        if (!output.u_AllSources)
+        {
+            throw std::runtime_error("Pressure output is not available.");
+        }
         return output.u_AllSources + srcIndex * input.Pos.NRr * input.Pos.NRz_per_range;
     }
 
@@ -401,6 +591,11 @@ namespace OpenOceanKraken
     {
         auto &output = this->getOutput_const(); // 获取输出
         auto &input = this->getParams_const();  // 获取输入
+        validateSourceIndex(srcIndex);
+        if (!output.v_AllSources)
+        {
+            throw std::runtime_error("Vertical velocity output is not available.");
+        }
         return output.v_AllSources + srcIndex * input.Pos.NRr * input.Pos.NRz_per_range;
     }
 
@@ -408,24 +603,44 @@ namespace OpenOceanKraken
     {
         auto &output = this->getOutput_const(); // 获取输出
         auto &input = this->getParams_const();  // 获取输入
+        validateSourceIndex(srcIndex);
+        if (!output.h_AllSources)
+        {
+            throw std::runtime_error("Horizontal velocity output is not available.");
+        }
         return output.h_AllSources + srcIndex * input.Pos.NRr * input.Pos.NRz_per_range;
     }
 
     std::complex<float> *Interface::get_u_AllSources() // 获取全部声源的复声压
     {
         auto &output = this->getOutput_const(); // 获取输出
+        ensureSetup();
+        if (!output.u_AllSources)
+        {
+            throw std::runtime_error("Pressure output is not available.");
+        }
         return output.u_AllSources;
     }
 
     std::complex<float> *Interface::get_v_AllSources() // 获取全部声源的垂直振速
     {
         auto &output = this->getOutput_const(); // 获取输出
+        ensureSetup();
+        if (!output.v_AllSources)
+        {
+            throw std::runtime_error("Vertical velocity output is not available.");
+        }
         return output.v_AllSources;
     }
 
     std::complex<float> *Interface::get_h_AllSources() // 获取全部声源的水平振速
     {
         auto &output = this->getOutput_const(); // 获取输出
+        ensureSetup();
+        if (!output.h_AllSources)
+        {
+            throw std::runtime_error("Horizontal velocity output is not available.");
+        }
         return output.h_AllSources;
     }
 
@@ -451,7 +666,7 @@ namespace OpenOceanKraken
 
     void Interface::export_mod(std::string filename) // 导出模型到文件
     {
-        
+        throw std::runtime_error("export_mod() is not implemented yet.");
     }
 
     void Interface::export_shd(std::string filename, int dataType)
@@ -577,22 +792,38 @@ namespace OpenOceanKraken
 
     OOK_parameters &Interface::getParams() const // 获取参数的引用
     {
+        if (!this->params)
+        {
+            throw std::runtime_error("OpenOceanKraken::Interface parameters have been freed.");
+        }
         return *this->params;
     }
     const OOK_parameters &Interface::getParams_const() const // 获取参数的副本
     {
+        if (!this->params)
+        {
+            throw std::runtime_error("OpenOceanKraken::Interface parameters have been freed.");
+        }
         return *this->params;
     }
     OOK_output &Interface::getOutput() const // 获取输出的引用
     {
+        if (!this->output)
+        {
+            throw std::runtime_error("OpenOceanKraken::Interface output has been freed.");
+        }
         return *this->output;
     }
     OOK_output Interface::getOutput_Copy() const // 获取输出的副本
     {
-        return *this->output;
+        throw std::runtime_error("getOutput_Copy() is disabled because OOK_output owns raw buffers. Use getOutput_const() or typed getters instead.");
     }
     const OOK_output &Interface::getOutput_const() const // 获取输出的副本
     {
+        if (!this->output)
+        {
+            throw std::runtime_error("OpenOceanKraken::Interface output has been freed.");
+        }
         return *this->output;
     }
 

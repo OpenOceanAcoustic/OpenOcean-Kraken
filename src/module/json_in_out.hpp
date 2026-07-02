@@ -119,6 +119,9 @@ namespace OpenOceanKraken
         case AttenuationUnit::MODE_M_dB_per_m:
             out = "dB/m";
             break;
+        case AttenuationUnit::MODE_m_dB_per_m:
+            out = "dB/m";
+            break;
         case AttenuationUnit::MODE_N_Nepers_per_m:
             out = "Nepers/m";
             break;
@@ -581,11 +584,13 @@ namespace OpenOceanKraken
             double end = src_depth.at("end").get<double>();
             int N = src_depth.at("NSz").get<int>();
             pos.Sz = Eigen::VectorXd::LinSpaced(N, start, end);
+            pos.NSz = N;
             pos.is_Linspace_Sz = true;
         }
         else
         {
             pos.Sz = src_depth.get<Eigen::VectorXd>();
+            pos.NSz = static_cast<int>(pos.Sz.size());
             pos.is_Linspace_Sz = false;
         }
 
@@ -597,11 +602,13 @@ namespace OpenOceanKraken
             double end = recv_range.at("end").get<double>();
             int N = recv_range.at("NRr").get<int>();
             pos.Rr = Eigen::VectorXd::LinSpaced(N, start, end);
+            pos.NRr = N;
             pos.is_Linspace_Rr = true;
         }
         else
         {
             pos.Rr = recv_range.get<Eigen::VectorXd>();
+            pos.NRr = static_cast<int>(pos.Rr.size());
             pos.is_Linspace_Rr = false;
         }
 
@@ -613,11 +620,13 @@ namespace OpenOceanKraken
             double end = recv_depth.at("end").get<double>();
             int N = recv_depth.at("NRz").get<int>();
             pos.Rz = Eigen::VectorXd::LinSpaced(N, start, end);
+            pos.NRz = N;
             pos.is_Linspace_Rz = true;
         }
         else
         {
             pos.Rz = recv_depth.get<Eigen::VectorXd>();
+            pos.NRz = static_cast<int>(pos.Rz.size());
             pos.is_Linspace_Rz = false;
         }
 
@@ -629,13 +638,16 @@ namespace OpenOceanKraken
             double end = recv_azim.at("end").get<double>();
             int N = recv_azim.at("NRo").get<int>();
             pos.Ro = Eigen::VectorXd::LinSpaced(N, start, end);
+            pos.NRo = N;
             pos.is_Linspace_Ro = true;
         }
         else
         {
             pos.Ro = recv_azim.get<Eigen::VectorXd>();
+            pos.NRo = static_cast<int>(pos.Ro.size());
             pos.is_Linspace_Ro = false;
         }
+        pos.NRz_per_range = (pos.GridType == Grid_Mode::MODE_I_Irregular) ? 1 : pos.NRz;
     }
 
     // Reflection
@@ -718,14 +730,24 @@ namespace OpenOceanKraken
             out["theta"] = pat.theta;
             out["pat"] = pat.pat;
         }
+        else
+        {
+            out = nullptr;
+        }
     }
     void from_json(const OpenOcean_json &in, SrcBmPat &pat)
     {
-
-            pat.NSBPPts = in.at("NSBPPts").get<int>();
-            pat.theta = in.at("theta").get<Eigen::VectorXd>();
-            pat.pat = in.at("pat").get<Eigen::VectorXd>();
-        
+        if (in.is_null() || !in.is_object() || !in.contains("NSBPPts"))
+        {
+            pat.NSBPPts = 0;
+            pat.theta.resize(0);
+            pat.pat.resize(0);
+            pat.isSet = false;
+            return;
+        }
+        pat.NSBPPts = in.at("NSBPPts").get<int>();
+        pat.theta = in.at("theta").get<Eigen::VectorXd>();
+        pat.pat = in.at("pat").get<Eigen::VectorXd>();
         pat.isSet = true;
     }
     // freqInfo

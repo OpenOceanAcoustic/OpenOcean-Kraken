@@ -160,24 +160,24 @@ namespace OpenOceanKraken
     struct HSInfo
     {
         // @brief 纵波（压缩波P-wave）声速
-        double alphaR;
+        double alphaR = 0.0;
         // @brief 纵波吸收系数
-        double alphaI;
+        double alphaI = 0.0;
         // @brief 横波（剪切波S-wave）声速
-        double betaR;
+        double betaR = 0.0;
         // @brief 横波吸收系数
-        double betaI;
-        double beta, ft;
+        double betaI = 0.0;
+        double beta = 0.0, ft = 0.0;
         // @brief P-wave速度
-        std::complex<double> cp;
+        std::complex<double> cp = {0.0, 0.0};
         // @brief S-wave速度
-        std::complex<double> cs;
+        std::complex<double> cs = {0.0, 0.0};
         // @brief 密度
-        double rho;
+        double rho = 0.0;
         // @brief 深度
-        double Depth;
+        double Depth = 0.0;
         // @brief 边界条件类型
-        BC_Mode BC;
+        BC_Mode BC = BC_Mode::MODE_V_Vacuum;
 
         
     };

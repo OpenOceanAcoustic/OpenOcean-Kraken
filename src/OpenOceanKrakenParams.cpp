@@ -74,15 +74,14 @@ namespace OpenOceanKraken
 
         void Range_Independent_Area::set_Top_Line(double Depth, double alphaR, double alphaI, double betaR, double betaI, double rho)
         {
-            this->HSBot.Depth = Depth;
-            this->HSBot.alphaR = alphaR;
-            this->HSBot.alphaI = alphaI;
-            this->HSBot.betaR = betaR;
-            this->HSBot.betaI = betaI;
-            this->HSBot.rho = rho;
-            // this->HSBot.sigma = 0.0;
-            this->HSBot.ft = 0.0;
-            this->HSBot.BC = BC_Mode::MODE_A_Half_space;
+            this->HSTop.Depth = Depth;
+            this->HSTop.alphaR = alphaR;
+            this->HSTop.alphaI = alphaI;
+            this->HSTop.betaR = betaR;
+            this->HSTop.betaI = betaI;
+            this->HSTop.rho = rho;
+            this->HSTop.ft = 0.0;
+            this->HSTop.BC = BC_Mode::MODE_A_Half_space;
         }
         void Range_Independent_Area::set_Bottom_type(BC_Mode type)
         {
