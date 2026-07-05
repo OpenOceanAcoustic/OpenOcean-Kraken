@@ -11,16 +11,28 @@ int main(int argc, char **argv)
 {
     if (argc < 3)
     {
-        std::cerr << "Usage: ook_case_runner <env_path> <output_root_without_extension> [threads]\n";
+        std::cerr << "Usage: ook_case_runner <env_path> <output_root_without_extension> [threads] [--mod]\n";
         return 2;
     }
 
     const std::string env_path = argv[1];
     const std::string output_root = argv[2];
     int threads = 1;
+    bool export_mod = false;
     if (argc >= 4)
     {
-        threads = std::max(1, std::stoi(argv[3]));
+        for (int i = 3; i < argc; ++i)
+        {
+            const std::string arg = argv[i];
+            if (arg == "--mod")
+            {
+                export_mod = true;
+            }
+            else
+            {
+                threads = std::max(1, std::stoi(arg));
+            }
+        }
     }
     else
     {
@@ -41,6 +53,11 @@ int main(int argc, char **argv)
         }
 
         kraken_interface.run();
+        if (export_mod)
+        {
+            kraken_interface.export_mod(output_root);
+            std::cout << "OOK MOD written: " << output_root << ".mod\n";
+        }
         kraken_interface.export_shd(output_root, 1);
         std::cout << "OOK SHD written: " << output_root << ".shd\n";
         return 0;

@@ -700,7 +700,18 @@ namespace OpenOceanKraken
                 throw std::runtime_error("Cannot export MOD file: invalid acoustic media range.");
             }
 
-            MergeVectors(input.Pos.Sz, input.Pos.Rz, zTabs[iprof], nzTabs[iprof], zFromSz[iprof], zFromRz[iprof]);
+            const auto &eigen = output.eigen[iprof];
+            if (eigen.ModeZ.size() > 0)
+            {
+                zTabs[iprof] = eigen.ModeZ;
+                nzTabs[iprof] = static_cast<int>(eigen.ModeZ.size());
+                zFromSz[iprof].resize(0);
+                zFromRz[iprof].resize(0);
+            }
+            else
+            {
+                MergeVectors(input.Pos.Sz, input.Pos.Rz, zTabs[iprof], nzTabs[iprof], zFromSz[iprof], zFromRz[iprof]);
+            }
             const int nMedia = lastAc - firstAc + 1;
             LRecordLength = std::max(LRecordLength, 2 * nzTabs[iprof]);
             LRecordLength = std::max(LRecordLength, 3 * nMedia);
@@ -890,27 +901,34 @@ namespace OpenOceanKraken
                 for (int iz = 0; iz < nzTab; ++iz)
                 {
                     std::complex<double> phi = 0.0;
-                    int sourceIndex = -1;
-                    for (int isz = 0; isz < zFromSz[iprof].size(); ++isz)
+                    if (eigen.PhiMode.rows() > mode && eigen.PhiMode.cols() == nzTab)
                     {
-                        if (zFromSz[iprof](isz) == iz)
-                        {
-                            sourceIndex = isz;
-                            break;
-                        }
-                    }
-                    if (sourceIndex >= 0)
-                    {
-                        phi = eigen.PsiS(mode, sourceIndex);
+                        phi = eigen.PhiMode(mode, iz);
                     }
                     else
                     {
-                        for (int irz = 0; irz < zFromRz[iprof].size(); ++irz)
+                        int sourceIndex = -1;
+                        for (int isz = 0; isz < zFromSz[iprof].size(); ++isz)
                         {
-                            if (zFromRz[iprof](irz) == iz)
+                            if (zFromSz[iprof](isz) == iz)
                             {
-                                phi = eigen.PsiR(mode, irz);
+                                sourceIndex = isz;
                                 break;
+                            }
+                        }
+                        if (sourceIndex >= 0)
+                        {
+                            phi = eigen.PsiS(mode, sourceIndex);
+                        }
+                        else
+                        {
+                            for (int irz = 0; irz < zFromRz[iprof].size(); ++irz)
+                            {
+                                if (zFromRz[iprof](irz) == iz)
+                                {
+                                    phi = eigen.PsiR(mode, irz);
+                                    break;
+                                }
                             }
                         }
                     }

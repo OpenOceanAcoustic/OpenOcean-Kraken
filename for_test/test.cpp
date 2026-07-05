@@ -273,7 +273,7 @@ namespace
         std::memcpy(&nmat, header.data() + 96, sizeof(nmat));
         test.require(nfreq == 1, "OOK MOD export should write one solved frequency");
         test.require(nmedia == 1, "MunkK MOD NMedia mismatch");
-        test.require(ntot == 501, "MunkK MOD zTab size mismatch");
+        test.require(ntot == 1001, "MunkK MOD zTab size mismatch");
         test.require(nmat == ntot, "KRAKEN MOD NTot/NMat should match for acoustic modes");
 
         int modes = 0;

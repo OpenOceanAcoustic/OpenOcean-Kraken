@@ -146,6 +146,7 @@ namespace OpenOceanKraken
         for (int i = 0; i < params.SBP.NSBPPts; i++)
         {
             sbpFile >> theta[i] >> pat[i];
+            pat[i] = std::pow(10.0, pat[i] / 20.0);
         }
         params.SBP.theta = Eigen::Map<Eigen::VectorXd>(theta.data(), theta.size());
         params.SBP.pat = Eigen::Map<Eigen::VectorXd>(pat.data(), pat.size());
@@ -394,6 +395,7 @@ namespace OpenOceanKraken
                     refCoefFile >> params.ReflectionCoef.RTop(i).R;
                     refCoefFile >> params.ReflectionCoef.RTop(i).phi;
                 }
+                params.ReflectionCoef.isDeg = false;
             }
             else if (pattern == ".brc")
             {
@@ -405,6 +407,7 @@ namespace OpenOceanKraken
                     refCoefFile >> params.ReflectionCoef.RBot(i).R;
                     refCoefFile >> params.ReflectionCoef.RBot(i).phi;
                 }
+                params.ReflectionCoef.isDeg = false;
             }
             else
             {
@@ -555,7 +558,9 @@ namespace OpenOceanKraken
             // 第4行：海面选项（TOP OPTION）
             if (line_idx < lines.size())
             {
-                std::istringstream iss(lines[line_idx++]);
+                const auto option_tokens = fortran_tokens(lines[line_idx++]);
+                const std::string option_text = option_tokens.empty() ? "" : option_tokens.front();
+                std::istringstream iss(option_text);
                 char option1, option2, option3, option4;
 
                 if (iss >> option1 >> option2 >> option3)
@@ -747,12 +752,15 @@ namespace OpenOceanKraken
             }
 
             // 海底半空间
-            char bottomType;
+            char bottomType = '\0';
             double dummy;
             if (line_idx < lines.size())
             {
-                std::istringstream iss(lines[line_idx++]);
-                iss >> bottomType;
+                const auto bottom_tokens = fortran_tokens(lines[line_idx++]);
+                if (!bottom_tokens.empty() && !bottom_tokens.front().empty())
+                {
+                    bottomType = bottom_tokens.front().front();
+                }
                 switch (bottomType)
                 {
                 case 'A':
@@ -784,17 +792,20 @@ namespace OpenOceanKraken
             if (params.sspInput[0].HSBot.BC == BC_Mode::MODE_A_Half_space ||
                 params.sspInput[0].HSBot.BC == BC_Mode::MODE_G_Grain)
             {
-                Point bottom_p;
                 if (line_idx < lines.size())
                 {
                     auto values = parse_numbers(lines[line_idx++]);
                     auto &bottom = params.sspInput[0].HSBot;
                     bottom.Depth = value_or_default(values, 0, bottom.Depth);
-                    bottom.alphaR = value_or_default(values, 1, bottom.alphaR);
-                    bottom.betaR = value_or_default(values, 2, 0.0);
-                    bottom.rho = value_or_default(values, 3, 1.0);
-                    bottom.alphaI = value_or_default(values, 4, 0.0);
-                    bottom.betaI = value_or_default(values, 5, 0.0);
+                    bottom.alphaR = value_or_default(values, 1, last_p.alphaR);
+                    bottom.betaR = value_or_default(values, 2, last_p.betaR);
+                    bottom.rho = value_or_default(values, 3, last_p.rho);
+                    bottom.alphaI = value_or_default(values, 4, last_p.alphaI);
+                    bottom.betaI = value_or_default(values, 5, last_p.betaI);
+                    if (bottom.alphaR <= 0.0 || bottom.rho <= 0.0)
+                    {
+                        throw std::runtime_error("Invalid bottom half-space: alphaR and rho must be positive after Fortran slash inheritance.");
+                    }
                 }
             }
 
@@ -843,6 +854,10 @@ namespace OpenOceanKraken
                 temp_rz = parse_numbers(lines[line_idx++]);
             }
             assign_vector_from_line(params.Pos.NRz, temp_rz, params.Pos.Rz, params.Pos.is_Linspace_Rz);
+
+            params.ModePos = params.Pos;
+            params.ModePos.GridType = Grid_Mode::MODE_R_Rectangular;
+            params.hasModePos = true;
 
             return true;
         }

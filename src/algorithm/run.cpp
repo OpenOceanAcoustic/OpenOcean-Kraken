@@ -1,8 +1,40 @@
 #include "run.h"
+#include <cmath>
+#include <limits>
+#include <stdexcept>
 
 // 计算本征值和本征函数
 namespace OpenOceanKraken
 {
+    namespace
+    {
+        int MinLocMaskedPositive(const Eigen::VectorXd &values, const int start, const int count, const double threshold)
+        {
+            int minLoc = 0;
+            double minValue = std::numeric_limits<double>::infinity();
+            for (int mode = 0; mode < count; ++mode)
+            {
+                const double value = values(start + mode);
+                if (std::isfinite(value) && value > threshold && value < minValue)
+                {
+                    minValue = value;
+                    minLoc = mode + 1;
+                }
+            }
+            return minLoc;
+        }
+
+        std::complex<double> HalfSpaceRadiationRoot(const std::complex<double> &z)
+        {
+            std::complex<double> root = std::sqrt(z);
+            if (std::imag(root) < 0.0)
+            {
+                root = -root;
+            }
+            return root;
+        }
+    }
+
     void EigenVWorker(ThreadPool &threadPool, const int &NumThreads, const size_t &iprof, const OOK_parameters &params, TridMtx &trid, OOK_output &output)
     {
         double freq = params.freqinfo.freq;
@@ -28,14 +60,14 @@ namespace OpenOceanKraken
             }
         }
 
-        size_t m = 0;
-        while (m < eigen.M && eigen.Extrap(m) > SQ(2 * pi * params.freqinfo.freq / trid.cHigh))
+        const double finalThreshold = SQ(2 * pi * params.freqinfo.freq / trid.cHigh);
+        eigen.M = MinLocMaskedPositive(eigen.Extrap, 0, eigen.M, finalThreshold);
+        if (eigen.M <= 0)
         {
-            m++;
+            throw std::runtime_error("KRAKEN eigen solve produced zero propagating modes.");
         }
-        eigen.M = m;
 
-        for (int i = 0; i < m; i++)
+        for (int i = 0; i < eigen.M; i++)
         {
             eigen.k(i) = sqrt(eigen.Extrap(i) + eigen.k(i));
         }
@@ -77,16 +109,7 @@ namespace OpenOceanKraken
         // 查找满足条件的最小位置
         double threshold = omega2 / SQ(trid.cHigh);
 
-        int Min_Loc = 0;
-
-        while (Min_Loc < eigen.M && eigen.Extrap(Min_Loc) > threshold)
-        {
-            Min_Loc++;
-        }
-        if (Min_Loc != 0)
-        {
-            eigen.M = Min_Loc;
-        }
+        eigen.M = MinLocMaskedPositive(eigen.Extrap, 0, eigen.M, threshold);
 
         // 计算NTotal：N(FirstAcoustic : LastAcoustic)的和
         int NTotal = 0;
@@ -250,24 +273,22 @@ namespace OpenOceanKraken
         // 等待所有ZBRENTX任务完成
         threadPool.wait_id("RunZBRENTX");
 
-        int validModes = 0;
+        int failedModes = 0;
         for (int modeIdx = 0; modeIdx < M; ++modeIdx)
         {
             if (rootOK[modeIdx])
             {
-                eigen.EVMat(iset * eigen.firstM + validModes) = roots[modeIdx];
-                ++validModes;
+                eigen.EVMat(iset * eigen.firstM + modeIdx) = roots[modeIdx];
+            }
+            else
+            {
+                ++failedModes;
             }
         }
-        for (int modeIdx = validModes; modeIdx < M; ++modeIdx)
-        {
-            eigen.EVMat(iset * eigen.firstM + modeIdx) = 0.0;
-        }
-        if (validModes != M)
+        if (failedModes != 0)
         {
             std::cout << "Warning in KRAKEN - Solve1 : Brent failed for "
-                      << (M - validModes) << " isolated mode bracket(s)" << std::endl;
-            eigen.M = validModes;
+                      << failedModes << " isolated mode bracket(s)" << std::endl;
         }
     }
 
@@ -297,10 +318,10 @@ namespace OpenOceanKraken
                     {
                         for (int j = 0; j < iset - ii - 1; j++)
                         {
-                            x1 = SQ(trid.h(j));
-                            x2 = SQ(trid.h(j + ii + 1));
-                            P(j) = ((SQ(trid.h(iset)) - x2) * P(j) -
-                                    (SQ(trid.h(iset)) - x1) * P(j + 1)) /
+                            x1 = SQ(trid.hV(j));
+                            x2 = SQ(trid.hV(j + ii + 1));
+                            P(j) = ((SQ(trid.hV(iset)) - x2) * P(j) -
+                                    (SQ(trid.hV(iset)) - x1) * P(j + 1)) /
                                    (x1 - x2);
                         }
                     }
@@ -308,7 +329,14 @@ namespace OpenOceanKraken
                 }
             }
             Tolerance = abs(x) * trid.B1.size() * pow(10.0, (1.0 - std::numeric_limits<double>::digits10));
+            Iteration = MaxIteration + 1;
             ZSecantX(x, Tolerance, Iteration, MaxIteration, iset, iprof, mode, Delta, iPower, trid, params, eigen.EVMat, eigen.firstM, isCountMode, modeCount);
+            if (Iteration > MaxIteration || !std::isfinite(x))
+            {
+                std::cout << "Warning in KRAKEN - Solve2 : RootFinderSecant failed for mode "
+                          << (mode + 1) << std::endl;
+                x = std::numeric_limits<double>::min();
+            }
             eigen.EVMat(iset * eigen.firstM + mode) = x;
             if (omega2 / SQ(trid.cHigh) > x)
             {
@@ -316,6 +344,7 @@ namespace OpenOceanKraken
                 return;
             }
         }
+
     }
 
     void Solve3(ThreadPool &threadPool, const int &NumThreads, const int &iset, const size_t &iprof, EigenParams &eigen, TridMtx &trid, const OOK_parameters &params)
@@ -337,6 +366,7 @@ namespace OpenOceanKraken
 
         FUNCT(iset, iprof, mode, xMin, Delta, iPower, trid, params, eigen.EVMat, eigen.firstM, isCountMode, modeCount);
         int M = modeCount;
+        eigen.M = M;
 
         for (int modeIdx = 0; modeIdx < M; ++modeIdx)
         {
@@ -357,6 +387,7 @@ namespace OpenOceanKraken
                 return;
             }
         }
+        eigen.M = M;
     }
 
     // 初始化有限差分方程
@@ -393,6 +424,8 @@ namespace OpenOceanKraken
             {
                 trid.hV(iset) = trid.h(i);
             }
+            ssp_profile.NMesh(i) = trid.N(i);
+            ssp_profile.interp_offset(i) = trid.Loc(i);
         }
         NPoints += ssp_profile.NMedia;
 
@@ -525,20 +558,25 @@ namespace OpenOceanKraken
         e(NTotal1) = 1.0 / h_rho;
 
         // === 3. 一次性构建插值表（关键优化：移出 mode 循环！）===
+        const Position &modePos = params.hasModePos ? params.ModePos : params.Pos;
         Eigen::VectorXd zTab;
         int NzTab;
         Eigen::VectorXi Ix, Iy;
-        MergeVectors(params.Pos.Sz, params.Pos.Rz, zTab, NzTab, Ix, Iy);
+        MergeVectors(modePos.Sz, modePos.Rz, zTab, NzTab, Ix, Iy);
 
         Eigen::VectorXd WTS(params.Pos.NSz), WTR(params.Pos.NRz), WTZ(NzTab);
         Eigen::VectorXi ISzTab(params.Pos.NSz), IRzTab(params.Pos.NRz), IZzTab(NzTab);
 
-        Weight_dble(z, NTotal1, params.Pos.Sz, params.Pos.NSz, WTS, ISzTab);
-        Weight_dble(z, NTotal1, params.Pos.Rz, params.Pos.NRz, WTR, IRzTab);
         Weight_dble(z, NTotal1, zTab, NzTab, WTZ, IZzTab);
+        Weight_dble(zTab, NzTab, params.Pos.Sz, params.Pos.NSz, WTS, ISzTab);
+        Weight_dble(zTab, NzTab, params.Pos.Rz, params.Pos.NRz, WTR, IRzTab);
 
         // 使用 float 矩阵直接匹配 .mod 输出格式
-        Eigen::MatrixXf phiZ(eigen.firstM, NzTab);
+        eigen.ModeZ = zTab;
+        eigen.PhiMode.resize(eigen.firstM, NzTab);
+        eigen.PhiMode.setZero();
+        Eigen::MatrixXcd dPhiMode(eigen.firstM, NzTab);
+        dPhiMode.setZero();
 
         // === 4. 临时工作向量（在 mode 循环内重用）===
         Eigen::VectorXd Psi(NTotal1), dPsidz(NTotal1), d(NTotal1);
@@ -658,6 +696,23 @@ namespace OpenOceanKraken
             }
 
             // --- 插值到接收/源深度（Sz, Rz）---
+            for (int izz = 0; izz < NzTab; ++izz)
+            {
+                if (zTab(izz) > z_ssp(z_ssp.size() - 1))
+                {
+                    eigen.PhiMode(mode, izz) = 0.0;
+                    dPhiMode(mode, izz) = 0.0;
+                }
+                else
+                {
+                    int idx = IZzTab(izz);
+                    eigen.PhiMode(mode, izz) = std::complex<double>(Psi(idx)) +
+                                               WTZ(izz) * std::complex<double>(dPsi(idx));
+                    dPhiMode(mode, izz) = std::complex<double>(dPsidz(idx)) +
+                                          WTZ(izz) * std::complex<double>(dPsidz(idx + 1) - dPsidz(idx));
+                }
+            }
+
             for (int isz = 0; isz < params.Pos.NSz; ++isz)
             {
                 if (params.Pos.Sz(isz) > z_ssp(z_ssp.size() - 1))
@@ -668,10 +723,10 @@ namespace OpenOceanKraken
                 else
                 {
                     int idx = ISzTab(isz);
-                    eigen.PsiS(mode, isz) = std::complex<double>(Psi(idx)) +
-                                            WTS(isz) * std::complex<double>(dPsi(idx));
-                    eigen.dPsidzS(mode, isz) = std::complex<double>(dPsidz(idx)) +
-                                               WTS(isz) * std::complex<double>(dPsidz(idx + 1) - dPsidz(idx));
+                    eigen.PsiS(mode, isz) = eigen.PhiMode(mode, idx) +
+                                            WTS(isz) * (eigen.PhiMode(mode, idx + 1) - eigen.PhiMode(mode, idx));
+                    eigen.dPsidzS(mode, isz) = dPhiMode(mode, idx) +
+                                               WTS(isz) * (dPhiMode(mode, idx + 1) - dPhiMode(mode, idx));
                 }
             }
 
@@ -685,25 +740,22 @@ namespace OpenOceanKraken
                 else
                 {
                     int idx = IRzTab(irz);
-                    eigen.PsiR(mode, irz) = std::complex<double>(Psi(idx)) +
-                                            WTR(irz) * std::complex<double>(dPsi(idx));
-                    eigen.dPsidzR(mode, irz) = std::complex<double>(dPsidz(idx)) +
-                                               WTR(irz) * std::complex<double>(dPsidz(idx + 1) - dPsidz(idx));
+                    eigen.PsiR(mode, irz) = eigen.PhiMode(mode, idx) +
+                                            WTR(irz) * (eigen.PhiMode(mode, idx + 1) - eigen.PhiMode(mode, idx));
+                    eigen.dPsidzR(mode, irz) = dPhiMode(mode, idx) +
+                                               WTR(irz) * (dPhiMode(mode, idx + 1) - dPhiMode(mode, idx));
                 }
             }
 
             // --- 构建 phiZ 并转为 float（用于 .mod 文件）---
-            for (int izz = 0; izz < NzTab; ++izz)
+        }
+        if (eigen.M > 0)
+        {
+            const double maxPsiS = eigen.PsiS.block(0, 0, eigen.M, eigen.PsiS.cols()).cwiseAbs().maxCoeff();
+            const double maxPsiR = eigen.PsiR.block(0, 0, eigen.M, eigen.PsiR.cols()).cwiseAbs().maxCoeff();
+            if (maxPsiS == 0.0 || maxPsiR == 0.0)
             {
-                if (zTab(izz) > z_ssp(z_ssp.size() - 1))
-                {
-                    phiZ(mode, izz) = 0.0f;
-                }
-                else
-                {
-                    int idx = IZzTab(izz);
-                    phiZ(mode, izz) = static_cast<float>(Psi(idx) + WTZ(izz) * dPsi(idx));
-                }
+                throw std::runtime_error("KRAKEN eigen solve produced zero source or receiver eigenfunctions.");
             }
         }
     }
@@ -724,7 +776,7 @@ namespace OpenOceanKraken
         if (HSTop.BC == BC_Mode::MODE_A_Half_space)
         {
             std::complex<double> cp2 = SQ(HSTop.cp);
-            Del = I1D * std::imag(std::sqrt(std::complex<double>(x - omega2 / cp2)));
+            Del = I1D * std::imag(HalfSpaceRadiationRoot(std::complex<double>(x - omega2 / cp2)));
             Perturbation_k -= Del * SQ(Phi(0)) / HSTop.rho;
             Slow += SQ(Phi(0)) / (2.0 * std::sqrt(x - std::real(omega2 / cp2))) / (HSTop.rho * std::real(cp2));
         }

@@ -3,6 +3,18 @@
 // 计算边界条件阻抗
 namespace OpenOceanKraken
 {
+namespace
+{
+std::complex<double> HalfSpaceRadiationRoot(const std::complex<double> &z)
+{
+    std::complex<double> root = std::sqrt(z);
+    if (std::imag(root) < 0.0)
+    {
+        root = -root;
+    }
+    return root;
+}
+}
 
 
 void BCImpedance(const size_t& iprof, const double& x, const bool& isTop, std::complex<double> &f, std::complex<double> &g,
@@ -71,7 +83,7 @@ void BCImpedance(const size_t& iprof, const double& x, const bool& isTop, std::c
         }
         else
         {
-            gammaP = std::sqrt(std::complex<double>(x - omega2 / SQ(HS.cp)));
+            gammaP = HalfSpaceRadiationRoot(std::complex<double>(x - omega2 / SQ(HS.cp)));
             f = gammaP;
             g = HS.rho;
             if (!isComplex)

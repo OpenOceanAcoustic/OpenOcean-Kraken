@@ -47,6 +47,7 @@ namespace OpenOceanKraken
                 RTop(i).theta = ReflCoef[i].theta;
                 RTop(i).phi = ReflCoef[i].phi;
             }
+            params.ReflectionCoef.isDeg = false;
             //params.Bdry.Top.BC = BC_Mode::MODE_F_File; // 边界条件设置为文件读取
         }
 
@@ -61,6 +62,7 @@ namespace OpenOceanKraken
                 RBot(i).theta = ReflCoef[i].theta;
                 RBot(i).phi = ReflCoef[i].phi;
             }
+            params.ReflectionCoef.isDeg = false;
             //params.Bdry.Bot.BC = BC_Mode::MODE_F_File; // 边界条件设置为文件读取
         }
 
@@ -110,6 +112,7 @@ namespace OpenOceanKraken
             RBot(0).R = 1.0;
             RBot(0).theta = 0.0;
             RBot(0).phi = 0.0;
+            params.ReflectionCoef.isDeg = false;
         }
 
 

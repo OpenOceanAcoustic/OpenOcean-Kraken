@@ -502,6 +502,9 @@ namespace OpenOceanKraken
         Eigen::MatrixXcd dPsidzS; // 声源深度本征函数值对深度微分
         // VectorXi modes;    // 模式索引
 
+        Eigen::VectorXd ModeZ;
+        Eigen::MatrixXcd PhiMode;
+
         inline void resize(int firstM, int NSz, int NRz, int NMeshMax, int NSets)
         {
             EVMat.resize(firstM * NSets);
@@ -512,6 +515,8 @@ namespace OpenOceanKraken
             PsiS.resize(firstM, NSz);
             dPsidzR.resize(firstM, NRz);
             dPsidzS.resize(firstM, NSz);
+            ModeZ.resize(0);
+            PhiMode.resize(0, 0);
         }
 
         inline void setZero()
@@ -524,6 +529,8 @@ namespace OpenOceanKraken
             PsiS.setZero();
             dPsidzR.setZero();
             dPsidzS.setZero();
+            ModeZ.setZero();
+            PhiMode.setZero();
         }
     };
 
@@ -549,6 +556,8 @@ namespace OpenOceanKraken
 
         // @brief 声源位置
         Position Pos;
+        Position ModePos;
+        bool hasModePos = false;
 
         // @brief 声速剖面参数
         std::vector<ssp::SSPStructure> SSP;

@@ -914,6 +914,11 @@ namespace OpenOceanKraken
         j["freqinfo"] = params.freqinfo;
         j["AttenUnit"] = params.AttenUnit;
         j["Pos"] = params.Pos;
+        j["hasModePos"] = params.hasModePos;
+        if (params.hasModePos)
+        {
+            j["ModePos"] = params.ModePos;
+        }
         j["sspInput"] = params.sspInput;
         j["ReflectionCoef"] = params.ReflectionCoef;
         j["SBP"] = params.SBP;
@@ -934,6 +939,8 @@ namespace OpenOceanKraken
         params.freqinfo = in.at("freqinfo").get<FreqInfo>();
         params.AttenUnit = in.at("AttenUnit").get<Atten_Mode>();
         params.Pos = in.at("Pos").get<Position>();
+        params.hasModePos = in.contains("hasModePos") ? in.at("hasModePos").get<bool>() : false;
+        params.ModePos = (params.hasModePos && in.contains("ModePos")) ? in.at("ModePos").get<Position>() : params.Pos;
         params.sspInput = in.at("sspInput").get<std::vector<ssp::Range_Independent_Area>>();
         params.ReflectionCoef = in.at("ReflectionCoef").get<ReflectionCoefInfo>();
         params.SBP = in.at("SBP").get<SrcBmPat>();

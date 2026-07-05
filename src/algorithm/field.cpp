@@ -1,14 +1,52 @@
 #include "field.h"
+#include <limits>
+#include <stdexcept>
 
 namespace OpenOceanKraken
 {
+    namespace
+    {
+        double InterpSourceBeamPattern(const SrcBmPat &sbp, double theta, int &iseg)
+        {
+            const int n = sbp.NSBPPts;
+            while (theta > sbp.theta(iseg + 1))
+            {
+                if (iseg < n - 3)
+                {
+                    ++iseg;
+                }
+                else
+                {
+                    break;
+                }
+            }
+            while (theta < sbp.theta(iseg))
+            {
+                if (iseg > 0)
+                {
+                    --iseg;
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            const double ratio = (theta - sbp.theta(iseg)) / (sbp.theta(iseg + 1) - sbp.theta(iseg));
+            return (1.0 - ratio) * sbp.pat(iseg) + ratio * sbp.pat(iseg + 1);
+        }
+    }
+
     void Evaluate(EigenParams &eigen, const OOK_parameters &params, int isz,int iprof,
                   std::complex<float> *uAllSources,
                   std::complex<float> *v_AllSources,
                   std::complex<float> *h_AllSources)
     {
         // 如果没有模态，返回零压力场
-        if (eigen.M <= 0)return;
+        if (eigen.M <= 0)
+        {
+            throw std::runtime_error("Cannot evaluate field: eigen.M <= 0.");
+        }
 
 
         Eigen::VectorXcd krm = eigen.k.segment(0, eigen.M);
@@ -18,9 +56,29 @@ namespace OpenOceanKraken
 
         Eigen::VectorXcd col_vec;
         col_vec = PsiS.col(isz);
+        if (col_vec.cwiseAbs().maxCoeff() == 0.0 || PsiR.cwiseAbs().maxCoeff() == 0.0)
+        {
+            throw std::runtime_error("Cannot evaluate field: source or receiver eigenfunctions are all zero.");
+        }
         double c0,rho;
         getSourceEnv(params.SSP.at(iprof),params.Pos.Sz(isz),rho,c0); //计算声源位置的声速和密度
         double omega = 2 * pi * params.freqinfo.freq;
+
+        if (params.SBP.isSet && isz == 0 && params.SBP.NSBPPts >= 2)
+        {
+            int iseg = 0;
+            const double reference_c0 = 1500.0;
+            for (int mode = 0; mode < eigen.M; ++mode)
+            {
+                double kz2 = std::real(SQ(omega / reference_c0) - SQ(krm(mode)));
+                if (kz2 < 0.0)
+                {
+                    kz2 = 0.0;
+                }
+                const double thetaT = (180.0 / pi) * std::atan(std::sqrt(kz2) / std::real(krm(mode)));
+                col_vec(mode) *= InterpSourceBeamPattern(params.SBP, thetaT, iseg);
+            }
+        }
 
 
         // 初始化因子和常数向量
@@ -149,7 +207,7 @@ namespace OpenOceanKraken
                 for (int iz = 0; iz < params.Pos.NRz; ++iz)
                 {
                     double denom = params.Pos.Rr(ir) + params.Pos.Ro(iz);
-                    if (std::abs(denom) > 1e-3)
+                    if (std::abs(denom) > std::numeric_limits<double>::min())
                     { // 避免除零
                         uAllSources[GetFieldAddr(isz, iz, ir, &params.Pos)] /= std::sqrt(denom);
                         if (params.is_Velocity)
