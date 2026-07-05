@@ -7,6 +7,7 @@
 #include <sstream>
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <stdexcept>
 #include <Eigen/Dense>
 
@@ -67,6 +68,27 @@ namespace OpenOceanKraken
         for (const auto &token : fortran_tokens(line))
         {
             values.push_back(std::stod(token));
+        }
+        return values;
+    }
+
+    static std::vector<double> parse_numbers_lenient(const std::string &line)
+    {
+        std::vector<double> values;
+        for (const auto &token : fortran_tokens(line))
+        {
+            try
+            {
+                size_t pos = 0;
+                double value = std::stod(token, &pos);
+                if (pos == token.size())
+                {
+                    values.push_back(value);
+                }
+            }
+            catch (const std::exception &)
+            {
+            }
         }
         return values;
     }
@@ -257,7 +279,7 @@ namespace OpenOceanKraken
                     params.coherenceType = CoherenceType::Coherent;
                 }
             }
-            // 第3~5行：模态数量跳过，声速剖面个数和范围在这里kraken也不解析，而且在env中已经赋值过了
+            // 第3~5行：模态数量跳过，声速剖面个数和范围在这里OpenOceanKraken也不解析，而且在env中已经赋值过了
             for (int i = 0; i < 3 && line_idx < flp_lines.size(); ++i)
                 line_idx++;
 
@@ -394,12 +416,100 @@ namespace OpenOceanKraken
         {
             std::cerr << "反射系数文件时格式错误:" << refCoefPath << std::endl;
             std::cerr << e.what() << '\n';
+            return false;
         }
         refCoefFile.close();
         return true;
     }
 
-    // 解析单个环境的所有行
+    // 读取内反射系数（IRC）文件
+    bool read_internal_refCoef_file(const std::string &envPath, OOK_parameters &params, std::string pattern)
+    {
+        params.ReflectionCoef.IRC = InternalReflectionCoefInfo{};
+        std::string ircPath = envPath.substr(0, envPath.length() - 4) + pattern;
+        std::ifstream ircFile(ircPath);
+        if (!ircFile.is_open())
+        {
+            std::cerr << "Unable to open Internal Reflection Coefficient file: " << ircPath << std::endl;
+            return false;
+        }
+
+        try
+        {
+            std::string titleLine;
+            if (!std::getline(ircFile, titleLine))
+            {
+                std::cerr << "Internal Reflection Coefficient file is empty: " << ircPath << std::endl;
+                return false;
+            }
+            const auto titleNumbers = parse_numbers_lenient(titleLine);
+            if (titleNumbers.empty())
+            {
+                std::cerr << "Internal Reflection Coefficient file header has no frequency: " << ircPath << std::endl;
+                return false;
+            }
+
+            int nk = 0;
+            ircFile >> nk;
+            if (nk <= 0)
+            {
+                std::cerr << "Internal Reflection Coefficient table must contain at least one point: " << ircPath << std::endl;
+                return false;
+            }
+
+            auto &irc = params.ReflectionCoef.IRC;
+            irc.freq = titleNumbers.back();
+            irc.xTab.resize(nk);
+            irc.fTab.resize(nk);
+            irc.gTab.resize(nk);
+            irc.iTab.resize(nk);
+
+            for (int i = 0; i < nk; ++i)
+            {
+                double x = 0.0;
+                double fReal = 0.0;
+                double fImag = 0.0;
+                double gReal = 0.0;
+                double gImag = 0.0;
+                int iPower = 0;
+                if (!(ircFile >> x >> fReal >> fImag >> gReal >> gImag >> iPower))
+                {
+                    std::cerr << "Internal Reflection Coefficient row is incomplete at index " << i << ": " << ircPath << std::endl;
+                    irc.isSet = false;
+                    return false;
+                }
+                if (!std::isfinite(x) || !std::isfinite(fReal) || !std::isfinite(fImag) ||
+                    !std::isfinite(gReal) || !std::isfinite(gImag))
+                {
+                    std::cerr << "Internal Reflection Coefficient row contains NaN/Inf at index " << i << ": " << ircPath << std::endl;
+                    irc.isSet = false;
+                    return false;
+                }
+                if (i > 0 && x <= irc.xTab(i - 1))
+                {
+                    std::cerr << "Internal Reflection Coefficient xTab must be strictly increasing: " << ircPath << std::endl;
+                    irc.isSet = false;
+                    return false;
+                }
+
+                irc.xTab(i) = x;
+                irc.fTab(i) = std::complex<double>(fReal, fImag);
+                irc.gTab(i) = std::complex<double>(gReal, gImag);
+                irc.iTab(i) = iPower;
+            }
+            irc.isSet = true;
+        }
+        catch (const std::exception &e)
+        {
+            std::cerr << "Failed to read Internal Reflection Coefficient file: " << ircPath << std::endl;
+            std::cerr << e.what() << std::endl;
+            params.ReflectionCoef.IRC.isSet = false;
+            return false;
+        }
+
+        return true;
+    }
+
     static bool parse_single_env(const std::vector<std::string>& lines,
                                  size_t& line_idx,
                                  OOK_parameters& params,
@@ -484,14 +594,18 @@ namespace OpenOceanKraken
                         break;
                     case 'F':
                         params.sspInput[0].HSTop.BC = BC_Mode::MODE_F_File;
-                        read_refCoef_file(envPath, params, ".trc");
+                        if (!read_refCoef_file(envPath, params, ".trc"))
+                        {
+                            std::cerr << "OOK top F option requires a readable .trc reflection coefficient file." << std::endl;
+                            return false;
+                        }
                         break;
                     case 'G':
                         params.sspInput[0].HSTop.BC = BC_Mode::MODE_G_Grain;
                         break;
                     case 'P':
-                        params.sspInput[0].HSTop.BC = BC_Mode::MODE_P_Precomputed;
-                        break;
+                        std::cerr << "OpenOceanKraken does not support top P precomputed reflection loss." << std::endl;
+                        return false;
                     default:
                         params.sspInput[0].HSTop.BC = BC_Mode::MODE_V_Vacuum;
                         break;
@@ -651,14 +765,18 @@ namespace OpenOceanKraken
                     params.sspInput[0].HSBot.BC = BC_Mode::MODE_R_Rigid;
                     break;
                 case 'F':
-                    params.sspInput[0].HSBot.BC = BC_Mode::MODE_F_File;
-                    read_refCoef_file(envPath, params, ".brc");
-                    break;
+                    std::cerr << "OpenOceanKraken does not support bottom F/.brc reflection coefficient files; use OpenOceanKrakenc for this option." << std::endl;
+                    return false;
                 case 'G':
                     params.sspInput[0].HSBot.BC = BC_Mode::MODE_G_Grain;
                     break;
                 case 'P':
                     params.sspInput[0].HSBot.BC = BC_Mode::MODE_P_Precomputed;
+                    if (!read_internal_refCoef_file(envPath, params, ".irc"))
+                    {
+                        std::cerr << "OpenOceanKraken bottom P option requires a readable .irc internal reflection coefficient file." << std::endl;
+                        return false;
+                    }
                     break;
                 }
             }

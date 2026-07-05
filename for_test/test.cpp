@@ -1,8 +1,12 @@
 #include "test.h"
 #include "OpenOceanKrakenInterface.h"
+#include "ThreadPool.h"
+#include "RefCoef.h"
 
 #include <Eigen/Dense>
 #include <algorithm>
+#include <complex>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <vector>
@@ -17,9 +21,15 @@ using OpenOceanKraken::ssp::Range_Independent_Area;
 
 namespace
 {
-    std::vector<std::string> expected_env_cases()
+    std::vector<std::string> expected_env_failures()
     {
-        return {};
+        return {"neggradC_brc.env", "neggradK_brc.env", "neggradC_irc.env", "neggradK_irc.env"};
+    }
+
+    bool is_expected_env_failure(const std::string &name)
+    {
+        const auto failures = expected_env_failures();
+        return std::find(failures.begin(), failures.end(), name) != failures.end();
     }
 
     void require_position_consistency(ook_test::TestRunner &test, const OOK_parameters &params, const std::string &case_name)
@@ -101,6 +111,13 @@ namespace
             test.require(fs::exists(flp_path), name + ": FLP file missing");
 
             Interface iface;
+            if (is_expected_env_failure(name))
+            {
+                test.require(!iface.from_env((test_root / name).string()), name + ": ordinary KRAKEN should reject unsupported or missing reflection coefficient input");
+                ++parsed;
+                continue;
+            }
+
             test.require(iface.from_env((test_root / name).string()), name + ": from_env must succeed");
             const auto &params = iface.getParams_const();
             require_position_consistency(test, params, name);
@@ -110,6 +127,52 @@ namespace
             ++parsed;
         }
         test.require(parsed == static_cast<int>(cases.size()), "ENV/FLP coverage must include every ENV case in test directory");
+    }
+
+    void test_kraken_reflection_option_guards(ook_test::TestRunner &test, const fs::path &test_root)
+    {
+        Interface brc_iface;
+        test.require(!brc_iface.from_env((test_root / "neggradK_brc.env").string()), "KRAKEN bottom F/.brc must fail fast");
+
+        Interface missing_irc_iface;
+        test.require(!missing_irc_iface.from_env((test_root / "neggradK_irc.env").string()), "KRAKEN bottom P must fail when .irc is missing");
+
+        const fs::path root = fs::temp_directory_path() / "ook_irc_fixture";
+        fs::remove_all(root);
+        fs::create_directories(root);
+        fs::copy_file(test_root / "neggradK_irc.env", root / "fixture.env", fs::copy_options::overwrite_existing);
+        fs::copy_file(test_root / "neggradK_irc.flp", root / "fixture.flp", fs::copy_options::overwrite_existing);
+        {
+            std::ofstream irc(root / "fixture.irc");
+            irc << "'fixture irc' 500.0\n";
+            irc << "3\n";
+            irc << "100.0 1.0 0.5 2.0 -0.5 0\n";
+            irc << "200.0 2.0 0.0 4.0 0.0 1\n";
+            irc << "300.0 3.0 -0.5 6.0 0.5 2\n";
+        }
+
+        Interface irc_iface;
+        test.require(irc_iface.from_env((root / "fixture.env").string()), "KRAKEN bottom P must load a valid .irc file");
+        const auto &irc = irc_iface.getParams_const().ReflectionCoef.IRC;
+        test.require(irc.isSet, "IRC table must be marked as set");
+        test.require(irc.xTab.size() == 3, "IRC table point count mismatch");
+        test.requireNear(irc.freq, 500.0, 1.0e-9, "IRC frequency mismatch");
+
+        std::complex<double> f;
+        std::complex<double> g;
+        int iPower = 0;
+        InterpolateIRC(std::complex<double>(50.0, 0.0), f, g, iPower, irc);
+        test.requireNear(std::real(f), 1.0, 1.0e-12, "IRC lower-bound f real mismatch");
+        test.requireNear(std::imag(f), 0.5, 1.0e-12, "IRC lower-bound f imag mismatch");
+        test.requireNear(std::real(g), 2.0, 1.0e-12, "IRC lower-bound g real mismatch");
+        test.requireNear(std::imag(g), -0.5, 1.0e-12, "IRC lower-bound g imag mismatch");
+        test.require(iPower == 0, "IRC lower-bound iPower mismatch");
+
+        InterpolateIRC(std::complex<double>(350.0, 0.0), f, g, iPower, irc);
+        test.requireNear(std::real(f), 3.0, 1.0e-12, "IRC upper-bound f real mismatch");
+        test.requireNear(std::imag(f), -0.5, 1.0e-12, "IRC upper-bound f imag mismatch");
+        test.require(iPower == 2, "IRC upper-bound iPower mismatch");
+        fs::remove_all(root);
     }
 
     void test_munk_exact_values(ook_test::TestRunner &test, const fs::path &test_root)
@@ -177,6 +240,50 @@ namespace
         test.require(params.SSP.size() == params.sspInput.size(), "JSON params SSP conversion count mismatch");
         fs::remove(json_path);
     }
+
+    void test_mod_export_header(ook_test::TestRunner &test, const fs::path &test_root)
+    {
+        ThreadPool pool(1);
+        Interface iface(pool);
+        iface.setNumThreads(1);
+        test.require(iface.from_env((test_root / "MunkK.env").string()), "MunkK from_env before MOD export must succeed");
+        iface.runEigen();
+
+        const fs::path root = fs::temp_directory_path() / "ook_munk_mod_export";
+        const fs::path mod_path = root.string() + ".mod";
+        fs::remove(mod_path);
+        iface.export_mod(root.string());
+        test.require(fs::exists(mod_path), "export_mod must create a .mod file");
+
+        std::ifstream mod(mod_path, std::ios::binary);
+        test.require(mod.is_open(), "exported .mod must be readable");
+
+        int lrecl = 0;
+        mod.read(reinterpret_cast<char *>(&lrecl), sizeof(lrecl));
+        test.require(lrecl >= 32, "MOD LRecordLength must respect Kraken minimum");
+        const std::streamoff rec_bytes = static_cast<std::streamoff>(4 * lrecl);
+
+        std::vector<char> header(static_cast<size_t>(rec_bytes), 0);
+        mod.seekg(0, std::ios::beg);
+        mod.read(header.data(), static_cast<std::streamsize>(header.size()));
+        int nfreq = 0, nmedia = 0, ntot = 0, nmat = 0;
+        std::memcpy(&nfreq, header.data() + 84, sizeof(nfreq));
+        std::memcpy(&nmedia, header.data() + 88, sizeof(nmedia));
+        std::memcpy(&ntot, header.data() + 92, sizeof(ntot));
+        std::memcpy(&nmat, header.data() + 96, sizeof(nmat));
+        test.require(nfreq == 1, "OOK MOD export should write one solved frequency");
+        test.require(nmedia == 1, "MunkK MOD NMedia mismatch");
+        test.require(ntot == 501, "MunkK MOD zTab size mismatch");
+        test.require(nmat == ntot, "KRAKEN MOD NTot/NMat should match for acoustic modes");
+
+        int modes = 0;
+        mod.seekg(5 * rec_bytes, std::ios::beg);
+        mod.read(reinterpret_cast<char *>(&modes), sizeof(modes));
+        test.require(modes > 0, "MunkK MOD must contain at least one mode");
+        test.require(fs::file_size(mod_path) >= static_cast<uintmax_t>((8 + modes) * rec_bytes), "MOD file is too small for mode and wavenumber records");
+        mod.close();
+        fs::remove(mod_path);
+    }
 }
 
 int main(int argc, char **argv)
@@ -189,9 +296,11 @@ int main(int argc, char **argv)
         test_lifecycle_and_guards(test);
         test_top_bottom_line(test);
         test_all_env_flp_cases(test, test_root);
+        test_kraken_reflection_option_guards(test, test_root);
         test_munk_exact_values(test, test_root);
         test_json_roundtrip_from_env(test, test_root);
         test_json_roundtrip_from_params(test);
+        test_mod_export_header(test, test_root);
         std::cout << "OOK interface tests passed. checks=" << test.checks() << std::endl;
         std::cout << "ENV/FLP coverage=all discovered ENV cases, JSON coverage=2/2" << std::endl;
         return 0;

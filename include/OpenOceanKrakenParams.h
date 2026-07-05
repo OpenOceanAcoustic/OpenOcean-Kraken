@@ -430,6 +430,17 @@ namespace OpenOceanKraken
         double phi;   // 反射系数相位
     };
 
+    // @brief 内部反射系数结构体
+    struct InternalReflectionCoefInfo
+    {
+        double freq = 0.0;
+        Eigen::VectorXd xTab;
+        Eigen::VectorXcd fTab;
+        Eigen::VectorXcd gTab;
+        Eigen::VectorXi iTab;
+        bool isSet = false;
+    };
+
     // @brief 声源指向性图结构体
     struct SrcBmPat
     {
@@ -464,6 +475,8 @@ namespace OpenOceanKraken
         Eigen::Matrix<ReflectionCoef, 1, Eigen::Dynamic> RTop;
         // @brief 底部反射系数参数
         Eigen::Matrix<ReflectionCoef, 1, Eigen::Dynamic> RBot;
+        // @brief 内部反射系数参数
+        InternalReflectionCoefInfo IRC;
         bool isDeg = false; // @brief 是否是角度制
     };
 

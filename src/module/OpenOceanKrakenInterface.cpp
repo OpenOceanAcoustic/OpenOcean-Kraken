@@ -10,7 +10,9 @@
 #include "run.h"
 #include "json_in_out.hpp"
 #include "env_in_out.hpp"
+#include <algorithm>
 #include <chrono>
+#include <cstring>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -132,14 +134,14 @@ namespace OpenOceanKraken
     {
         ensureAlive();
         auto &params = this->getParams(); // 获取参数
-        size_t num_threads = this->NumThreads;
-        if (num_threads == 0)
+        size_t workspace_count = std::max<size_t>(1, params.SSP.size());
+        if (this->NumThreads == 0)
         {
             throw std::runtime_error("NumThreads must be greater than zero.");
         }
         releaseIntermediate();
-        this->intm_TridMtx = new TridMtx[num_threads];
-        for (size_t i = 0; i < num_threads; i++)
+        this->intm_TridMtx = new TridMtx[workspace_count];
+        for (size_t i = 0; i < workspace_count; i++)
         {
             this->intm_TridMtx[i].resize(params.NMeshMax, params.NMediaMax, params.mesh.NSets);
         }
@@ -333,7 +335,7 @@ namespace OpenOceanKraken
         this->clearResults();
         for (size_t iprof = 0; iprof < params.SSP.size(); iprof++)
         {
-            EigenVWorker(*this->threadPool, this->NumThreads, iprof, params, *this->intm_TridMtx, output);
+            EigenVWorker(*this->threadPool, this->NumThreads, iprof, params, this->intm_TridMtx[iprof], output);
         }
     }
 
@@ -666,7 +668,276 @@ namespace OpenOceanKraken
 
     void Interface::export_mod(std::string filename) // 导出模型到文件
     {
-        throw std::runtime_error("export_mod() is not implemented yet.");
+        auto &input = this->getParams_const();
+        auto &output = this->getOutput_const();
+        if (!output.eigen)
+        {
+            throw std::runtime_error("Cannot export MOD file before eigen output is available.");
+        }
+        if (!this->intm_TridMtx)
+        {
+            throw std::runtime_error("Cannot export MOD file before the tridiagonal workspace is available.");
+        }
+        if (input.SSP.empty())
+        {
+            throw std::runtime_error("Cannot export MOD file without SSP profiles.");
+        }
+
+        const int nfreq = 1; // OOK currently solves one frequency per run.
+        std::vector<Eigen::VectorXd> zTabs(input.SSP.size());
+        std::vector<Eigen::VectorXi> zFromSz(input.SSP.size());
+        std::vector<Eigen::VectorXi> zFromRz(input.SSP.size());
+        std::vector<int> nzTabs(input.SSP.size(), 0);
+
+        int LRecordLength = std::max(2 * nfreq, 32);
+        for (size_t iprof = 0; iprof < input.SSP.size(); ++iprof)
+        {
+            const auto &ssp = input.SSP.at(iprof);
+            const int firstAc = ssp.FirstAcoustic;
+            const int lastAc = ssp.LastAcoustic;
+            if (firstAc < 0 || lastAc < firstAc || lastAc >= ssp.NMedia)
+            {
+                throw std::runtime_error("Cannot export MOD file: invalid acoustic media range.");
+            }
+
+            MergeVectors(input.Pos.Sz, input.Pos.Rz, zTabs[iprof], nzTabs[iprof], zFromSz[iprof], zFromRz[iprof]);
+            const int nMedia = lastAc - firstAc + 1;
+            LRecordLength = std::max(LRecordLength, 2 * nzTabs[iprof]);
+            LRecordLength = std::max(LRecordLength, 3 * nMedia);
+        }
+
+        const int recordBytes = 4 * LRecordLength;
+        std::ofstream MODFile(filename + ".mod", std::ios::binary | std::ios::trunc);
+        if (!MODFile.is_open())
+        {
+            throw std::runtime_error("Failed to open MOD file for writing: " + filename + ".mod");
+        }
+
+        auto append_bytes = [](std::vector<char> &record, const void *data, size_t size)
+        {
+            const char *ptr = static_cast<const char *>(data);
+            record.insert(record.end(), ptr, ptr + size);
+        };
+        auto append_int = [&](std::vector<char> &record, int value)
+        {
+            append_bytes(record, &value, sizeof(value));
+        };
+        auto append_float = [&](std::vector<char> &record, float value)
+        {
+            append_bytes(record, &value, sizeof(value));
+        };
+        auto append_double = [&](std::vector<char> &record, double value)
+        {
+            append_bytes(record, &value, sizeof(value));
+        };
+        auto append_fixed_string = [&](std::vector<char> &record, const std::string &value, size_t width)
+        {
+            std::string padded(width, ' ');
+            std::memcpy(padded.data(), value.data(), std::min(width, value.size()));
+            append_bytes(record, padded.data(), padded.size());
+        };
+        auto append_complex_float = [&](std::vector<char> &record, std::complex<double> value)
+        {
+            const float realPart = static_cast<float>(std::real(value));
+            const float imagPart = static_cast<float>(std::imag(value));
+            append_float(record, realPart);
+            append_float(record, imagPart);
+        };
+        auto write_record = [&](int recordNumber, const std::vector<char> &payload)
+        {
+            if (payload.size() > static_cast<size_t>(recordBytes))
+            {
+                throw std::runtime_error("MOD record payload exceeds fixed record length.");
+            }
+            std::vector<char> record(recordBytes, 0);
+            if (!payload.empty())
+            {
+                std::memcpy(record.data(), payload.data(), payload.size());
+            }
+            const std::streamoff offset = static_cast<std::streamoff>(recordNumber - 1) * recordBytes;
+            MODFile.seekp(offset, std::ios::beg);
+            MODFile.write(record.data(), static_cast<std::streamsize>(record.size()));
+            if (!MODFile)
+            {
+                throw std::runtime_error("Failed while writing MOD file record.");
+            }
+        };
+        auto bc_char = [](BC_Mode mode) -> char
+        {
+            switch (mode)
+            {
+            case BC_Mode::MODE_R_Rigid:
+                return 'R';
+            case BC_Mode::MODE_V_Vacuum:
+                return 'V';
+            case BC_Mode::MODE_F_File:
+                return 'F';
+            case BC_Mode::MODE_A_Half_space:
+                return 'A';
+            case BC_Mode::MODE_G_Grain:
+                return 'G';
+            case BC_Mode::MODE_P_Precomputed:
+                return 'P';
+            default:
+                return 'V';
+            }
+        };
+        auto material_name = [](Media_Mode mode) -> std::string
+        {
+            return mode == Media_Mode::MODE_E_Elastic ? "ELASTIC" : "ACOUSTIC";
+        };
+        auto hs_cp = [](const HSInfo &hs) -> std::complex<double>
+        {
+            return hs.cp != std::complex<double>(0.0, 0.0) ? hs.cp : std::complex<double>(hs.alphaR, hs.alphaI);
+        };
+        auto hs_cs = [](const HSInfo &hs) -> std::complex<double>
+        {
+            return hs.cs != std::complex<double>(0.0, 0.0) ? hs.cs : std::complex<double>(hs.betaR, hs.betaI);
+        };
+        auto medium_top_depth = [](const ssp::SSPStructure &ssp, int medium) -> float
+        {
+            if (ssp.offset.size() > medium && ssp.z.size() > ssp.offset(medium))
+            {
+                return static_cast<float>(ssp.z(ssp.offset(medium)));
+            }
+            return 0.0f;
+        };
+        auto medium_bottom_depth = [&](const ssp::SSPStructure &ssp, int medium) -> float
+        {
+            const int end = ssp.get_media_end(medium);
+            if (ssp.z.size() > end)
+            {
+                return static_cast<float>(ssp.z(end));
+            }
+            return medium_top_depth(ssp, medium) + (ssp.depth.size() > medium ? static_cast<float>(ssp.depth(medium)) : 0.0f);
+        };
+
+        int iRecProfile = 1;
+        for (size_t iprof = 0; iprof < input.SSP.size(); ++iprof)
+        {
+            const auto &ssp = input.SSP.at(iprof);
+            const auto &trid = this->intm_TridMtx[iprof];
+            const auto &eigen = output.eigen[iprof];
+            const int firstAc = ssp.FirstAcoustic;
+            const int lastAc = ssp.LastAcoustic;
+            const int nMedia = lastAc - firstAc + 1;
+            const int nzTab = nzTabs[iprof];
+            const int m = std::max(0, eigen.M);
+
+            std::vector<char> record;
+            append_int(record, LRecordLength);
+            append_fixed_string(record, input.Title, 80);
+            append_int(record, nfreq);
+            append_int(record, nMedia);
+            append_int(record, nzTab);
+            append_int(record, nzTab);
+            write_record(iRecProfile, record);
+
+            record.clear();
+            for (int medium = firstAc; medium <= lastAc; ++medium)
+            {
+                const int nMesh = (trid.N.size() > medium && trid.N(medium) > 0) ? trid.N(medium) : ssp.NMesh(medium);
+                append_int(record, nMesh);
+                append_fixed_string(record, material_name(ssp.Material.at(medium)), 8);
+            }
+            write_record(iRecProfile + 1, record);
+
+            record.clear();
+            for (int medium = firstAc; medium <= lastAc; ++medium)
+            {
+                append_float(record, medium_top_depth(ssp, medium));
+                const int loc = (trid.Loc.size() > medium) ? trid.Loc(medium) : ssp.offset(medium);
+                const float rhoTop = (trid.rho.size() > loc && trid.rho(loc) != 0.0)
+                                         ? static_cast<float>(trid.rho(loc))
+                                         : static_cast<float>(ssp.rho(ssp.offset(medium)));
+                append_float(record, rhoTop);
+            }
+            write_record(iRecProfile + 2, record);
+
+            record.clear();
+            append_double(record, input.freqinfo.freq);
+            write_record(iRecProfile + 3, record);
+
+            record.clear();
+            for (int iz = 0; iz < nzTab; ++iz)
+            {
+                append_float(record, static_cast<float>(zTabs[iprof](iz)));
+            }
+            write_record(iRecProfile + 4, record);
+
+            iRecProfile += 5;
+
+            record.clear();
+            append_int(record, m);
+            write_record(iRecProfile, record);
+
+            record.clear();
+            append_fixed_string(record, std::string(1, bc_char(ssp.HSTop.BC)), 1);
+            append_complex_float(record, hs_cp(ssp.HSTop));
+            append_complex_float(record, hs_cs(ssp.HSTop));
+            append_float(record, static_cast<float>(ssp.HSTop.rho));
+            append_float(record, medium_top_depth(ssp, firstAc));
+            append_fixed_string(record, std::string(1, bc_char(ssp.HSBot.BC)), 1);
+            append_complex_float(record, hs_cp(ssp.HSBot));
+            append_complex_float(record, hs_cs(ssp.HSBot));
+            append_float(record, static_cast<float>(ssp.HSBot.rho));
+            append_float(record, medium_bottom_depth(ssp, lastAc));
+            write_record(iRecProfile + 1, record);
+
+            for (int mode = 0; mode < m; ++mode)
+            {
+                record.clear();
+                for (int iz = 0; iz < nzTab; ++iz)
+                {
+                    std::complex<double> phi = 0.0;
+                    int sourceIndex = -1;
+                    for (int isz = 0; isz < zFromSz[iprof].size(); ++isz)
+                    {
+                        if (zFromSz[iprof](isz) == iz)
+                        {
+                            sourceIndex = isz;
+                            break;
+                        }
+                    }
+                    if (sourceIndex >= 0)
+                    {
+                        phi = eigen.PsiS(mode, sourceIndex);
+                    }
+                    else
+                    {
+                        for (int irz = 0; irz < zFromRz[iprof].size(); ++irz)
+                        {
+                            if (zFromRz[iprof](irz) == iz)
+                            {
+                                phi = eigen.PsiR(mode, irz);
+                                break;
+                            }
+                        }
+                    }
+                    append_complex_float(record, phi);
+                }
+                write_record(iRecProfile + 2 + mode, record);
+            }
+
+            int iFirst = 0;
+            const int modesPerRecord = std::max(1, LRecordLength / 2);
+            const int kRecordCount = (m > 0) ? (1 + (2 * m - 1) / LRecordLength) : 0;
+            for (int irec = 0; irec < kRecordCount; ++irec)
+            {
+                record.clear();
+                const int iLast = std::min(m, iFirst + modesPerRecord);
+                for (int mode = iFirst; mode < iLast; ++mode)
+                {
+                    append_complex_float(record, eigen.k(mode));
+                }
+                write_record(iRecProfile + m + 2 + irec, record);
+                iFirst = iLast;
+            }
+
+            iRecProfile += 3 + m + ((m > 0) ? ((2 * m - 1) / LRecordLength) : 0);
+        }
+
+        MODFile.close();
     }
 
     void Interface::export_shd(std::string filename, int dataType)

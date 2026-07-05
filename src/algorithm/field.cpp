@@ -126,6 +126,24 @@ namespace OpenOceanKraken
             }
 
             // 可选：加入柱面扩展因子
+            if (params.coherenceType == CoherenceType::Incoherent)
+            {
+                for (int iz = 0; iz < params.Pos.NRz; ++iz)
+                {
+                    Eigen::VectorXcd temp = Cmat.col(iz).array() * Hank.array();
+                    uAllSources[GetFieldAddr(isz, iz, ir, &params.Pos)] = std::sqrt((temp.array() * temp.array()).sum());
+
+                    if (params.is_Velocity)
+                    {
+                        Eigen::VectorXcd temp_vr = Cmat_vr.col(iz).array() * Hank.array();
+                        v_AllSources[GetFieldAddr(isz, iz, ir, &params.Pos)] = std::sqrt((temp_vr.array() * temp_vr.array()).sum());
+
+                        Eigen::VectorXcd temp_vz = Cmat_vz.col(iz).array() * Hank.array();
+                        h_AllSources[GetFieldAddr(isz, iz, ir, &params.Pos)] = std::sqrt((temp_vz.array() * temp_vz.array()).sum());
+                    }
+                }
+            }
+
             if (params.SourceType == Source_Mode::MODE_R_Point)
             {
                 for (int iz = 0; iz < params.Pos.NRz; ++iz)

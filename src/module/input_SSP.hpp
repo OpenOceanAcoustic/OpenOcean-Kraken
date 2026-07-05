@@ -1,5 +1,5 @@
-
 #include "paramsBase.h"
+#include <stdexcept>
 namespace OpenOceanKraken
 {
     class input_SSP : public paramsBase
@@ -80,9 +80,16 @@ namespace OpenOceanKraken
                     }
                     
 
-                    double h = ssp.depth[imedia] / ssp.NMesh[imedia];
                     double lambda_1_20 = ssp.alphaR[layer_end - 1] / params.freqinfo.freq / 20.0; // 最后一个声速计算波长
+                    if (lambda_1_20 <= 0.0)
+                    {
+                        throw std::runtime_error("Invalid SSP mesh estimate: frequency and sound speed must be positive.");
+                    }
                     int Nneeded = int((ssp.depth[imedia]) / lambda_1_20);
+                    if (ssp.NMesh[imedia] < 0)
+                    {
+                        throw std::runtime_error("Invalid SSP mesh count: NMesh must be non-negative.");
+                    }
                     Nneeded = std::max(Nneeded, 10); // require a minimum of 10 points				要求每一层媒质至少有10个点
 
                     if (ssp.NMesh[imedia] == 0) // 网格数为0时，将网格数调整为Nneeded
@@ -91,7 +98,8 @@ namespace OpenOceanKraken
                         std::cout << "网格数为0，按照波长1/20计算，已经将网格数量设定为: " << Nneeded << std::endl;
                         ssp.NMesh[imedia] = Nneeded;
                     }
-                    else if (h > lambda_1_20)
+                    double h = ssp.depth[imedia] / ssp.NMesh[imedia];
+                    if (h > lambda_1_20)
                     {
                         // 打印警告信息（中文）
                         std::cout << "警告：KRAKEN 垂直网格步长太大，已经将网格数量: " << ssp.NMesh[imedia] << " 调整为: " << Nneeded << std::endl;

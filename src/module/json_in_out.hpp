@@ -662,6 +662,64 @@ namespace OpenOceanKraken
     //     ref.phi = in.at("phi").get<double>();
     // }
     // ReflectionCoefInfo
+    void to_json(OpenOcean_json &out, const InternalReflectionCoefInfo &irc)
+    {
+        const int size = static_cast<int>(irc.xTab.size());
+        Eigen::VectorXd fReal(size);
+        Eigen::VectorXd fImag(size);
+        Eigen::VectorXd gReal(size);
+        Eigen::VectorXd gImag(size);
+        for (int i = 0; i < size; ++i)
+        {
+            fReal(i) = std::real(irc.fTab(i));
+            fImag(i) = std::imag(irc.fTab(i));
+            gReal(i) = std::real(irc.gTab(i));
+            gImag(i) = std::imag(irc.gTab(i));
+        }
+        out = OpenOcean_json{
+            {"isSet", irc.isSet},
+            {"freq", irc.freq},
+            {"xTab", irc.xTab},
+            {"fReal", fReal},
+            {"fImag", fImag},
+            {"gReal", gReal},
+            {"gImag", gImag},
+            {"iTab", irc.iTab}};
+    }
+
+    void from_json(const OpenOcean_json &in, InternalReflectionCoefInfo &irc)
+    {
+        if (!in.is_object() || !in.contains("isSet") || !in.at("isSet").get<bool>())
+        {
+            irc = InternalReflectionCoefInfo{};
+            return;
+        }
+
+        const auto &xTab = in.at("xTab").get<Eigen::VectorXd>();
+        const auto &fReal = in.at("fReal").get<Eigen::VectorXd>();
+        const auto &fImag = in.at("fImag").get<Eigen::VectorXd>();
+        const auto &gReal = in.at("gReal").get<Eigen::VectorXd>();
+        const auto &gImag = in.at("gImag").get<Eigen::VectorXd>();
+        const auto &iTab = in.at("iTab").get<Eigen::VectorXi>();
+        const int size = static_cast<int>(xTab.size());
+        if (fReal.size() != size || fImag.size() != size || gReal.size() != size || gImag.size() != size || iTab.size() != size)
+        {
+            throw std::runtime_error("InternalReflectionCoefInfo JSON vector size mismatch.");
+        }
+
+        irc.freq = in.at("freq").get<double>();
+        irc.xTab = xTab;
+        irc.fTab.resize(size);
+        irc.gTab.resize(size);
+        irc.iTab = iTab;
+        for (int i = 0; i < size; ++i)
+        {
+            irc.fTab(i) = std::complex<double>(fReal(i), fImag(i));
+            irc.gTab(i) = std::complex<double>(gReal(i), gImag(i));
+        }
+        irc.isSet = true;
+    }
+
     void to_json(OpenOcean_json &out, const ReflectionCoefInfo &ref)
     {
         int TOP_Size = ref.RTop.size();
@@ -694,6 +752,7 @@ namespace OpenOceanKraken
         j["RBot"]["R"] = RBot_R;
         j["RBot"]["phi"] = RBot_phi;
         j["RBot"]["theta"] = RBot_theta;
+        j["IRC"] = ref.IRC;
         out = std::move(j);
     }
     void from_json(const OpenOcean_json &in, ReflectionCoefInfo &ref)
@@ -718,6 +777,14 @@ namespace OpenOceanKraken
 
         ref.RTop = load_coefs(in.at("RTop"));
         ref.RBot = load_coefs(in.at("RBot"));
+        if (in.contains("IRC"))
+        {
+            ref.IRC = in.at("IRC").get<InternalReflectionCoefInfo>();
+        }
+        else
+        {
+            ref.IRC = InternalReflectionCoefInfo{};
+        }
         ref.isDeg = false;
     }
 

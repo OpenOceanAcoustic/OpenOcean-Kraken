@@ -133,7 +133,7 @@ void BCImpedance(const size_t& iprof, const double& x, const bool& isTop, std::c
     }
     else if (HS.BC == BC_Mode::MODE_P_Precomputed)
     { // 预计算反射系数
-        // TODO InterpolateIRC
+        InterpolateIRC(std::complex<double>(x, 0.0), f, g, iPower, params.ReflectionCoef.IRC);
 
         if (!isComplex)
         {
