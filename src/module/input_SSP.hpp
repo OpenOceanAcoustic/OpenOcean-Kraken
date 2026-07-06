@@ -98,12 +98,11 @@ namespace OpenOceanKraken
                         std::cout << "网格数为0，按照波长1/20计算，已经将网格数量设定为: " << Nneeded << std::endl;
                         ssp.NMesh[imedia] = Nneeded;
                     }
-                    double h = ssp.depth[imedia] / ssp.NMesh[imedia];
-                    if (h > lambda_1_20)
+                    if (ssp.NMesh[imedia] < Nneeded / 2)
                     {
                         // 打印警告信息（中文）
                         std::cout << "警告：KRAKEN 垂直网格步长太大，已经将网格数量: " << ssp.NMesh[imedia] << " 调整为: " << Nneeded << std::endl;
-                        ssp.NMesh[imedia] = Nneeded;
+                        throw std::runtime_error("SSP mesh count is too coarse.");
                     }
                     NMeshAll += ssp.NMesh[imedia];
                 }

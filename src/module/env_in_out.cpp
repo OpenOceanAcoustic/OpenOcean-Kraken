@@ -746,10 +746,6 @@ namespace OpenOceanKraken
             }
 
             params.sspInput[0].layers[0].npts = npts;
-            if (params.sspInput[0].layers[0].nmesh == 0)
-            {
-                params.sspInput[0].layers[0].nmesh = static_cast<int>(points.size());
-            }
 
             // 海底半空间
             char bottomType = '\0';

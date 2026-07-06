@@ -39,3 +39,4 @@ build_codex/
 build_codex_mingw/
 build_interface_mingw/
 .gitignore
+build-coverage/
