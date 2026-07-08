@@ -510,7 +510,7 @@ namespace OpenOceanKraken
                     Eigen::MatrixXcd cpCoef_local(4, npoints);
                     Eigen::MatrixXcd csCoef_local(4, npoints);
                     Eigen::MatrixXcd rhoCoef_local(4, npoints);
-                    Eigen::MatrixXcd work_local(2, npoints); // 假设 csWork 至少需要 2 行
+                    Eigen::MatrixXcd work_local(4, npoints);
 
                     // 调用 PCHIP（传完整局部矩阵，非 block）
                     PCHIP(z_seg, cp_seg, npoints, cpCoef_local, work_local);

@@ -35,8 +35,6 @@ eigen/
 tmp.cpp
 default_params.json
 docs/
-build_codex/
-build_codex_mingw/
-build_interface_mingw/
 .gitignore
 build-coverage/
+build_acceptance/

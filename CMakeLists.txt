@@ -52,6 +52,12 @@ if(BUILD_TESTING)
         NAME OpenOceanKraken_interface_tests
         COMMAND OpenOceanKraken_interface_tests ${CMAKE_CURRENT_SOURCE_DIR}/../test
     )
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../test_for_lcov")
+        add_test(
+            NAME OpenOceanKraken_lcov_fixture_tests
+            COMMAND OpenOceanKraken_interface_tests ${CMAKE_CURRENT_SOURCE_DIR}/../test_for_lcov
+        )
+    endif()
 
     add_executable(ook_case_runner for_test/ook_case_runner.cpp)
     target_include_directories(ook_case_runner PRIVATE ${OOK_INCLUDE_DIRS})

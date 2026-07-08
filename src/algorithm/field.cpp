@@ -151,12 +151,12 @@ namespace OpenOceanKraken
                         // 计算水平振速vr
                         Eigen::VectorXcd col_vec_vr = Cmat_vr.col(iz);
                         std::complex<double> data_vr = (col_vec_vr.array() * Hank.array()).sum();
-                        v_AllSources[GetFieldAddr(isz, iz, ir, &params.Pos)] = data_vr;
+                        h_AllSources[GetFieldAddr(isz, iz, ir, &params.Pos)] = data_vr;
 
                         // 计算垂直振速vz
                         Eigen::VectorXcd col_vec_vz = Cmat_vz.col(iz);
                         std::complex<double> data_vz = (col_vec_vz.array() * Hank.array()).sum();
-                        h_AllSources[GetFieldAddr(isz, iz, ir, &params.Pos)] = data_vz;
+                        v_AllSources[GetFieldAddr(isz, iz, ir, &params.Pos)] = data_vz;
                     }
                 }
             }
