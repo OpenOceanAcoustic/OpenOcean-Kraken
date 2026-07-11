@@ -24,15 +24,12 @@ eigen/
 build/
 *.f90
 nlohmann/
-tests/
-build/
+for_test/
 bin/
 *.mod
 *.shd
 pybind11-master/
 nlohmann/
-eigen/
-tmp.cpp
 default_params.json
 docs/
 .gitignore

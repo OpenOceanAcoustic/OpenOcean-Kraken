@@ -21,10 +21,10 @@ namespace OpenOceanKraken
 
     // 函数声明
 
-    void SolveEp(ThreadPool &threadPool, const int &NumThreads, const int &iset, const size_t &iprof, const int &NSets, EigenParams &eigen, TridMtx &trid, const OOK_parameters &params, double &Error);
+    void SolveEp(ThreadPool &threadPool, const int &NumThreads, const int &iset, const size_t &iprof, const int &NSets, EigenParams &eigen, const EigenParams *previousEigen, TridMtx &trid, const OOK_parameters &params, double &Error);
     void Solve1(ThreadPool &threadPool, const int &NumThreads, const int &iset, const size_t &iprof, const int &NSets, EigenParams &eigen, TridMtx &trid, const OOK_parameters &params);
     void Solve2(ThreadPool &threadPool, const int &NumThreads, const int &iset, const size_t &iprof, EigenParams &eigen, TridMtx &trid, const OOK_parameters &params);
-    void Solve3(ThreadPool &threadPool, const int &NumThreads, const int &iset, const size_t &iprof, EigenParams &eigen, TridMtx &trid, const OOK_parameters &params);
+    bool Solve3(ThreadPool &threadPool, const int &NumThreads, const int &iset, const size_t &iprof, EigenParams &eigen, const EigenParams &previousEigen, TridMtx &trid, const OOK_parameters &params);
     void TridPreprocess(int &iset, size_t iprof, const OOK_parameters &params, TridMtx &trid, int ntimes);
 
     void VectorSolve(size_t iprof, TridMtx &trid, const OOK_parameters &params, EigenParams &eigen,

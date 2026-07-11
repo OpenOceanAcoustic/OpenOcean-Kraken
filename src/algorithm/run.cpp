@@ -42,13 +42,18 @@ namespace OpenOceanKraken
         auto &HSTop = params.SSP.at(iprof).HSTop;
         auto &HSBot = params.SSP.at(iprof).HSBot;
         auto &eigen = output.eigen[iprof];
+        const EigenParams *previousEigen = nullptr;
+        if (iprof > 0 && params.modeType == ModeType::Couple)
+        {
+            previousEigen = &output.eigen[iprof - 1];
+        }
         double error;
 
         for (int iset = 0; iset < params.mesh.NSets; iset++)
         {
             int ntimes = params.mesh.NV[iset];
             TridPreprocess(iset, iprof, params, trid, ntimes);
-            SolveEp(threadPool, NumThreads, iset, iprof, params.mesh.NSets, eigen, trid, params, error);
+            SolveEp(threadPool, NumThreads, iset, iprof, params.mesh.NSets, eigen, previousEigen, trid, params, error);
             if (error * params.Rmax < 1.0)
             {
                 break;
@@ -83,13 +88,28 @@ namespace OpenOceanKraken
         }
     }
 
-    void SolveEp(ThreadPool &threadPool, const int &NumThreads, const int &iset, const size_t &iprof, const int &NSets, EigenParams &eigen, TridMtx &trid, const OOK_parameters &params, double &Error)
+    void SolveEp(ThreadPool &threadPool, const int &NumThreads, const int &iset, const size_t &iprof, const int &NSets, EigenParams &eigen, const EigenParams *previousEigen, TridMtx &trid, const OOK_parameters &params, double &Error)
     {
         double omega2 = SQ(2 * pi * params.freqinfo.freq);
         const auto &ssp_prof = params.SSP.at(iprof); // 只查一次
         if (iprof > 0 && iset < 2 && params.modeType == ModeType::Couple)
         {
-            Solve3(threadPool, NumThreads, iset, iprof, eigen, trid, params);
+            if (previousEigen == nullptr)
+            {
+                throw std::logic_error("KRAKEN Solve3 requires the previous profile eigenvalues.");
+            }
+            if (!Solve3(threadPool, NumThreads, iset, iprof, eigen, *previousEigen, trid, params))
+            {
+                if (ssp_prof.NMedia <= ssp_prof.LastAcoustic - ssp_prof.FirstAcoustic + 1)
+                {
+                    std::cout << "Warning in KRAKEN - Solve3: previous profile initial guesses are unavailable; falling back to Solve1." << std::endl;
+                    Solve1(threadPool, NumThreads, iset, iprof, NSets, eigen, trid, params);
+                }
+                else
+                {
+                    throw std::runtime_error("KRAKEN Solve3 has insufficient valid initial guesses for an elastic profile.");
+                }
+            }
         }
         else if ((iset < 2) && (ssp_prof.NMedia <= ssp_prof.LastAcoustic - ssp_prof.FirstAcoustic + 1))
         {
@@ -302,6 +322,14 @@ namespace OpenOceanKraken
         bool isCountMode = false;
 
         Eigen::VectorXd P(10);
+        if (eigen.firstM <= 0)
+        {
+            throw std::runtime_error("KRAKEN Solve2 requires a positive modal capacity.");
+        }
+        if (eigen.M <= 0 || eigen.M > eigen.firstM)
+        {
+            eigen.M = eigen.firstM;
+        }
 
         for (int mode = 0; mode < eigen.M; mode++)
         {
@@ -347,13 +375,12 @@ namespace OpenOceanKraken
 
     }
 
-    void Solve3(ThreadPool &threadPool, const int &NumThreads, const int &iset, const size_t &iprof, EigenParams &eigen, TridMtx &trid, const OOK_parameters &params)
+    bool Solve3(ThreadPool &threadPool, const int &NumThreads, const int &iset, const size_t &iprof, EigenParams &eigen, const EigenParams &previousEigen, TridMtx &trid, const OOK_parameters &params)
     {
         int IT, MaxIT, iPower = 0, mode = 0; // NzTab = 0,
         double x, xMin, Tolerance, Delta;
-        std::string ErrorMessage;
 
-        bool isCountMode = false;
+        bool isCountMode = true;
 
         MaxIT = 500;
 
@@ -367,15 +394,32 @@ namespace OpenOceanKraken
         FUNCT(iset, iprof, mode, xMin, Delta, iPower, trid, params, eigen.EVMat, eigen.firstM, isCountMode, modeCount);
         int M = modeCount;
         eigen.M = M;
+        isCountMode = false;
+
+        const Eigen::Index previousSetStart = static_cast<Eigen::Index>(iset) * previousEigen.firstM;
+        const Eigen::Index previousSetEnd = previousSetStart + M;
+        if (M <= 0 || M > eigen.firstM || M > previousEigen.firstM || previousSetStart < 0 || previousSetEnd > previousEigen.EVMat.size())
+        {
+            return false;
+        }
 
         for (int modeIdx = 0; modeIdx < M; ++modeIdx)
         {
-            x = eigen.EVMat(iset * eigen.firstM + modeIdx);
-            Tolerance = std::abs(x) * std::pow(10.0, 2.0 - std::numeric_limits<double>::digits10);
-            ZSecantX(x, Tolerance, IT, MaxIT, iset, iprof, mode, Delta, iPower, trid, params, eigen.EVMat, eigen.firstM, isCountMode, modeCount);
-
-            if (!ErrorMessage.empty())
+            x = previousEigen.EVMat(previousSetStart + modeIdx);
+            if (!std::isfinite(x) || x <= 0.0)
             {
+                return false;
+            }
+            Tolerance = std::abs(x) * std::pow(10.0, 2.0 - std::numeric_limits<double>::digits10);
+            IT = MaxIT + 1;
+            ZSecantX(x, Tolerance, IT, MaxIT, iset, iprof, modeIdx, Delta, iPower, trid, params, eigen.EVMat, eigen.firstM, isCountMode, modeCount);
+
+            if (IT > MaxIT || !std::isfinite(x))
+            {
+                std::cout << "Warning in KRAKEN - Solve3: RootFinderSecant failed for profile "
+                          << (iprof + 1) << ", mesh set " << (iset + 1)
+                          << ", mode " << (modeIdx + 1) << std::endl;
+                x = std::numeric_limits<double>::min();
                 // 输出警告信息
             }
 
@@ -384,10 +428,11 @@ namespace OpenOceanKraken
             if (omega2 / SQ(trid.cHigh) > x)
             {
                 eigen.M = modeIdx; // 调整为当前索引
-                return;
+                return true;
             }
         }
         eigen.M = M;
+        return true;
     }
 
     // 初始化有限差分方程
@@ -469,16 +514,17 @@ namespace OpenOceanKraken
 
                 for (int j = 0; j < trid.N(im) + 1; ++j)
                 {
-                    cMin = std::min(std::real(trid.cs_int[j]), cMin);
+                    const int idx = ii + j;
+                    cMin = std::min(std::real(trid.cs_int(idx)), cMin);
 
-                    cp2 = SQ(std::real(trid.cp_int(j)));
-                    cs2 = SQ(std::real(trid.cs_int(j)));
+                    cp2 = SQ(std::real(trid.cp_int(idx)));
+                    cs2 = SQ(std::real(trid.cs_int(idx)));
 
-                    trid.B1(ii + j) = Two_h / (trid.rho_int(j) * cs2);
-                    trid.B2(ii + j) = Two_h / (trid.rho_int(j) * cp2);
-                    trid.B3(ii + j) = 4.0 * Two_h * trid.rho_int(j) * cs2 * (cp2 - cs2) / cp2;
-                    trid.B4(ii + j) = Two_h * (cp2 - 2.0 * cs2) / cp2;
-                    trid.rho(ii + j) = Two_h * std::real(omega2) * trid.rho_int(j);
+                    trid.B1(idx) = Two_h / (trid.rho_int(idx) * cs2);
+                    trid.B2(idx) = Two_h / (trid.rho_int(idx) * cp2);
+                    trid.B3(idx) = 4.0 * Two_h * trid.rho_int(idx) * cs2 * (cp2 - cs2) / cp2;
+                    trid.B4(idx) = Two_h * (cp2 - 2.0 * cs2) / cp2;
+                    trid.rho(idx) = Two_h * std::real(omega2) * trid.rho_int(idx);
                 }
             }
         }

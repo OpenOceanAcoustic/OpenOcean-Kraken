@@ -540,12 +540,18 @@ namespace OpenOceanKraken
             }
 
             // 第3行: 介质层数
+            int nmedia = 1;
             if (line_idx < lines.size())
             {
                 std::istringstream iss(lines[line_idx++]);
                 int val;
                 if (iss >> val)
                 {
+                    if (val <= 0)
+                    {
+                        throw std::runtime_error("ENV NMEDIA must be greater than zero.");
+                    }
+                    nmedia = val;
                     params.NMediaMax = static_cast<int>(val);
                 }
                 else
@@ -674,6 +680,109 @@ namespace OpenOceanKraken
             }
 
             // 第5行：海水竖直网格层个数，界面粗糙度，海水深度
+            struct Point
+            {
+                double z = 0, alphaR = 0, betaR = 0, rho = 1, alphaI = 0, betaI = 0;
+            };
+            Point last_p;
+            double last_medium_depth = 0.0;
+
+            params.sspInput[0].layers.clear();
+            params.sspInput[0].layers.reserve(static_cast<size_t>(nmedia));
+
+            for (int imedia = 0; imedia < nmedia; ++imedia)
+            {
+                if (line_idx >= lines.size())
+                {
+                    throw std::runtime_error("ENV ended before all media were read.");
+                }
+
+                const auto medium_values = parse_numbers(lines[line_idx++]);
+                if (medium_values.size() < 3)
+                {
+                    throw std::runtime_error("ENV medium header must contain NMESH SIGMA DEPTH.");
+                }
+
+                const int nmesh = static_cast<int>(medium_values[0]);
+                const double roughness = medium_values[1];
+                const double medium_depth = medium_values[2];
+                last_medium_depth = medium_depth;
+
+                std::vector<Point> points;
+                Point previous_p;
+
+                while (line_idx < lines.size())
+                {
+                    std::istringstream iss(lines[line_idx++]);
+                    Point p = previous_p;
+                    int count = 0;
+                    if (iss >> p.z)
+                        count++;
+                    if (iss >> p.alphaR)
+                        count++;
+                    if (iss >> p.betaR)
+                        count++;
+                    if (iss >> p.rho)
+                        count++;
+                    if (iss >> p.alphaI)
+                        count++;
+                    if (iss >> p.betaI)
+                        count++;
+
+                    if (count < 2)
+                    {
+                        if (!iss)
+                            line_idx--;
+                        break;
+                    }
+
+                    points.push_back(p);
+                    previous_p = p;
+                    last_p = p;
+
+                    if (p.z >= medium_depth - 1.0e-6)
+                    {
+                        break;
+                    }
+                }
+
+                const int npts = static_cast<int>(points.size());
+                if (npts == 0)
+                {
+                    throw std::runtime_error("ENV medium contains no SSP points.");
+                }
+                if (points.back().z < medium_depth - 1.0e-6)
+                {
+                    throw std::runtime_error("ENV medium SSP does not reach the declared medium depth.");
+                }
+
+                ssp::SSPLayer layer;
+                layer.npts = npts;
+                layer.nmesh = nmesh;
+                layer.sigma = roughness;
+                layer.Material = points.front().betaR == 0.0 ? Media_Mode::MODE_A_Acoustic : Media_Mode::MODE_E_Elastic;
+                layer.z.resize(npts);
+                layer.alphaR.resize(npts);
+                layer.betaR.resize(npts);
+                layer.rho.resize(npts);
+                layer.alphaI.resize(npts);
+                layer.betaI.resize(npts);
+
+                for (int i = 0; i < npts; ++i)
+                {
+                    layer.z[i] = points[i].z;
+                    layer.alphaR[i] = points[i].alphaR;
+                    layer.betaR[i] = points[i].betaR;
+                    layer.rho[i] = points[i].rho;
+                    layer.alphaI[i] = points[i].alphaI;
+                    layer.betaI[i] = points[i].betaI;
+                }
+
+                params.sspInput[0].layers.push_back(layer);
+            }
+            params.sspInput[0].HSBot.Depth = last_medium_depth;
+
+#if 0
             if (line_idx < lines.size())
             {
                 std::istringstream iss(lines[line_idx++]);
@@ -746,6 +855,7 @@ namespace OpenOceanKraken
             }
 
             params.sspInput[0].layers[0].npts = npts;
+#endif
 
             // 海底半空间
             char bottomType = '\0';
