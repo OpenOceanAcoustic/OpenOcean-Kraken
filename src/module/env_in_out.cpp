@@ -679,6 +679,28 @@ namespace OpenOceanKraken
                 }
             }
 
+            // A模式表示顶部为声学/弹性半空间；紧接的下一行就是顶部材料参数，因此需要读取多一行
+            if (params.sspInput[0].HSTop.BC == BC_Mode::MODE_A_Half_space)
+            {
+                if (line_idx >= lines.size())
+                {
+                    throw std::runtime_error("ENV top half-space properties are missing.");
+                }
+
+                const auto values = parse_numbers(lines[line_idx++]);
+                auto &top = params.sspInput[0].HSTop;
+                top.Depth = value_or_default(values, 0, 0.0);
+                top.alphaR = value_or_default(values, 1, 1500.0);
+                top.betaR = value_or_default(values, 2, 0.0);
+                top.rho = value_or_default(values, 3, 1.0);
+                top.alphaI = value_or_default(values, 4, 0.0);
+                top.betaI = value_or_default(values, 5, 0.0);
+                if (top.alphaR <= 0.0 || top.rho <= 0.0)
+                {
+                    throw std::runtime_error("Invalid top half-space: alphaR and rho must be positive.");
+                }
+            }
+
             // 第5行：海水竖直网格层个数，界面粗糙度，海水深度
             struct Point
             {

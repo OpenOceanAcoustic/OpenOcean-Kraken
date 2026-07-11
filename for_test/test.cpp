@@ -956,6 +956,44 @@ namespace
                 test.require(area.HSTop.BC == BC_Mode::MODE_F_File, name + ": top F option mismatch");
                 test.require(params.ReflectionCoef.RTop.size() == 2, name + ": top reflection table size mismatch");
             }
+            else if (name == "boundary_bottom_acoustic.env")
+            {
+                test.require(area.HSTop.BC == BC_Mode::MODE_V_Vacuum, name + ": top V option mismatch");
+                test.require(area.HSBot.BC == BC_Mode::MODE_A_Half_space, name + ": bottom A option mismatch");
+                test.requireNear(area.HSBot.betaR, 0.0, 1.0e-12, name + ": bottom must be acoustic");
+            }
+            else if (name == "boundary_bottom_elastic.env")
+            {
+                test.require(area.HSBot.BC == BC_Mode::MODE_A_Half_space, name + ": bottom A option mismatch");
+                test.requireNear(area.HSBot.betaR, 1100.0, 1.0e-12, name + ": bottom shear speed mismatch");
+            }
+            else if (name == "boundary_top_vacuum.env")
+            {
+                test.require(area.HSTop.BC == BC_Mode::MODE_V_Vacuum, name + ": top V option mismatch");
+            }
+            else if (name == "boundary_top_rigid.env")
+            {
+                test.require(area.HSTop.BC == BC_Mode::MODE_R_Rigid, name + ": top R option mismatch");
+            }
+            else if (name == "boundary_top_acoustic.env")
+            {
+                test.require(area.HSTop.BC == BC_Mode::MODE_A_Half_space, name + ": top A option mismatch");
+                test.requireNear(area.HSTop.alphaR, 1475.0, 1.0e-12, name + ": top compressional speed mismatch");
+                test.requireNear(area.HSTop.betaR, 0.0, 1.0e-12, name + ": top must be acoustic");
+                test.requireNear(area.HSTop.rho, 0.98, 1.0e-12, name + ": top density mismatch");
+            }
+            else if (name == "boundary_top_elastic.env")
+            {
+                test.require(area.HSTop.BC == BC_Mode::MODE_A_Half_space, name + ": top A option mismatch");
+                test.requireNear(area.HSTop.alphaR, 1475.0, 1.0e-12, name + ": top compressional speed mismatch");
+                test.requireNear(area.HSTop.betaR, 100.0, 1.0e-12, name + ": top shear speed mismatch");
+                test.requireNear(area.HSTop.rho, 0.98, 1.0e-12, name + ": top density mismatch");
+            }
+            else if (name == "boundary_top_file.env")
+            {
+                test.require(area.HSTop.BC == BC_Mode::MODE_F_File, name + ": top F option mismatch");
+                test.require(params.ReflectionCoef.RTop.size() == 2, name + ": top reflection table size mismatch");
+            }
 
             const fs::path json_path = fs::temp_directory_path() / ("ook_option_" + name + ".json");
             test.require(iface.to_json(json_path.string()), name + ": option fixture to_json must succeed");
