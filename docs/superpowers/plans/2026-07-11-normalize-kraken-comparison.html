@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Normalize ? Kraken ????????????</title>
+<style>
+:root { color-scheme: light; --ink:#172033; --muted:#5d687a; --line:#d9dfeb; --accent:#075985; --soft:#f3f7fb; }
+* { box-sizing: border-box; }
+body { margin:0; color:var(--ink); background:#eef2f7; font:16px/1.7 "Segoe UI","Microsoft YaHei",sans-serif; }
+main { max-width:1120px; margin:32px auto; padding:44px 56px 72px; background:#fff; box-shadow:0 12px 35px rgba(15,23,42,.08); }
+h1,h2,h3 { line-height:1.3; color:#0f2942; scroll-margin-top:24px; }
+h1 { margin-top:0; padding-bottom:18px; border-bottom:3px solid var(--accent); }
+h2 { margin-top:42px; padding-bottom:8px; border-bottom:1px solid var(--line); }
+h3 { margin-top:34px; }
+a { color:var(--accent); }
+blockquote { margin:20px 0; padding:12px 18px; border-left:4px solid #38bdf8; background:#f0f9ff; color:#334155; }
+code { padding:.15em .35em; border-radius:4px; background:#eef2f6; font-family:Consolas,"Cascadia Code",monospace; }
+pre { overflow:auto; padding:18px; border:1px solid #263449; border-radius:8px; background:#111827; color:#e5edf7; line-height:1.5; }
+pre code { padding:0; background:transparent; color:inherit; }
+table { width:100%; border-collapse:collapse; margin:18px 0; }
+th,td { padding:10px 12px; border:1px solid var(--line); text-align:left; vertical-align:top; }
+th { background:var(--soft); }
+li { margin:.28em 0; }
+.headerlink { margin-left:.45em; opacity:.25; text-decoration:none; }
+.headerlink:hover { opacity:1; }
+@media (max-width:760px) { main { margin:0; padding:26px 20px 48px; box-shadow:none; } body { background:#fff; } pre { font-size:13px; } }
+@media print { body { background:#fff; font-size:11pt; } main { max-width:none; margin:0; padding:0; box-shadow:none; } pre { white-space:pre-wrap; } a { color:inherit; text-decoration:none; } }
+</style>
+</head>
+<body><main><h1 id="normalize-kraken-implementation-plan">Normalize 与 Kraken 计算结果对比测试 Implementation Plan<a class="headerlink" href="#normalize-kraken-implementation-plan" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (<code>- [ ]</code>) syntax for tracking.</p>
+</blockquote>
+<p><strong>Goal:</strong> 建立一个使用相同 ENV 运行 OOK 与 Fortran Kraken、比较归一化模态函数和复波数并保留环境与原始产物的可重复测试。</p>
+<p><strong>Architecture:</strong> 一个纯 Python 比较模块负责模态符号对齐、误差度量和近似归一化泛函检查；同一模块的运行层负责隔离执行两个真实求解器并保存日志与 JSON。<code>unittest</code> 先用合成 MOD 数据验证比较器会正确通过和失败，再运行专用声学环境的端到端 Kraken oracle 测试。</p>
+<p><strong>Tech Stack:</strong> Python 3 标准库、<code>unittest</code>、现有 <code>tools/read_mod_summary.py</code> MOD 解析器、OOK C++17 可执行文件、Fortran Kraken 可执行文件。</p>
+<h2 id="global-constraints">Global Constraints<a class="headerlink" href="#global-constraints" title="Permanent link">&para;</a></h2>
+<ul>
+<li>不修改 <code>src/algorithm/run.cpp</code> 或 Fortran Kraken 的生产算法。</li>
+<li>数值基准固定为 <code>krakenFortran/build_mingw/out/kraken.exe</code>，不回退到 <code>krakenc.exe</code>。</li>
+<li>两端使用同一个 <code>for_test/fixtures/normalize/normalize_reference.env</code>。</li>
+<li>模态函数允许整模态乘以 <code>-1</code>，但不允许重新缩放。</li>
+<li><code>Phi</code> 最大绝对误差或最大相对误差必须不超过 <code>5e-5</code>；近零阈值固定为 <code>1e-10</code>。</li>
+<li>深度网格最大绝对误差不超过 <code>1e-6 m</code>；复波数最大绝对误差不超过 <code>1e-7 1/m</code>。</li>
+<li>近似归一化泛函同时要求 OOK/Kraken 最大互差不超过 <code>5e-5</code>，且各自与 1 的最大偏差不超过 <code>5e-2</code>。后一个较宽容差只补偿 MOD 中单精度波数对临界模态导纳导数的放大，不替代严格的 OOK/Kraken 互差检查。</li>
+<li>最新一次产物固定保留在 <code>for_test/artifacts/normalize_kraken/</code>，清理范围不得越出该目录。</li>
+<li>不恢复或提交工作区中既有的无关删除项。</li>
+</ul>
+<h2 id="file-structure">File Structure<a class="headerlink" href="#file-structure" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Create: <code>for_test/normalize_kraken_compare.py</code> — 纯比较函数、归一化泛函检查、真实进程运行、产物写入和 CLI。</li>
+<li>Create: <code>for_test/test_normalize_kraken_compare.py</code> — 合成数据单元测试和真实端到端测试。</li>
+<li>Create: <code>for_test/fixtures/normalize/normalize_reference.env</code> — 单频、单声学层、1000 网格点和 1001 MOD 输出深度的固定环境。</li>
+<li>Generate: <code>for_test/artifacts/normalize_kraken/comparison.json</code> — 完整指标、阈值、命令、路径、哈希和结论。</li>
+<li>Generate: <code>for_test/artifacts/normalize_kraken/ook/normalize_reference.mod</code> — OOK 原始 MOD。</li>
+<li>Generate: <code>for_test/artifacts/normalize_kraken/kraken/normalize_reference.mod</code> — Kraken 原始 MOD。</li>
+<li>Generate: <code>for_test/artifacts/normalize_kraken/*.log</code> — 两端进程输出。</li>
+<li>Reference: <code>../tools/read_mod_summary.py</code> — 已验证的 MOD 二进制解析器。</li>
+</ul>
+<hr />
+<h3 id="task-1">Task 1: 建立纯模态比较器<a class="headerlink" href="#task-1" title="Permanent link">&para;</a></h3>
+<p><strong>Files:</strong>
+- Create: <code>for_test/test_normalize_kraken_compare.py</code>
+- Create: <code>for_test/normalize_kraken_compare.py</code></p>
+<p><strong>Interfaces:</strong>
+- Consumes: <code>compare_modal_data(ook: dict, kraken: dict, thresholds: Thresholds) -&gt; dict</code> 的两个 <code>parse_mod</code> 风格字典。
+- Produces: <code>Thresholds</code> 数据类、<code>compare_modal_data</code>、<code>normalization_values</code> 和包含 <code>passes</code>、最差误差位置及逐模态摘要的字典。</p>
+<ul>
+<li>[ ] <strong>Step 1: 写入符号对齐与差异检测的失败测试</strong></li>
+</ul>
+<p>在 <code>for_test/test_normalize_kraken_compare.py</code> 中创建 <code>NormalizeComparatorTests</code>，使用以下工厂构造最小 MOD 数据：</p>
+<pre><code class="language-python">def modal_data(phi, k=(1.0, 0.0)):
+    return {
+        &quot;nfreq&quot;: 1, &quot;nmedia&quot;: 1, &quot;ntot&quot;: len(phi), &quot;nmesh&quot;: [len(phi) - 1],
+        &quot;freqs&quot;: [250.0], &quot;z&quot;: [float(i) for i in range(len(phi))], &quot;M&quot;: 1,
+        &quot;phi&quot;: [[{&quot;real&quot;: float(v), &quot;imag&quot;: 0.0} for v in phi]],
+        &quot;k&quot;: [{&quot;real&quot;: float(k[0]), &quot;imag&quot;: float(k[1])}],
+        &quot;halfspace&quot;: {&quot;top&quot;: {&quot;bc&quot;: &quot;V&quot;}, &quot;bottom&quot;: {
+            &quot;bc&quot;: &quot;A&quot;, &quot;cp&quot;: {&quot;real&quot;: 1590.0, &quot;imag&quot;: 0.0}, &quot;rho&quot;: 1.2,
+        }},
+    }
+
+def test_sign_flipped_mode_passes(self):
+    result = compare_modal_data(modal_data([0.0, 1.0, 0.0]), modal_data([0.0, -1.0, 0.0]))
+    self.assertTrue(result[&quot;passes&quot;])
+    self.assertEqual(result[&quot;modes&quot;][0][&quot;sign&quot;], -1)
+
+def test_shape_difference_fails(self):
+    result = compare_modal_data(modal_data([0.0, 1.0, 0.0]), modal_data([0.0, 0.5, 0.0]))
+    self.assertFalse(result[&quot;passes&quot;])
+
+def test_nonfinite_value_fails(self):
+    result = compare_modal_data(modal_data([0.0, float(&quot;nan&quot;), 0.0]), modal_data([0.0, 1.0, 0.0]))
+    self.assertFalse(result[&quot;passes&quot;])
+    self.assertIn(&quot;non-finite&quot;, &quot; &quot;.join(result[&quot;failures&quot;]))
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 运行测试确认因模块缺失而失败</strong></li>
+</ul>
+<p>Run:</p>
+<pre><code class="language-powershell">python -m unittest for_test/test_normalize_kraken_compare.py -v
+</code></pre>
+<p>Expected: FAIL with <code>ModuleNotFoundError: No module named 'normalize_kraken_compare'</code>。</p>
+<ul>
+<li>[ ] <strong>Step 3: 实现最小比较器</strong></li>
+</ul>
+<p>在 <code>for_test/normalize_kraken_compare.py</code> 中实现：</p>
+<pre><code class="language-python">@dataclass(frozen=True)
+class Thresholds:
+    phi_abs: float = 5.0e-5
+    phi_rel: float = 5.0e-5
+    near_zero: float = 1.0e-10
+    z_abs: float = 1.0e-6
+    k_abs: float = 1.0e-7
+    normalization_pair: float = 5.0e-5
+    normalization_one: float = 5.0e-2
+
+def as_complex(value):
+    return complex(value[&quot;real&quot;], value[&quot;imag&quot;])
+
+def compare_modal_data(ook, kraken, thresholds=Thresholds()):
+    failures = []
+    for key in (&quot;nfreq&quot;, &quot;nmedia&quot;, &quot;ntot&quot;, &quot;M&quot;):
+        if ook[key] != kraken[key]:
+            failures.append(f&quot;{key} mismatch: OOK={ook[key]} Kraken={kraken[key]}&quot;)
+    if failures:
+        return {&quot;passes&quot;: False, &quot;failures&quot;: failures, &quot;modes&quot;: []}
+    if not all(math.isfinite(v) for data in (ook, kraken)
+               for mode in data[&quot;phi&quot;] for pair in mode for v in pair.values()):
+        return {&quot;passes&quot;: False, &quot;failures&quot;: [&quot;non-finite modal value&quot;], &quot;modes&quot;: []}
+    z_max = max((abs(a - b) for a, b in zip(ook[&quot;z&quot;], kraken[&quot;z&quot;])), default=0.0)
+    k_max = max((abs(as_complex(a) - as_complex(b)) for a, b in zip(ook[&quot;k&quot;], kraken[&quot;k&quot;])), default=0.0)
+    modes = []
+    phi_abs = phi_rel = 0.0
+    for index, (left, right) in enumerate(zip(ook[&quot;phi&quot;], kraken[&quot;phi&quot;]), 1):
+        a = [as_complex(v) for v in left]
+        b = [as_complex(v) for v in right]
+        sign = 1 if sum(abs(x-y)**2 for x, y in zip(a, b)) &lt;= sum(abs(x+y)**2 for x, y in zip(a, b)) else -1
+        abs_err = [abs(x-sign*y) for x, y in zip(a, b)]
+        rel_err = [e/max(abs(x), abs(sign*y)) for e, x, y in zip(abs_err, a, b)
+                   if max(abs(x), abs(sign*y)) &gt;= thresholds.near_zero]
+        row = {&quot;mode&quot;: index, &quot;sign&quot;: sign, &quot;max_abs_phi&quot;: max(abs_err, default=0.0),
+               &quot;max_rel_phi&quot;: max(rel_err, default=0.0)}
+        modes.append(row)
+        phi_abs = max(phi_abs, row[&quot;max_abs_phi&quot;])
+        phi_rel = max(phi_rel, row[&quot;max_rel_phi&quot;])
+    if z_max &gt; thresholds.z_abs:
+        failures.append(f&quot;z max abs {z_max} exceeds {thresholds.z_abs}&quot;)
+    if k_max &gt; thresholds.k_abs:
+        failures.append(f&quot;k max abs {k_max} exceeds {thresholds.k_abs}&quot;)
+    if phi_abs &gt; thresholds.phi_abs and phi_rel &gt; thresholds.phi_rel:
+        failures.append(f&quot;Phi errors abs={phi_abs} rel={phi_rel}&quot;)
+    return {&quot;passes&quot;: not failures, &quot;failures&quot;: failures, &quot;max_abs_z&quot;: z_max,
+            &quot;max_abs_k&quot;: k_max, &quot;max_abs_phi&quot;: phi_abs, &quot;max_rel_phi&quot;: phi_rel,
+            &quot;modes&quot;: modes}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: 运行比较器单元测试确认通过</strong></li>
+</ul>
+<p>Run: <code>python -m unittest for_test/test_normalize_kraken_compare.py -v</code></p>
+<p>Expected: 3 tests PASS。</p>
+<ul>
+<li>[ ] <strong>Step 5: 提交纯比较器</strong></li>
+</ul>
+<pre><code class="language-powershell">git add for_test/normalize_kraken_compare.py for_test/test_normalize_kraken_compare.py
+git commit -m &quot;test: add Normalize modal comparator&quot;
+</code></pre>
+<h3 id="task-2">Task 2: 添加固定环境和真实求解器运行层<a class="headerlink" href="#task-2" title="Permanent link">&para;</a></h3>
+<p><strong>Files:</strong>
+- Modify: <code>for_test/test_normalize_kraken_compare.py</code>
+- Modify: <code>for_test/normalize_kraken_compare.py</code>
+- Create: <code>for_test/fixtures/normalize/normalize_reference.env</code></p>
+<p><strong>Interfaces:</strong>
+- Consumes: <code>run_comparison(workspace_root: Path, artifact_root: Path, timeout: int = 120) -&gt; dict</code>。
+- Produces: 隔离运行目录、两份 MOD、两份日志和完整 <code>comparison.json</code>。</p>
+<ul>
+<li>[ ] <strong>Step 1: 写入端到端失败测试</strong></li>
+</ul>
+<p>追加：</p>
+<pre><code class="language-python">class NormalizeKrakenIntegrationTests(unittest.TestCase):
+    def test_reference_environment_matches_fortran_kraken(self):
+        workspace = Path(__file__).resolve().parents[2]
+        artifacts = Path(__file__).resolve().parent / &quot;artifacts&quot; / &quot;normalize_kraken&quot;
+        result = run_comparison(workspace, artifacts, timeout=120)
+        self.assertTrue(result[&quot;passes&quot;], result[&quot;failures&quot;])
+        self.assertTrue((artifacts / &quot;comparison.json&quot;).is_file())
+        self.assertTrue((artifacts / &quot;ook&quot; / &quot;normalize_reference.mod&quot;).is_file())
+        self.assertTrue((artifacts / &quot;kraken&quot; / &quot;normalize_reference.mod&quot;).is_file())
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 运行端到端测试确认因运行层或环境缺失而失败</strong></li>
+</ul>
+<p>Run:</p>
+<pre><code class="language-powershell">python -m unittest for_test.test_normalize_kraken_compare.NormalizeKrakenIntegrationTests -v
+</code></pre>
+<p>Expected: FAIL with missing <code>run_comparison</code> or missing <code>normalize_reference.env</code>。</p>
+<ul>
+<li>[ ] <strong>Step 3: 写入固定 ENV</strong></li>
+</ul>
+<p>将 <code>calibK.env</code> 的物理参数固定为专用用例，并把输出深度改为完整 1001 点网格：</p>
+<pre><code class="language-text">'Normalize reference: vacuum top, acoustic half-space bottom'
+250.0
+1
+'CVW'
+1000  0.0  100.0
+     0.0  1500.0 /
+   100.0  1500.0 /
+'A'  0.0
+   100.0  1590.0  0.0  1.2 0.5 /
+1400.0  20000
+0.0
+1
+50.0 /
+1001
+0.0  100.0 /
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: 实现安全产物目录、进程执行和 MOD 解析加载</strong></li>
+</ul>
+<p>实现 <code>prepare_artifacts</code>，先解析目标路径并验证其位于 <code>OOK/for_test/artifacts</code> 下，之后才允许清理；实现 <code>run_command</code> 使用 <code>subprocess.run(..., timeout=timeout, capture_output=True, text=True, encoding="utf-8", errors="replace")</code>，并把命令、工作目录、返回码和输出写入日志。通过 <code>importlib.util.spec_from_file_location</code> 从 <code>workspace_root/tools/read_mod_summary.py</code> 加载 <code>parse_mod</code>。</p>
+<p>OOK 命令固定为：</p>
+<pre><code class="language-python">[str(workspace_root / &quot;OOK/bin/ook_case_runner.exe&quot;), str(env_path),
+ str(artifact_root / &quot;ook/normalize_reference&quot;), &quot;1&quot;, &quot;--mod&quot;]
+</code></pre>
+<p>Kraken 命令固定为：</p>
+<pre><code class="language-python">[str(workspace_root / &quot;krakenFortran/build_mingw/out/kraken.exe&quot;), &quot;normalize_reference&quot;]
+</code></pre>
+<p>Kraken 的 <code>cwd</code> 固定为 <code>artifact_root / "kraken"</code>，且先把同一个 ENV 复制进去。</p>
+<ul>
+<li>[ ] <strong>Step 5: 实现近似归一化泛函和 JSON 报告</strong></li>
+</ul>
+<p>对每个模态按完整 1001 点 <code>z</code> 网格计算单层介质梯形积分；对声学下半空间，用 MOD 中的 <code>cp</code>、<code>rho</code> 和 <code>k.real**2</code>，按 <code>x1=0.9999999*x</code>、<code>x2=1.0000001*x</code> 对 <code>real(sqrt(x-omega**2/cp**2))/rho</code> 做相同有限差分，得到底导纳导数并加入末端项。把两端逐模态值、最大互差和各自最大 <code>|RN-1|</code> 写入比较结果，并纳入 Global Constraints 的通过条件。</p>
+<p><code>comparison.json</code> 还必须写入：ISO 时间、环境和两端可执行文件绝对路径及 SHA-256、实际命令、阈值、元数据、全局最差误差、前 20/中 20/后 20 模态摘要和 <code>passes</code>。</p>
+<ul>
+<li>[ ] <strong>Step 6: 运行端到端测试并按实际红灯校准诊断而非放宽阈值</strong></li>
+</ul>
+<p>Run:</p>
+<pre><code class="language-powershell">python -m unittest for_test.test_normalize_kraken_compare.NormalizeKrakenIntegrationTests -v
+</code></pre>
+<p>Expected: PASS。若失败，先检查命令、MOD 格式、模态匹配和归一化公式；不得把 <code>Phi=5e-5</code>、<code>z=1e-6</code>、<code>k=1e-7</code> 或归一化互差 <code>5e-5</code> 放宽。</p>
+<ul>
+<li>[ ] <strong>Step 7: 提交环境和运行层</strong></li>
+</ul>
+<pre><code class="language-powershell">git add for_test/normalize_kraken_compare.py for_test/test_normalize_kraken_compare.py for_test/fixtures/normalize/normalize_reference.env
+git commit -m &quot;test: compare Normalize output with Kraken&quot;
+</code></pre>
+<h3 id="task-3">Task 3: 完整验证和产物复核<a class="headerlink" href="#task-3" title="Permanent link">&para;</a></h3>
+<p><strong>Files:</strong>
+- Verify: <code>for_test/artifacts/normalize_kraken/comparison.json</code>
+- Verify: <code>for_test/artifacts/normalize_kraken/ook/normalize_reference.mod</code>
+- Verify: <code>for_test/artifacts/normalize_kraken/kraken/normalize_reference.mod</code></p>
+<p><strong>Interfaces:</strong>
+- Consumes: Task 1 与 Task 2 的测试和运行器。
+- Produces: 新鲜的测试证据和保留在固定目录中的最终产物。</p>
+<ul>
+<li>[ ] <strong>Step 1: 运行全部 Normalize 测试</strong></li>
+</ul>
+<p>Run: <code>python -m unittest for_test/test_normalize_kraken_compare.py -v</code></p>
+<p>Expected: 所有比较器与端到端测试 PASS，无 skipped。</p>
+<ul>
+<li>[ ] <strong>Step 2: 运行现有 MOD 工具测试</strong></li>
+</ul>
+<p>Run:</p>
+<pre><code class="language-powershell">$env:PYTHONPATH='E:\my_project\ook_project\tools'
+python -m unittest E:\my_project\ook_project\tools\test_mod_tools.py -v
+</code></pre>
+<p>Expected: 4 tests PASS。</p>
+<ul>
+<li>[ ] <strong>Step 3: 运行 OOK CTest 回归</strong></li>
+</ul>
+<p>Run: <code>ctest --test-dir build_acceptance --output-on-failure</code></p>
+<p>Expected: <code>100% tests passed</code>。</p>
+<ul>
+<li>[ ] <strong>Step 4: 复核 JSON 与原始文件</strong></li>
+</ul>
+<p>Run:</p>
+<pre><code class="language-powershell">$r = Get-Content -Raw for_test/artifacts/normalize_kraken/comparison.json | ConvertFrom-Json
+$r | Select-Object passes,failures,max_abs_z,max_abs_k,max_abs_phi,max_rel_phi
+Get-Item for_test/artifacts/normalize_kraken/ook/normalize_reference.mod,
+         for_test/artifacts/normalize_kraken/kraken/normalize_reference.mod,
+         for_test/fixtures/normalize/normalize_reference.env |
+  Select-Object FullName,Length,LastWriteTime
+</code></pre>
+<p>Expected: <code>passes=True</code>、<code>failures=[]</code>，三项文件均存在且非空。</p>
+<ul>
+<li>[ ] <strong>Step 5: 检查最终差异和无关修改</strong></li>
+</ul>
+<p>Run:</p>
+<pre><code class="language-powershell">git status --short
+git diff --check HEAD~2..HEAD
+</code></pre>
+<p>Expected: 只包含本计划文件、比较器、测试和环境的预期提交；用户原有两个删除项仍保持为未提交删除。</p></main></body>
+</html>
