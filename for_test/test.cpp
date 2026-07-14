@@ -1229,6 +1229,56 @@ namespace
         test.require(json_cases > 0, "LCOV bad input coverage requires at least one bad JSON fixture");
     }
 
+    void test_multilayer_elastic_stack_terminal_mode(ook_test::TestRunner &test, const fs::path &test_root)
+    {
+        ThreadPool pool(1);
+        Interface iface(pool);
+        iface.setNumThreads(1);
+
+        const fs::path env_path = test_root / "multilayer_elastic_stack.env";
+        test.require(fs::exists(env_path), "multilayer elastic stack fixture must exist");
+        test.require(iface.from_env(env_path.string()), "multilayer elastic stack from_env must succeed");
+        iface.runEigen();
+
+        const auto &eigen = iface.getOutput_const().eigen[0];
+        test.require(eigen.M == 19, "multilayer elastic stack must retain the terminal cutoff mode");
+
+        const double omega = 2.0 * std::acos(-1.0) * iface.getParams_const().freqinfo.freq;
+        const double terminal_phase_speed = omega / std::real(eigen.k(eigen.M - 1));
+        test.requireNear(terminal_phase_speed, 1998.731201, 0.05,
+                         "multilayer elastic stack terminal mode phase speed mismatch");
+    }
+
+    void test_multilayer_mud_sand_lossy_wavenumbers(ook_test::TestRunner &test, const fs::path &test_root)
+    {
+        ThreadPool pool(1);
+        Interface iface(pool);
+        iface.setNumThreads(1);
+
+        const fs::path env_path = test_root / "multilayer_mud_sand.env";
+        test.require(fs::exists(env_path), "multilayer mud/sand fixture must exist");
+        test.require(iface.from_env(env_path.string()), "multilayer mud/sand from_env must succeed");
+        iface.runEigen();
+
+        const auto &eigen = iface.getOutput_const().eigen[0];
+        test.require(eigen.M == 7, "multilayer mud/sand must retain seven propagating modes");
+
+        const double kraken_k[] = {
+            0.418148130178,
+            0.415981858969,
+            0.412391990423,
+            0.406430929899,
+            0.405105829239,
+            0.401739627123,
+            0.396181911230,
+        };
+        for (int mode = 0; mode < eigen.M; ++mode)
+        {
+            test.requireNear(std::real(eigen.k(mode)), kraken_k[mode], 1.0e-7,
+                             "multilayer mud/sand lossy wavenumber mismatch at mode " + std::to_string(mode + 1));
+        }
+    }
+
     void test_mod_export_header(ook_test::TestRunner &test, const fs::path &test_root)
     {
         ThreadPool pool(1);
@@ -1300,6 +1350,8 @@ int main(int argc, char **argv)
         test_json_roundtrip_from_env(test, env_root);
         test_json_roundtrip_from_params(test);
         test_bad_input_cases(test, bad_root);
+        test_multilayer_elastic_stack_terminal_mode(test, env_root);
+        test_multilayer_mud_sand_lossy_wavenumbers(test, env_root);
         test_mod_export_header(test, env_root);
         std::cout << "OOK interface tests passed. checks=" << test.checks() << std::endl;
         std::cout << "ENV/FLP coverage=all discovered ENV cases, JSON coverage=2/2, bad fixtures=all discovered ENV/JSON" << std::endl;

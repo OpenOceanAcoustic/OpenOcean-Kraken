@@ -24,7 +24,8 @@ namespace OpenOceanKraken
             for (int iprof = 0; iprof < params.SSP.size(); iprof++)
             {
                 double cmin = params.SSP.at(iprof).alphaR.minCoeff();
-                output.eigen[iprof].firstM = (size_t)(2.0 * params.SSP.at(iprof).depth.tail(1)(0) * freq / cmin * 1.1 + 10);
+                const double total_depth = params.SSP.at(iprof).depth.sum();
+                output.eigen[iprof].firstM = (size_t)(2.0 * total_depth * freq / cmin * 1.1 + 10);
                 output.eigen[iprof].resize(output.eigen[iprof].firstM, pos.NSz, pos.NRz, params.NMeshMax, params.mesh.NSets);
             }
 

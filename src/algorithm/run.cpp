@@ -517,8 +517,8 @@ namespace OpenOceanKraken
                     const int idx = ii + j;
                     cMin = std::min(std::real(trid.cs_int(idx)), cMin);
 
-                    cp2 = SQ(std::real(trid.cp_int(idx)));
-                    cs2 = SQ(std::real(trid.cs_int(idx)));
+                    cp2 = std::real(trid.cp_int(idx) * trid.cp_int(idx));
+                    cs2 = std::real(trid.cs_int(idx) * trid.cs_int(idx));
 
                     trid.B1(idx) = Two_h / (trid.rho_int(idx) * cs2);
                     trid.B2(idx) = Two_h / (trid.rho_int(idx) * cp2);
