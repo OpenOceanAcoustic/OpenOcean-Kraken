@@ -4,6 +4,8 @@
 #include "json_eigen.hpp"
 #include "OpenOceanKrakenParams.h"
 #include "OpenOceanKrakenInterface.h"
+#include <cmath>
+#include <stdexcept>
 
 // 定义数据结构对象的值
 namespace OpenOceanKraken
@@ -914,6 +916,9 @@ namespace OpenOceanKraken
         j["freqinfo"] = params.freqinfo;
         j["AttenUnit"] = params.AttenUnit;
         j["Pos"] = params.Pos;
+        j["MLimit"] = params.MLimit;
+        j["NProf"] = params.NProf;
+        j["RProf"] = params.RProf;
         j["hasModePos"] = params.hasModePos;
         if (params.hasModePos)
         {
@@ -939,9 +944,51 @@ namespace OpenOceanKraken
         params.freqinfo = in.at("freqinfo").get<FreqInfo>();
         params.AttenUnit = in.at("AttenUnit").get<Atten_Mode>();
         params.Pos = in.at("Pos").get<Position>();
+        params.MLimit = in.contains("MLimit") ? in.at("MLimit").get<int>() : 9999;
         params.hasModePos = in.contains("hasModePos") ? in.at("hasModePos").get<bool>() : false;
         params.ModePos = (params.hasModePos && in.contains("ModePos")) ? in.at("ModePos").get<Position>() : params.Pos;
         params.sspInput = in.at("sspInput").get<std::vector<ssp::Range_Independent_Area>>();
+        params.NProf = in.contains("NProf") ? in.at("NProf").get<int>() : static_cast<int>(params.sspInput.size());
+        if (in.contains("RProf"))
+        {
+            params.RProf = in.at("RProf").get<Eigen::VectorXd>();
+        }
+        else
+        {
+            params.RProf.resize(params.NProf);
+            for (int i = 0; i < params.NProf; ++i)
+            {
+                params.RProf(i) = params.sspInput.at(static_cast<size_t>(i)).Range;
+            }
+        }
+        if (params.MLimit <= 0)
+        {
+            throw std::runtime_error("MLimit must be greater than zero.");
+        }
+        if (params.NProf <= 0 || params.NProf != static_cast<int>(params.sspInput.size()))
+        {
+            throw std::runtime_error("NProf must match the number of SSP profiles.");
+        }
+        if (params.RProf.size() != params.NProf)
+        {
+            throw std::runtime_error("RProf size must equal NProf.");
+        }
+        for (int i = 0; i < params.NProf; ++i)
+        {
+            if (!std::isfinite(params.RProf(i)))
+            {
+                throw std::runtime_error("RProf must contain finite values.");
+            }
+            if (i == 0 && std::abs(params.RProf(i)) > 1.0e-9)
+            {
+                throw std::runtime_error("The first RProf value must be zero.");
+            }
+            if (i > 0 && params.RProf(i) <= params.RProf(i - 1))
+            {
+                throw std::runtime_error("RProf values must be strictly increasing.");
+            }
+            params.sspInput[static_cast<size_t>(i)].Range = params.RProf(i);
+        }
         params.ReflectionCoef = in.at("ReflectionCoef").get<ReflectionCoefInfo>();
         params.SBP = in.at("SBP").get<SrcBmPat>();
         params.is_Velocity = in.at("is_Velocity").get<bool>();

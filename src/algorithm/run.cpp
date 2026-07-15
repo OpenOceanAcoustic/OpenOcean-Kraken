@@ -877,6 +877,7 @@ namespace OpenOceanKraken
         if (HSBot.BC == BC_Mode::MODE_A_Half_space || HSBot.BC == BC_Mode::MODE_F_File || HSBot.BC == BC_Mode::MODE_P_Precomputed)
         {
             isTop = false;
+            isComplex = false;
             BCImpedance(iprof, x, isTop, fBot1, gBot1, iPower, isComplex, trid,
                         params, modeCount);
             isComplex = true;

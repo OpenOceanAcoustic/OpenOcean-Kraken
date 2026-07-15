@@ -44,37 +44,43 @@ void from_json(const BasicJsonType& j,
     using MatrixType = Eigen::Matrix<Scalar, Rows, Cols, Options, MaxRows, MaxCols>;
     if (j.is_array()) {
         if (!j.empty() && j.front().is_array()) {
-            // 2D
-            auto rows = static_cast<int>(j.size());
-            auto cols = static_cast<int>(j[0].size());
+            if constexpr (MatrixType::IsVectorAtCompileTime) {
+                throw std::runtime_error("Expected 1D JSON array for Eigen vector");
+            } else {
+                auto rows = static_cast<int>(j.size());
+                auto cols = static_cast<int>(j[0].size());
 
-            if constexpr (MatrixType::RowsAtCompileTime != Eigen::Dynamic) {
-                if (rows != MatrixType::RowsAtCompileTime)
-                    throw std::runtime_error("Row count mismatch");
-            }
-            if constexpr (MatrixType::ColsAtCompileTime != Eigen::Dynamic) {
-                if (cols != MatrixType::ColsAtCompileTime)
-                    throw std::runtime_error("Column count mismatch");
-            }
+                if constexpr (MatrixType::RowsAtCompileTime != Eigen::Dynamic) {
+                    if (rows != MatrixType::RowsAtCompileTime)
+                        throw std::runtime_error("Row count mismatch");
+                }
+                if constexpr (MatrixType::ColsAtCompileTime != Eigen::Dynamic) {
+                    if (cols != MatrixType::ColsAtCompileTime)
+                        throw std::runtime_error("Column count mismatch");
+                }
 
-            mat.resize(rows, cols);
-            for (int i = 0; i < rows; ++i) {
-                if (j[i].size() != static_cast<size_t>(cols))
-                    throw std::runtime_error("Inconsistent column size");
-                for (int k = 0; k < cols; ++k) {
-                    mat(i, k) = j[i][k].template get<Scalar>();
+                mat.resize(rows, cols);
+                for (int i = 0; i < rows; ++i) {
+                    if (j[i].size() != static_cast<size_t>(cols))
+                        throw std::runtime_error("Inconsistent column size");
+                    for (int k = 0; k < cols; ++k) {
+                        mat(i, k) = j[i][k].template get<Scalar>();
+                    }
                 }
             }
         } else {
-            // 1D
-            auto size = static_cast<int>(j.size());
-            if constexpr (MatrixType::SizeAtCompileTime != Eigen::Dynamic) {
-                if (size != MatrixType::SizeAtCompileTime)
-                    throw std::runtime_error("Vector size mismatch");
-            }
-            mat.resize(size);
-            for (int i = 0; i < size; ++i) {
-                mat(i) = j[i].template get<Scalar>();
+            if constexpr (!MatrixType::IsVectorAtCompileTime) {
+                throw std::runtime_error("Expected 2D JSON array for Eigen matrix");
+            } else {
+                auto size = static_cast<int>(j.size());
+                if constexpr (MatrixType::SizeAtCompileTime != Eigen::Dynamic) {
+                    if (size != MatrixType::SizeAtCompileTime)
+                        throw std::runtime_error("Vector size mismatch");
+                }
+                mat.resize(size);
+                for (int i = 0; i < size; ++i) {
+                    mat(i) = j[i].template get<Scalar>();
+                }
             }
         }
     } else {

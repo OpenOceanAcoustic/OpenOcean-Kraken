@@ -8,6 +8,8 @@
 #include "output_eigen.hpp"
 #include "output_field.hpp"
 #include "run.h"
+#include "EvaluateAD.h"
+#include "EvaluateCM.h"
 #include "json_in_out.hpp"
 #include "env_in_out.hpp"
 #include <algorithm>
@@ -317,6 +319,29 @@ namespace OpenOceanKraken
         {
             return;
         }
+        if (params.SSP.size() > 1)
+        {
+            if (params.is_Velocity)
+            {
+                throw std::logic_error("multi-profile velocity is not implemented");
+            }
+            for (int isz = 0; isz < params.Pos.NSz; ++isz)
+            {
+                if (params.modeType == ModeType::Adiabatic)
+                {
+                    EvaluateAD(output.eigen, params.NProf, params, isz, output.u_AllSources);
+                }
+                else if (params.modeType == ModeType::Couple)
+                {
+                    EvaluateCM(output.eigen, params.NProf, params, isz, output.u_AllSources);
+                }
+                else
+                {
+                    throw std::logic_error("unsupported multi-profile field mode");
+                }
+            }
+            return;
+        }
         for (size_t iprof = 0; iprof < params.SSP.size(); iprof++)
         {
             FieldWorker(iprof, params, output);
@@ -571,7 +596,7 @@ namespace OpenOceanKraken
             return false;
         if (!read_flp_file(envPath, params))
         {
-            std::cerr << "警告: flp 文件解析失败" << std::endl;
+            return false;
         }
         this->set_SSP(params.sspInput);// 将sspInput转换到SSP中
         return true;

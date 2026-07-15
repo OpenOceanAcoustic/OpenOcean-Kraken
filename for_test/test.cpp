@@ -10,11 +10,16 @@
 #include "ThreadPool.h"
 #include "util.h"
 #include "field.h"
+#include "EvaluateAD.h"
+#include "EvaluateCM.h"
+#include "MergeVectors.h"
 #include "input_Freq.hpp"
 #include "input_reflcoef.hpp"
 #include "input_sbp.hpp"
 #include "input_SSP.hpp"
 #include "input_Sz_Rz_RR.hpp"
+#include "output_eigen.hpp"
+#include "output_field.hpp"
 
 #include <Eigen/Dense>
 #include <algorithm>
@@ -23,6 +28,8 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <limits>
+#include <utility>
 #include <vector>
 
 namespace OpenOceanKraken
@@ -42,6 +49,8 @@ using OpenOceanKraken::ElasticDN;
 using OpenOceanKraken::ElasticUP;
 using OpenOceanKraken::EigenParams;
 using OpenOceanKraken::Evaluate;
+using OpenOceanKraken::EvaluateAD;
+using OpenOceanKraken::EvaluateCM;
 using OpenOceanKraken::Grid_Mode;
 using OpenOceanKraken::HSInfo;
 using OpenOceanKraken::Interface;
@@ -145,11 +154,81 @@ namespace
         test.requireThrows([&]() { freed.getParams(); }, "getParams after free must throw");
     }
 
+    void test_interface_velocity_and_export_workflow(ook_test::TestRunner &test, const fs::path &test_root)
+    {
+        const fs::path env_path = test_root / "calibK.env";
+        if (!fs::exists(env_path))
+        {
+            return;
+        }
+
+        ThreadPool pool(1);
+        Interface iface(pool);
+        iface.setThreadPool(pool);
+        iface.setNumThreads(1);
+        test.require(iface.getHardwareThreads() >= 0, "hardware thread query must be available");
+        test.require(iface.from_env(env_path.string()), "interface velocity fixture must load");
+
+        std::string title = "interface velocity and export workflow";
+        iface.set_Title(title);
+        iface.set_Freq(250.0);
+        Eigen::VectorXd freqvec(1);
+        freqvec << 250.0;
+        iface.set_freqvec(freqvec);
+        Eigen::VectorXd sz(1);
+        Eigen::VectorXd rz(3);
+        Eigen::VectorXd rr(3);
+        Eigen::VectorXd ro(3);
+        sz << 50.0;
+        rz << 0.0, 50.0, 100.0;
+        rr << 1.0, 2.0, 3.0;
+        ro.setZero();
+        iface.set_Sz(sz);
+        iface.set_Rz(rz);
+        iface.set_Rr(rr);
+        iface.set_Ro(ro);
+        iface.set_cPhase(1400.0, 20000.0);
+        iface.set_Rmax(1000.0);
+        iface.set_GridType(Grid_Mode::MODE_R_Rectangular);
+        iface.set_SourceType(Source_Mode::MODE_X_Line);
+        iface.set_RunMode(Run_Mode::MODE_B_Both);
+        iface.set_Velocity_enable(true);
+        iface.run();
+
+        test.require(iface.get_u(0) != nullptr, "source pressure getter must return data");
+        test.require(iface.get_v(0) != nullptr, "source vertical velocity getter must return data");
+        test.require(iface.get_h(0) != nullptr, "source horizontal velocity getter must return data");
+        test.require(iface.get_u_AllSources() != nullptr, "all-source pressure getter must return data");
+        test.require(iface.get_v_AllSources() != nullptr, "all-source vertical velocity getter must return data");
+        test.require(iface.get_h_AllSources() != nullptr, "all-source horizontal velocity getter must return data");
+        test.requireThrows([&]() { iface.get_u(1); }, "source getter must reject an out-of-range source");
+
+        const fs::path root = fs::temp_directory_path() / "ook_interface_velocity_export";
+        fs::remove_all(root);
+        fs::create_directories(root);
+        const std::string output_root = (root / "result").string();
+        iface.export_result(output_root);
+        iface.export_shd((root / "default_component").string(), 0);
+        test.require(fs::exists(root / "result_P.mod"), "export_result must write pressure MOD");
+        test.require(fs::exists(root / "result_P.shd"), "export_result must write pressure SHD");
+        test.require(fs::exists(root / "result_V.shd"), "export_result must write vertical velocity SHD");
+        test.require(fs::exists(root / "result_H.shd"), "export_result must write horizontal velocity SHD");
+        test.require(fs::exists(root / "default_component.shd"), "default SHD component must write pressure");
+
+        iface.clearResults();
+        test.requireNear(std::abs(iface.get_u(0)[0]), 0.0, 0.0, "clearResults must zero pressure");
+        test.requireNear(std::abs(iface.get_v(0)[0]), 0.0, 0.0, "clearResults must zero vertical velocity");
+        test.requireNear(std::abs(iface.get_h(0)[0]), 0.0, 0.0, "clearResults must zero horizontal velocity");
+        fs::remove_all(root);
+    }
+
     void test_top_bottom_line(ook_test::TestRunner &test)
     {
         Range_Independent_Area area;
         area.set_Bottom_Line(5000.0, 1600.0, 0.8, 0.0, 0.0, 1.8);
         area.set_Top_Line(0.0, 1500.0, 0.0, 0.0, 0.0, 1.0);
+        area.set_Bottom_type(BC_Mode::MODE_R_Rigid);
+        area.set_Bottom_type(BC_Mode::MODE_A_Half_space);
         test.requireNear(area.HSTop.Depth, 0.0, 1.0e-9, "Top depth must be written to HSTop");
         test.requireNear(area.HSTop.alphaR, 1500.0, 1.0e-9, "Top alphaR must be written to HSTop");
         test.requireNear(area.HSBot.Depth, 5000.0, 1.0e-9, "Top setter must not overwrite HSBot depth");
@@ -550,6 +629,231 @@ namespace
         return eigen;
     }
 
+    void test_evaluate_ad_identical_profiles_matches_single_profile(ook_test::TestRunner &test)
+    {
+        auto params = minimal_field_params();
+        params.is_Velocity = false;
+        params.SBP.isSet = false;
+        params.Pos.Ro.setZero();
+        params.NProf = 2;
+        params.MLimit = 9999;
+        params.RProf.resize(2);
+        params.RProf << 0.0, 5.0;
+        params.SSP.push_back(params.SSP.front());
+
+        auto eigen = minimal_eigen();
+        std::vector<EigenParams> profiles = {eigen, eigen};
+        std::vector<std::complex<float>> expected(4, {0.0f, 0.0f});
+        std::vector<std::complex<float>> actual(4, {0.0f, 0.0f});
+        Evaluate(eigen, params, 0, 0, expected.data(), nullptr, nullptr);
+        EvaluateAD(profiles.data(), static_cast<int>(profiles.size()), params, 0, actual.data());
+
+        for (size_t i = 0; i < actual.size(); ++i)
+        {
+            test.requireNear(std::abs(actual[i] - expected[i]), 0.0, 2.0e-5,
+                             "identical-profile EvaluateAD must match range-independent Evaluate");
+        }
+    }
+
+    void test_evaluate_ad_modes_and_guards(ook_test::TestRunner &test)
+    {
+        auto params = minimal_field_params();
+        params.is_Velocity = false;
+        params.NProf = 2;
+        params.MLimit = 9999;
+        params.RProf.resize(2);
+        params.RProf << 0.0, 5.0;
+        params.SSP.push_back(params.SSP.front());
+        auto eigen = minimal_eigen();
+        std::vector<EigenParams> profiles = {eigen, eigen};
+        std::vector<std::complex<float>> output(4, {0.0f, 0.0f});
+
+        params.SBP.isSet = true;
+        EvaluateAD(profiles.data(), 2, params, 0, output.data());
+        test.require(std::isfinite(output.back().real()), "EvaluateAD beam-pattern output must be finite");
+
+        auto bad_beam = params;
+        bad_beam.SBP.theta.setZero();
+        test.requireThrows([&]() { EvaluateAD(profiles.data(), 2, bad_beam, 0, output.data()); },
+                           "EvaluateAD must reject duplicate beam-pattern angles");
+
+        params.SBP.isSet = false;
+        params.SourceType = Source_Mode::MODE_R_Point;
+        params.coherenceType = CoherenceType::Incoherent;
+        EvaluateAD(profiles.data(), 2, params, 0, output.data());
+        test.require(std::abs(output[0]) == 0.0f, "EvaluateAD point source must vanish at zero range");
+
+        auto three_profiles = params;
+        three_profiles.coherenceType = CoherenceType::Coherent;
+        three_profiles.NProf = 3;
+        three_profiles.RProf.resize(3);
+        three_profiles.RProf << 0.0, 3.0, 6.0;
+        three_profiles.SSP.push_back(three_profiles.SSP.front());
+        std::vector<EigenParams> eigen_three = {eigen, eigen, eigen};
+        eigen_three[2].M = 1;
+        EvaluateAD(eigen_three.data(), 3, three_profiles, 0, output.data());
+        test.require(std::isfinite(output.back().real()), "EvaluateAD multi-segment output must be finite");
+
+        test.requireThrows([&]() { EvaluateAD(nullptr, 2, params, 0, output.data()); },
+                           "EvaluateAD must reject a null profile array");
+        test.requireThrows([&]() { EvaluateAD(profiles.data(), 1, params, 0, output.data()); },
+                           "EvaluateAD must reject a profile count mismatch");
+        auto bad_ranges = params;
+        bad_ranges.RProf(0) = 1.0;
+        test.requireThrows([&]() { EvaluateAD(profiles.data(), 2, bad_ranges, 0, output.data()); },
+                           "EvaluateAD must require RProf to start at zero");
+        test.requireThrows([&]() { EvaluateAD(profiles.data(), 2, params, 1, output.data()); },
+                           "EvaluateAD must reject an invalid source index");
+        std::vector<EigenParams> incomplete = profiles;
+        incomplete[1].M = 0;
+        test.requireThrows([&]() { EvaluateAD(incomplete.data(), 2, params, 0, output.data()); },
+                           "EvaluateAD must reject an incomplete eigen profile");
+        auto decreasing_receivers = params;
+        decreasing_receivers.Pos.Rr << 10.0, 5.0;
+        test.requireThrows([&]() { EvaluateAD(profiles.data(), 2, decreasing_receivers, 0, output.data()); },
+                           "EvaluateAD must reject decreasing receiver ranges");
+        test.requireThrows([&]() { EvaluateAD(profiles.data(), 2, params, 0, nullptr); },
+                           "EvaluateAD must reject a null pressure buffer");
+        auto zero_limit = params;
+        zero_limit.MLimit = 0;
+        test.requireThrows([&]() { EvaluateAD(profiles.data(), 2, zero_limit, 0, output.data()); },
+                           "EvaluateAD must reject an empty MLimit result");
+    }
+
+    void test_evaluate_cm_identical_profiles_preserve_amplitude(ook_test::TestRunner &test)
+    {
+        auto params = minimal_field_params();
+        params.is_Velocity = false;
+        params.SBP.isSet = false;
+        params.SourceType = Source_Mode::MODE_X_Line;
+        params.NProf = 2;
+        params.MLimit = 1;
+        params.RProf.resize(2);
+        params.RProf << 0.0, 10.0;
+        params.SSP.push_back(params.SSP.front());
+        for (auto &ssp : params.SSP)
+        {
+            ssp.HSTop.BC = BC_Mode::MODE_V_Vacuum;
+            ssp.HSBot.BC = BC_Mode::MODE_R_Rigid;
+            ssp.rho.setOnes();
+        }
+        params.Pos.Rr << 0.0, 10.0;
+        params.Pos.Rz << 0.0, 1.0;
+
+        EigenParams eigen;
+        eigen.M = 1;
+        eigen.k.resize(1);
+        eigen.k << std::complex<double>(0.2, 0.0);
+        eigen.PsiS = Eigen::MatrixXcd::Ones(1, 1);
+        eigen.PsiR = Eigen::MatrixXcd::Ones(1, 2);
+        eigen.ModeZ.resize(2);
+        eigen.ModeZ << 0.0, 1.0;
+        eigen.PhiMode = Eigen::MatrixXcd::Ones(1, 2);
+        std::vector<EigenParams> profiles = {eigen, eigen};
+
+        std::vector<std::complex<float>> actual(4, {0.0f, 0.0f});
+        EvaluateCM(profiles.data(), static_cast<int>(profiles.size()), params, 0, actual.data());
+
+        constexpr float pi_single = 3.1415926f;
+        const std::complex<float> i(0.0f, 1.0f);
+        const std::complex<float> initial =
+            std::sqrt(2.0f * pi_single) * std::exp(i * (pi_single / 4.0f)) / 0.2f;
+        const std::complex<float> propagated =
+            initial * std::exp(-i * std::complex<float>(0.2f, 0.0f) * 10.0f);
+        for (int iz = 0; iz < 2; ++iz)
+        {
+            test.requireNear(std::abs(actual[GetFieldAddr(0, iz, 0, &params.Pos)] - initial), 0.0, 2.0e-5,
+                             "EvaluateCM initial amplitude mismatch");
+            test.requireNear(std::abs(actual[GetFieldAddr(0, iz, 1, &params.Pos)] - propagated), 0.0, 2.0e-5,
+                             "EvaluateCM identical-profile crossing must preserve amplitude");
+        }
+
+        auto beamed = params;
+        beamed.SBP.isSet = true;
+        std::vector<std::complex<float>> beamed_output(4, {0.0f, 0.0f});
+        EvaluateCM(profiles.data(), static_cast<int>(profiles.size()), beamed, 0, beamed_output.data());
+        test.require(std::abs(beamed_output.back() - actual.back()) > 1.0e-5f,
+                     "EvaluateCM source beam pattern must alter modal excitation");
+    }
+
+    void test_evaluate_cm_modes_and_guards(ook_test::TestRunner &test)
+    {
+        auto params = minimal_field_params();
+        params.is_Velocity = false;
+        params.SBP.isSet = false;
+        params.SourceType = Source_Mode::MODE_R_Point;
+        params.coherenceType = CoherenceType::Coherent;
+        params.NProf = 2;
+        params.MLimit = 1;
+        params.RProf.resize(2);
+        params.RProf << 0.0, 10.0;
+        params.SSP.push_back(params.SSP.front());
+        for (auto &ssp : params.SSP)
+        {
+            ssp.HSTop.BC = BC_Mode::MODE_V_Vacuum;
+            ssp.HSBot.BC = BC_Mode::MODE_R_Rigid;
+            ssp.rho.setOnes();
+        }
+        params.Pos.Rr << 0.0, 10.0;
+
+        EigenParams eigen;
+        eigen.M = 1;
+        eigen.k.resize(1);
+        eigen.k << std::complex<double>(0.2, 0.0);
+        eigen.PsiS = Eigen::MatrixXcd::Ones(1, 1);
+        eigen.PsiR = Eigen::MatrixXcd::Ones(1, 2);
+        eigen.ModeZ.resize(2);
+        eigen.ModeZ << 0.0, 1.0;
+        eigen.PhiMode = Eigen::MatrixXcd::Ones(1, 2);
+        std::vector<EigenParams> profiles = {eigen, eigen};
+        std::vector<std::complex<float>> output(4, {0.0f, 0.0f});
+
+        EvaluateCM(profiles.data(), 2, params, 0, output.data());
+        test.require(std::isfinite(output.back().real()), "EvaluateCM point-source output must be finite");
+
+        auto three_profiles = params;
+        three_profiles.NProf = 3;
+        three_profiles.RProf.resize(3);
+        three_profiles.RProf << 0.0, 5.0, 10.0;
+        three_profiles.SSP.push_back(three_profiles.SSP.front());
+        std::vector<EigenParams> eigen_three = {eigen, eigen, eigen};
+        EvaluateCM(eigen_three.data(), 3, three_profiles, 0, output.data());
+        test.require(std::isfinite(output.back().real()), "EvaluateCM multi-segment output must be finite");
+
+        test.requireThrows([&]() { EvaluateCM(nullptr, 2, params, 0, output.data()); },
+                           "EvaluateCM must reject a null profile array");
+        test.requireThrows([&]() { EvaluateCM(profiles.data(), 1, params, 0, output.data()); },
+                           "EvaluateCM must reject a profile count mismatch");
+        auto incoherent = params;
+        incoherent.coherenceType = CoherenceType::Incoherent;
+        test.requireThrows([&]() { EvaluateCM(profiles.data(), 2, incoherent, 0, output.data()); },
+                           "EvaluateCM must reject incoherent propagation");
+        test.requireThrows([&]() { EvaluateCM(profiles.data(), 2, params, 1, output.data()); },
+                           "EvaluateCM must reject an invalid source index");
+        std::vector<EigenParams> incomplete = profiles;
+        incomplete[1].PhiMode.resize(0, 0);
+        test.requireThrows([&]() { EvaluateCM(incomplete.data(), 2, params, 0, output.data()); },
+                           "EvaluateCM must reject an incomplete eigen profile");
+        test.requireThrows([&]() { EvaluateCM(profiles.data(), 2, params, 0, nullptr); },
+                           "EvaluateCM must reject a null pressure buffer");
+        auto zero_limit = params;
+        zero_limit.MLimit = 0;
+        test.requireThrows([&]() { EvaluateCM(profiles.data(), 2, zero_limit, 0, output.data()); },
+                           "EvaluateCM must reject an empty MLimit result");
+        auto bad_profile_ranges = params;
+        bad_profile_ranges.RProf << 0.0, 0.0;
+        test.requireThrows([&]() { EvaluateCM(profiles.data(), 2, bad_profile_ranges, 0, output.data()); },
+                           "EvaluateCM must reject non-increasing profile ranges");
+        auto decreasing_receivers = params;
+        decreasing_receivers.Pos.Rr << 10.0, 5.0;
+        test.requireThrows([&]() { EvaluateCM(profiles.data(), 2, decreasing_receivers, 0, output.data()); },
+                           "EvaluateCM must reject decreasing receiver ranges");
+        auto missing_ssp = params;
+        missing_ssp.SSP.pop_back();
+        test.requireThrows([&]() { EvaluateCM(profiles.data(), 2, missing_ssp, 0, output.data()); },
+                           "EvaluateCM must require one SSP per profile");
+    }
+
     void test_ssp_field_and_file_helpers(ook_test::TestRunner &test)
     {
         auto unit = [] {
@@ -615,6 +919,15 @@ namespace
         Evaluate(eigen, params, 0, 0, u.data(), v.data(), h.data());
         test.require(std::isfinite(std::real(u[0])), "coherent field output must be finite");
 
+        EigenParams directional_eigen = minimal_eigen();
+        directional_eigen.dPsidzR.setZero();
+        std::fill(u.begin(), u.end(), std::complex<float>{});
+        std::fill(v.begin(), v.end(), std::complex<float>{});
+        std::fill(h.begin(), h.end(), std::complex<float>{});
+        Evaluate(directional_eigen, params, 0, 0, u.data(), v.data(), h.data());
+        test.require(std::abs(v[0]) < 1.0e-7f, "coherent vertical velocity must use dPsiR/dz");
+        test.require(std::abs(h[0]) > 1.0e-7f, "coherent horizontal velocity must use PsiR");
+
         params.SourceType = Source_Mode::MODE_R_Point;
         params.coherenceType = CoherenceType::Incoherent;
         std::fill(u.begin(), u.end(), std::complex<float>{});
@@ -622,6 +935,14 @@ namespace
         std::fill(h.begin(), h.end(), std::complex<float>{});
         Evaluate(eigen, params, 0, 0, u.data(), v.data(), h.data());
         test.require(std::isfinite(std::real(u[1])), "incoherent field output must be finite");
+
+        params.SourceType = Source_Mode::MODE_X_Line;
+        std::fill(u.begin(), u.end(), std::complex<float>{});
+        std::fill(v.begin(), v.end(), std::complex<float>{});
+        std::fill(h.begin(), h.end(), std::complex<float>{});
+        Evaluate(directional_eigen, params, 0, 0, u.data(), v.data(), h.data());
+        test.require(std::abs(v[0]) < 1.0e-7f, "incoherent vertical velocity must use dPsiR/dz");
+        test.require(std::abs(h[0]) > 1.0e-7f, "incoherent horizontal velocity must use PsiR");
 
         std::fill(u.begin(), u.end(), std::complex<float>{});
         field(eigen, params, u.data(), 0);
@@ -710,6 +1031,24 @@ namespace
         out_base.ClearResults(params, output);
         out_base.Finalize(output);
 
+        paramsBase *input_base = new input_Freq();
+        delete input_base;
+        input_base = new input_Sz_Rz_RR();
+        delete input_base;
+        input_base = new input_reflcoef();
+        delete input_base;
+        input_base = new input_sbp();
+        delete input_base;
+        input_base = new input_SSP();
+        delete input_base;
+
+        outputBase *output_base = new OpenOceanKraken::output_Eigen();
+        delete output_base;
+        output_base = new OpenOceanKraken::output_Field();
+        delete output_base;
+        output_base = new outputBase();
+        delete output_base;
+
         input_Freq freq;
         freq.Init(params);
         freq.Default(params);
@@ -784,6 +1123,12 @@ namespace
 
         Range_Independent_Area mutable_area;
         auto layer = simple_layer();
+        OpenOceanKraken::ssp::SSPLayer copied_layer;
+        copied_layer = layer;
+        OpenOceanKraken::ssp::SSPLayer moved_layer;
+        moved_layer = std::move(copied_layer);
+        test.require(moved_layer.npts == layer.npts, "SSPLayer move assignment point count mismatch");
+        test.requireNear(moved_layer.z[moved_layer.npts - 1], layer.z[layer.npts - 1], 1.0e-12, "SSPLayer move assignment depth mismatch");
         mutable_area.addLayer(layer);
         mutable_area.insertLayer(1, layer);
         mutable_area.removeLayer(1);
@@ -842,6 +1187,40 @@ namespace
         auto cd = Util::cpxf2cpxd(cf);
         test.requireNear(std::real(cd), 1.25, 1.0e-6, "complex conversion real mismatch");
         test.requireNear(std::imag(cd), -2.5, 1.0e-6, "complex conversion imag mismatch");
+
+        Eigen::MatrixXd matrix(2, 2);
+        matrix << 1.0, 2.0, 3.0, 4.0;
+        OpenOcean_json matrix_json = matrix;
+        const auto decoded_matrix = matrix_json.get<Eigen::MatrixXd>();
+        test.requireNear(decoded_matrix(1, 0), 3.0, 1.0e-12, "2D Eigen JSON roundtrip mismatch");
+
+        OpenOcean_json ragged_json = OpenOcean_json::parse("[[1.0, 2.0], [3.0]]");
+        test.requireThrows([&]() { (void)ragged_json.get<Eigen::MatrixXd>(); }, "ragged Eigen JSON matrix must throw");
+        OpenOcean_json wrong_columns = OpenOcean_json::parse("[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]");
+        test.requireThrows([&]() { (void)wrong_columns.get<Eigen::Matrix<double, Eigen::Dynamic, 2>>(); }, "fixed-column Eigen JSON mismatch must throw");
+
+        Eigen::VectorXd merge_x(3), merge_y(1), merged;
+        Eigen::VectorXi ix, iy;
+        int merged_count = 0;
+        merge_x << 1.0, 2.0, 3.0;
+        merge_y << 1.0;
+        OpenOceanKraken::MergeVectors(merge_x, merge_y, merged, merged_count, ix, iy);
+        test.require(merged_count == 3 && ix[2] == 2 && iy[0] == 0, "MergeVectors exhausted-y path mismatch");
+
+        merge_x.resize(1);
+        merge_y.resize(1);
+        merge_x << 1.0 + std::numeric_limits<double>::epsilon();
+        merge_y << 1.0;
+        OpenOceanKraken::MergeVectors(merge_x, merge_y, merged, merged_count, ix, iy);
+        test.require(merged_count == 1 && ix[0] == 0 && iy[0] == 0, "MergeVectors near-duplicate x path mismatch");
+
+        Eigen::VectorXd one(1), tab(1), weights(1);
+        Eigen::VectorXi weight_indices(1);
+        one << 5.0;
+        tab << 5.0;
+        OpenOceanKraken::Weight_dble(one, 1, tab, 1, weights, weight_indices);
+        test.requireNear(weights[0], 0.0, 1.0e-12, "Weight_dble singleton weight mismatch");
+        test.require(weight_indices[0] == 0, "Weight_dble singleton index mismatch");
     }
 
     void test_all_env_flp_cases(ook_test::TestRunner &test, const fs::path &test_root)
@@ -981,6 +1360,11 @@ namespace
                 test.requireNear(area.HSTop.alphaR, 1475.0, 1.0e-12, name + ": top compressional speed mismatch");
                 test.requireNear(area.HSTop.betaR, 0.0, 1.0e-12, name + ": top must be acoustic");
                 test.requireNear(area.HSTop.rho, 0.98, 1.0e-12, name + ": top density mismatch");
+                ThreadPool pool(1);
+                iface.setThreadPool(pool);
+                iface.setNumThreads(1);
+                iface.runEigen();
+                test.require(iface.getOutput_const().eigen[0].M > 0, name + ": acoustic top half-space must produce modes");
             }
             else if (name == "boundary_top_elastic.env")
             {
@@ -1229,6 +1613,200 @@ namespace
         test.require(json_cases > 0, "LCOV bad input coverage requires at least one bad JSON fixture");
     }
 
+    void test_mult_profile_velocity_is_rejected_until_supported(ook_test::TestRunner &test, const fs::path &test_root)
+    {
+        fs::path env_path = test_root / "solve3_mode_loss.env";
+        if (!fs::exists(env_path))
+        {
+            env_path = test_root / "solve3_examples" / "solve3_mode_loss.env";
+        }
+        if (!fs::exists(env_path))
+        {
+            return;
+        }
+
+        ThreadPool pool(1);
+        Interface iface(pool);
+        iface.setNumThreads(1);
+        test.require(iface.from_env(env_path.string()), "multi-profile field guard fixture must load");
+        test.require(iface.getParams_const().SSP.size() > 1, "multi-profile field guard fixture must contain multiple SSP profiles");
+        iface.getParams().is_Velocity = true;
+        iface.runEigen();
+
+        bool rejected = false;
+        try
+        {
+            iface.runField();
+        }
+        catch (const std::logic_error &error)
+        {
+            rejected = std::string(error.what()) == "multi-profile velocity is not implemented";
+        }
+        test.require(rejected, "runField must explicitly reject unsupported multi-profile velocity");
+    }
+
+    void test_mult_profile_coupled_field_runs(ook_test::TestRunner &test, const fs::path &test_root)
+    {
+        for (const std::string &case_name : {"solve3_mode_loss", "solve3_mode_gain"})
+        {
+            const fs::path env_path = test_root / (case_name + ".env");
+            if (!fs::exists(env_path))
+            {
+                continue;
+            }
+
+            ThreadPool pool(1);
+            Interface iface(pool);
+            iface.setNumThreads(1);
+            test.require(iface.from_env(env_path.string()), case_name + ": multi-profile coupled fixture must load");
+            test.require(iface.getParams_const().modeType == ModeType::Couple, case_name + ": coupled FLP mode mismatch");
+            iface.runEigen();
+            if (case_name == "solve3_mode_gain")
+            {
+                const auto &output = iface.getOutput_const();
+                test.require(output.eigen[1].M > output.eigen[0].M,
+                             "solve3_mode_gain must increase the available mode count");
+            }
+            iface.runField();
+
+            const auto &params = iface.getParams_const();
+            const std::complex<float> *pressure = iface.get_u_AllSources();
+            const size_t count = static_cast<size_t>(params.Pos.NSz) *
+                                 static_cast<size_t>(params.Pos.NRz_per_range) *
+                                 static_cast<size_t>(params.Pos.NRr);
+            for (size_t i = 0; i < count; ++i)
+            {
+                test.require(std::isfinite(pressure[i].real()) && std::isfinite(pressure[i].imag()),
+                             case_name + ": multi-profile coupled pressure must be finite");
+            }
+        }
+    }
+
+    void test_mult_profile_adiabatic_field_runs(ook_test::TestRunner &test, const fs::path &test_root)
+    {
+        const fs::path env_path = test_root / "adiabatic_mode_loss.env";
+        if (!fs::exists(env_path))
+        {
+            return;
+        }
+
+        ThreadPool pool(1);
+        Interface iface(pool);
+        iface.setNumThreads(1);
+        test.require(iface.from_env(env_path.string()), "multi-profile adiabatic fixture must load");
+        test.require(iface.getParams_const().modeType == ModeType::Adiabatic, "adiabatic FLP mode mismatch");
+        iface.runEigen();
+        iface.runField();
+
+        const auto &params = iface.getParams_const();
+        const std::complex<float> *pressure = iface.get_u_AllSources();
+        const size_t count = static_cast<size_t>(params.Pos.NSz) *
+                             static_cast<size_t>(params.Pos.NRz_per_range) *
+                             static_cast<size_t>(params.Pos.NRr);
+        for (size_t i = 0; i < count; ++i)
+        {
+            test.require(std::isfinite(pressure[i].real()) && std::isfinite(pressure[i].imag()),
+                         "multi-profile adiabatic pressure must be finite");
+        }
+    }
+
+    void test_mult_profile_flp_metadata_is_serialized(ook_test::TestRunner &test, const fs::path &test_root)
+    {
+        const fs::path env_path = test_root / "solve3_mode_loss.env";
+        if (!fs::exists(env_path))
+        {
+            return;
+        }
+
+        Interface iface;
+        test.require(iface.from_env(env_path.string()), "multi-profile FLP metadata fixture must load");
+        const auto &params = iface.getParams_const();
+        test.require(params.MLimit == 9999, "multi-profile FLP MLimit mismatch");
+        test.require(params.NProf == 2, "multi-profile FLP NProf mismatch");
+        test.require(params.RProf.size() == 2, "multi-profile FLP RProf size mismatch");
+        test.requireNear(params.RProf(0), 0.0, 1.0e-9, "multi-profile first range mismatch");
+        test.requireNear(params.RProf(1), 5000.0, 1.0e-9, "multi-profile second range mismatch");
+        const std::string json = iface.to_json_string();
+        test.require(json.find("\"MLimit\"") != std::string::npos, "multi-profile JSON must preserve MLimit");
+        test.require(json.find("\"NProf\"") != std::string::npos, "multi-profile JSON must preserve NProf");
+        test.require(json.find("\"RProf\"") != std::string::npos, "multi-profile JSON must preserve RProf");
+
+        const fs::path json_path = fs::temp_directory_path() / "ook_mult_profile_roundtrip.json";
+        test.require(iface.to_json(json_path.string()), "multi-profile JSON export must succeed");
+        Interface roundtrip;
+        test.require(roundtrip.from_json(json_path.string()), "multi-profile JSON import must succeed");
+        const auto &roundtrip_params = roundtrip.getParams_const();
+        test.require(roundtrip_params.MLimit == 9999, "roundtrip MLimit mismatch");
+        test.require(roundtrip_params.NProf == 2, "roundtrip NProf mismatch");
+        test.requireNear(roundtrip_params.RProf(1), 5000.0, 1.0e-9, "roundtrip second profile range mismatch");
+        fs::remove(json_path);
+    }
+
+    void test_invalid_mult_profile_flp_is_rejected(ook_test::TestRunner &test, const fs::path &test_root)
+    {
+        const fs::path source_env = test_root / "solve3_mode_loss.env";
+        if (!fs::exists(source_env))
+        {
+            return;
+        }
+
+        const fs::path root = fs::temp_directory_path() / "ook_invalid_mult_profile_flp";
+        fs::create_directories(root);
+        const fs::path env_path = root / "case.env";
+        const fs::path flp_path = root / "case.flp";
+        fs::copy_file(source_env, env_path, fs::copy_options::overwrite_existing);
+
+        auto write_flp = [&flp_path](int nprof, const std::string &rprof)
+        {
+            std::ofstream flp(flp_path);
+            flp << "/,\n'RC'\n9999,\n" << nprof << "\n" << rprof
+                << "\n101\n0.0 5.0 /\n1\n50.0 /\n101\n0.0 100.0 /\n101\n0.0 0.0 /\n";
+        };
+
+        write_flp(2, "0.0 0.0 /");
+        Interface non_increasing;
+        test.require(!non_increasing.from_env(env_path.string()), "non-increasing RProf must fail from_env");
+
+        write_flp(3, "0.0 5.0 10.0 /");
+        Interface count_mismatch;
+        test.require(!count_mismatch.from_env(env_path.string()), "NProf/ENV profile mismatch must fail from_env");
+        fs::remove_all(root);
+    }
+
+    void test_normalize_file_top_halfspace_bottom_wavenumbers(ook_test::TestRunner &test, const fs::path &test_root)
+    {
+        const fs::path env_path = test_root / "normalize_boundary_top_file.env";
+        if (!fs::exists(env_path))
+        {
+            return;
+        }
+
+        ThreadPool pool(1);
+        Interface iface(pool);
+        iface.setNumThreads(1);
+        test.require(iface.from_env(env_path.string()), "Normalize F/A regression fixture must load");
+        iface.runEigen();
+
+        const auto &eigen = iface.getOutput_const().eigen[0];
+        test.require(eigen.M == 7, "Normalize F/A regression must retain seven modes");
+        const std::complex<double> kraken_k[] = {
+            {0.20901788771152496, 0.00043763950816355646},
+            {0.20555116236209870, 0.00135090237017720940},
+            {0.19825963675975800, 0.00232429802417755130},
+            {0.18705640733242035, 0.00269085052423179150},
+            {0.16757051646709442, 0.00227311137132346630},
+            {0.13855974376201630, 0.00241931318305432800},
+            {0.09136671572923660, 0.00316715380176901800},
+        };
+        for (int mode = 0; mode < eigen.M; ++mode)
+        {
+            test.requireNear(std::real(eigen.k(mode)), std::real(kraken_k[mode]), 1.0e-7,
+                             "Normalize F/A real wavenumber mismatch at mode " + std::to_string(mode + 1));
+            test.requireNear(std::imag(eigen.k(mode)), std::imag(kraken_k[mode]), 1.0e-7,
+                             "Normalize F/A imaginary wavenumber mismatch at mode " + std::to_string(mode + 1));
+        }
+    }
+
     void test_multilayer_elastic_stack_terminal_mode(ook_test::TestRunner &test, const fs::path &test_root)
     {
         ThreadPool pool(1);
@@ -1336,10 +1914,15 @@ int main(int argc, char **argv)
         const fs::path option_root = test_root / "option_examples";
         test.require(fs::exists(env_root), "positive ENV fixture root must exist");
         test_lifecycle_and_guards(test);
+        test_interface_velocity_and_export_workflow(test, env_root);
         test_top_bottom_line(test);
         test_interpolation_helpers(test);
         test_attenuation_and_reflection_helpers(test);
         test_boundary_and_scatter_helpers(test);
+        test_evaluate_ad_identical_profiles_matches_single_profile(test);
+        test_evaluate_ad_modes_and_guards(test);
+        test_evaluate_cm_identical_profiles_preserve_amplitude(test);
+        test_evaluate_cm_modes_and_guards(test);
         test_ssp_field_and_file_helpers(test);
         test_input_module_helpers(test);
         test_util_helpers(test);
@@ -1350,6 +1933,12 @@ int main(int argc, char **argv)
         test_json_roundtrip_from_env(test, env_root);
         test_json_roundtrip_from_params(test);
         test_bad_input_cases(test, bad_root);
+        test_mult_profile_flp_metadata_is_serialized(test, test_root);
+        test_invalid_mult_profile_flp_is_rejected(test, test_root);
+        test_mult_profile_velocity_is_rejected_until_supported(test, test_root);
+        test_mult_profile_coupled_field_runs(test, test_root);
+        test_mult_profile_adiabatic_field_runs(test, test_root);
+        test_normalize_file_top_halfspace_bottom_wavenumbers(test, test_root);
         test_multilayer_elastic_stack_terminal_mode(test, env_root);
         test_multilayer_mud_sand_lossy_wavenumbers(test, env_root);
         test_mod_export_header(test, env_root);

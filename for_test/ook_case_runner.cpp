@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <exception>
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <thread>
@@ -11,7 +12,7 @@ int main(int argc, char **argv)
 {
     if (argc < 3)
     {
-        std::cerr << "Usage: ook_case_runner <env_path> <output_root_without_extension> [threads] [--mod] [--velocity]\n";
+        std::cerr << "Usage: ook_case_runner <env_path> <output_root_without_extension> [threads] [--mod] [--mod-only] [--velocity]\n";
         return 2;
     }
 
@@ -19,6 +20,7 @@ int main(int argc, char **argv)
     const std::string output_root = argv[2];
     int threads = 1;
     bool export_mod = false;
+    bool mod_only = false;
     bool export_velocity = false;
     if (argc >= 4)
     {
@@ -28,6 +30,11 @@ int main(int argc, char **argv)
             if (arg == "--mod")
             {
                 export_mod = true;
+            }
+            else if (arg == "--mod-only")
+            {
+                export_mod = true;
+                mod_only = true;
             }
             else if (arg == "--velocity")
             {
@@ -47,6 +54,12 @@ int main(int argc, char **argv)
 
     try
     {
+        const char *output_suffixes[] = {".mod", ".shd", "_P.shd", "_V.shd", "_H.shd"};
+        for (const char *suffix : output_suffixes)
+        {
+            std::filesystem::remove(output_root + suffix);
+        }
+
         ThreadPool thread_pool(static_cast<size_t>(threads));
         OpenOceanKraken::Interface kraken_interface(thread_pool);
         kraken_interface.setNumThreads(threads);
@@ -60,6 +73,14 @@ int main(int argc, char **argv)
         if (export_velocity)
         {
             kraken_interface.set_Velocity_enable(true);
+        }
+
+        if (mod_only)
+        {
+            kraken_interface.runEigen();
+            kraken_interface.export_mod(output_root);
+            std::cout << "OOK MOD written: " << output_root << ".mod\n";
+            return 0;
         }
 
         kraken_interface.run();

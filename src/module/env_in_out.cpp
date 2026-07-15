@@ -194,8 +194,7 @@ namespace OpenOceanKraken
             }
 
             // 去除首尾空白字符
-            flp_line.erase(0, flp_line.find_first_not_of(" \t\r\n"));
-            flp_line.erase(flp_line.find_last_not_of(" \t\r\n") + 1);
+            flp_line = trim_copy(flp_line);
 
             // 去掉单引号 '
             flp_line.erase(std::remove(flp_line.begin(), flp_line.end(), '\''), flp_line.end());
@@ -281,8 +280,58 @@ namespace OpenOceanKraken
                 }
             }
             // 第3~5行：模态数量跳过，声速剖面个数和范围在这里OpenOceanKraken也不解析，而且在env中已经赋值过了
-            for (int i = 0; i < 3 && line_idx < flp_lines.size(); ++i)
-                line_idx++;
+            if (line_idx >= flp_lines.size())
+            {
+                throw std::runtime_error("FLP MLimit is missing.");
+            }
+            params.MLimit = std::stoi(fortran_tokens(flp_lines[line_idx++]).at(0));
+            if (params.MLimit <= 0)
+            {
+                throw std::runtime_error("FLP MLimit must be greater than zero.");
+            }
+
+            if (line_idx >= flp_lines.size())
+            {
+                throw std::runtime_error("FLP NProf is missing.");
+            }
+            params.NProf = std::stoi(fortran_tokens(flp_lines[line_idx++]).at(0));
+            if (params.NProf <= 0)
+            {
+                throw std::runtime_error("FLP NProf must be greater than zero.");
+            }
+            if (params.NProf != static_cast<int>(params.sspInput.size()))
+            {
+                throw std::runtime_error("FLP NProf does not match the number of ENV profiles.");
+            }
+
+            if (line_idx >= flp_lines.size())
+            {
+                throw std::runtime_error("FLP RProf is missing.");
+            }
+            const std::vector<double> profile_ranges_km = parse_numbers(flp_lines[line_idx++]);
+            if (profile_ranges_km.size() < static_cast<size_t>(params.NProf))
+            {
+                throw std::runtime_error("FLP RProf contains fewer entries than NProf.");
+            }
+            params.RProf.resize(params.NProf);
+            for (int i = 0; i < params.NProf; ++i)
+            {
+                const double range_m = profile_ranges_km[static_cast<size_t>(i)] * 1.0e3;
+                if (!std::isfinite(range_m))
+                {
+                    throw std::runtime_error("FLP RProf must contain finite values.");
+                }
+                if (i == 0 && std::abs(range_m) > 1.0e-9)
+                {
+                    throw std::runtime_error("FLP first profile range must be zero.");
+                }
+                if (i > 0 && range_m <= params.RProf(i - 1))
+                {
+                    throw std::runtime_error("FLP profile ranges must be strictly increasing.");
+                }
+                params.RProf(i) = range_m;
+                params.sspInput[static_cast<size_t>(i)].Range = range_m;
+            }
 
             // 第6行：接收器水平个数
             if (line_idx < flp_lines.size())
@@ -1022,8 +1071,7 @@ namespace OpenOceanKraken
             }
 
             // 去除首尾空白字符
-            line.erase(0, line.find_first_not_of(" \t\r\n"));
-            line.erase(line.find_last_not_of(" \t\r\n") + 1);
+            line = trim_copy(line);
 
             // 去掉单引号 '
             line.erase(std::remove(line.begin(), line.end(), '\''), line.end());

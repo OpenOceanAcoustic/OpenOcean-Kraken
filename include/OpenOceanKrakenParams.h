@@ -559,6 +559,11 @@ namespace OpenOceanKraken
         Position ModePos;
         bool hasModePos = false;
 
+        // Range-dependent field metadata. RProf is stored in metres internally.
+        int MLimit = 9999;
+        int NProf = 1;
+        Eigen::VectorXd RProf = Eigen::VectorXd::Zero(1);
+
         // @brief 声速剖面参数
         std::vector<ssp::SSPStructure> SSP;
         std::vector<ssp::Range_Independent_Area> sspInput; // SSP输入 方便to_json

@@ -35,3 +35,5 @@ docs/
 .gitignore
 build-coverage/
 build_acceptance/
+build_lcov_gate/
+build_interface_mingw/

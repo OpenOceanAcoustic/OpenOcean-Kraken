@@ -16,9 +16,15 @@ else()
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
+if(NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
+endif()
+if(NOT CMAKE_LIBRARY_OUTPUT_DIRECTORY)
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
+endif()
+if(NOT CMAKE_ARCHIVE_OUTPUT_DIRECTORY)
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
+endif()
 
 set(OOK_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -62,4 +68,23 @@ if(BUILD_TESTING)
     add_executable(ook_case_runner for_test/ook_case_runner.cpp)
     target_include_directories(ook_case_runner PRIVATE ${OOK_INCLUDE_DIRS})
     target_link_libraries(ook_case_runner PRIVATE OpenOceanKraken_core -static-libgcc -static-libstdc++)
+
+    find_package(Python3 COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../test/solve3_mode_loss.env")
+        add_test(
+            NAME OpenOceanKraken_case_runner_output_tests
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/for_test/test_case_runner_outputs.py
+                --runner $<TARGET_FILE:ook_case_runner>
+                --fixture ${CMAKE_CURRENT_SOURCE_DIR}/../test/solve3_mode_loss.env
+        )
+        add_test(
+            NAME OpenOceanKraken_runner_validation_tests
+            COMMAND ${Python3_EXECUTABLE} -m unittest tools.tests.test_runner_validation -v
+        )
+        set_tests_properties(
+            OpenOceanKraken_runner_validation_tests
+            PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..
+        )
+    endif()
 endif()
