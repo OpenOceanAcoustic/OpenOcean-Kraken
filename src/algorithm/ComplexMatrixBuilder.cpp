@@ -27,6 +27,10 @@ AcousticMatrix buildAcousticMatrix(const AcousticCase &input, int meshMultiplier
     for (const AcousticLayer &layer : input.layers)
     {
         const bool elastic = layer.samples.front().cs > 0.0;
+        if (elastic && layer.roughnessRms != 0.0)
+        {
+            throw std::invalid_argument("Rough elastic interfaces are not allowed");
+        }
         for (const AcousticSample &sample : layer.samples)
         {
             if ((sample.cs > 0.0) != elastic)
@@ -47,20 +51,6 @@ AcousticMatrix buildAcousticMatrix(const AcousticCase &input, int meshMultiplier
         matrix.spacing.push_back(spacing);
         matrix.layerElastic.push_back(elastic);
 
-        std::vector<std::complex<double>> sampleCp(layer.samples.size());
-        std::vector<std::complex<double>> sampleCs(layer.samples.size(), 0.0);
-        for (std::size_t sample = 0; sample < layer.samples.size(); ++sample)
-        {
-            sampleCp[sample] = complexSoundSpeed(
-                layer.samples[sample].cp, layer.samples[sample].alphaP,
-                input.frequency, input.attenuationUnit);
-            if (elastic)
-            {
-                sampleCs[sample] = complexSoundSpeed(
-                    layer.samples[sample].cs, layer.samples[sample].alphaS,
-                    input.frequency, input.attenuationUnit);
-            }
-        }
         std::size_t lowerIndex = 0;
 
         for (int local = 0; local <= count; ++local)
@@ -79,34 +69,43 @@ AcousticMatrix buildAcousticMatrix(const AcousticCase &input, int meshMultiplier
             const AcousticSample &upper = layer.samples[lowerIndex + 1];
             const double fraction = (depth - lower.depth) / (upper.depth - lower.depth);
 
-            const std::complex<double> lowerCp = sampleCp[lowerIndex];
-            const std::complex<double> upperCp = sampleCp[lowerIndex + 1];
-            const std::complex<double> lowerCs = sampleCs[lowerIndex];
-            const std::complex<double> upperCs = sampleCs[lowerIndex + 1];
-            std::complex<double> cp;
-            std::complex<double> cs = 0.0;
+            double cpReal = 0.0;
+            double csReal = 0.0;
             if (input.interpolation == AcousticInterpolation::N2Linear)
             {
-                const std::complex<double> n2 =
-                    (1.0 - fraction) / (lowerCp * lowerCp) +
-                    fraction / (upperCp * upperCp);
-                cp = 1.0 / std::sqrt(n2);
+                const double n2 =
+                    (1.0 - fraction) / (lower.cp * lower.cp) +
+                    fraction / (upper.cp * upper.cp);
+                cpReal = 1.0 / std::sqrt(n2);
                 if (elastic)
                 {
-                    const std::complex<double> shearN2 =
-                        (1.0 - fraction) / (lowerCs * lowerCs) +
-                        fraction / (upperCs * upperCs);
-                    cs = 1.0 / std::sqrt(shearN2);
+                    const double shearN2 =
+                        (1.0 - fraction) / (lower.cs * lower.cs) +
+                        fraction / (upper.cs * upper.cs);
+                    csReal = 1.0 / std::sqrt(shearN2);
                 }
             }
             else
             {
-                cp = (1.0 - fraction) * lowerCp + fraction * upperCp;
+                cpReal = (1.0 - fraction) * lower.cp + fraction * upper.cp;
                 if (elastic)
                 {
-                    cs = (1.0 - fraction) * lowerCs + fraction * upperCs;
+                    csReal = (1.0 - fraction) * lower.cs + fraction * upper.cs;
                 }
             }
+            const double alphaP =
+                (1.0 - fraction) * lower.alphaP + fraction * upper.alphaP;
+            const double alphaS =
+                (1.0 - fraction) * lower.alphaS + fraction * upper.alphaS;
+            const AttenuationContext context = attenuationContext(
+                input, layer.attenuationPower, layer.transitionFrequency);
+            const std::complex<double> cp = complexSoundSpeed(
+                depth, cpReal, alphaP, context);
+            const std::complex<double> cs = elastic
+                                                ? complexSoundSpeed(
+                                                      depth, csReal, alphaS,
+                                                      context)
+                                                : std::complex<double>{};
             const double rho = (1.0 - fraction) * lower.rho + fraction * upper.rho;
 
             matrix.depth.push_back(depth);

@@ -188,18 +188,21 @@ std::vector<double> mergedModeDepths(const AcousticCase &input)
 
 ModeBoundaryData makeModeBoundary(const AcousticBoundary &source,
                                   double depth,
-                                  double frequency,
-                                  char attenuationUnit)
+                                  const AcousticCase &input)
 {
     ModeBoundaryData result;
     result.type = boundaryCode(source.type);
     result.cp = source.cp > 0.0
-                    ? complexSoundSpeed(source.cp, source.alphaP,
-                                        frequency, attenuationUnit)
+                    ? complexSoundSpeed(
+                          depth, source.cp, source.alphaP,
+                          attenuationContext(input, source.attenuationPower,
+                                             source.transitionFrequency))
                     : std::complex<double>{};
     result.cs = source.cs > 0.0
-                    ? complexSoundSpeed(source.cs, source.alphaS,
-                                        frequency, attenuationUnit)
+                    ? complexSoundSpeed(
+                          depth, source.cs, source.alphaS,
+                          attenuationContext(input, source.attenuationPower,
+                                             source.transitionFrequency))
                     : std::complex<double>{};
     result.rho = source.rho;
     result.depth = depth;
@@ -271,10 +274,10 @@ ModeProfileData makeModeProfile(const AcousticCase &input,
     }
     result.top = makeModeBoundary(input.top,
                                   input.layers[firstAcoustic].topDepth,
-                                  input.frequency, input.attenuationUnit);
+                                  input);
     result.bottom = makeModeBoundary(input.bottom,
                                      input.layers[lastAcoustic].bottomDepth,
-                                     input.frequency, input.attenuationUnit);
+                                     input);
     return result;
 }
 
@@ -361,11 +364,33 @@ class Interface::InterfaceImpl
 public:
     OOKC_parameters params;
     OOKC_output output;
-    ThreadPool *threadPool = nullptr;
-    int numThreads = static_cast<int>(std::max(1u, std::thread::hardware_concurrency()));
+    ThreadPool::ExecutorLease ownedProfileExecutor;
+    ThreadPool::BorrowedExecutor borrowedProfileExecutor;
+    bool hasBorrowedProfileExecutor = false;
+    int fieldThreads = static_cast<int>(std::max(1u, std::thread::hardware_concurrency()));
     bool alive = true;
     std::string eigenSignature;
     std::string fieldSignature;
+    std::shared_ptr<detail::ResultViewState> viewState =
+        std::make_shared<detail::ResultViewState>();
+
+    ThreadPool::ExecutorLease acquireProfileExecutor() const
+    {
+        if (ownedProfileExecutor)
+        {
+            return ownedProfileExecutor;
+        }
+        if (!hasBorrowedProfileExecutor)
+        {
+            return {};
+        }
+        ThreadPool::ExecutorLease lease = borrowedProfileExecutor.lock();
+        if (!lease)
+        {
+            throw std::runtime_error("external ThreadPool expired");
+        }
+        return lease;
+    }
 };
 
 Interface::Interface()
@@ -376,7 +401,14 @@ Interface::Interface()
 Interface::Interface(ThreadPool &threadPool)
     : Interface()
 {
-    impl_->threadPool = &threadPool;
+    impl_->borrowedProfileExecutor = threadPool.borrowExecutor();
+    impl_->hasBorrowedProfileExecutor = true;
+}
+
+Interface::Interface(std::shared_ptr<ThreadPool> threadPool)
+    : Interface()
+{
+    setProfileExecutor(std::move(threadPool));
 }
 
 Interface::~Interface() = default;
@@ -412,21 +444,32 @@ void Interface::ensureResultsFresh() const
     }
 }
 
-void Interface::setNumThreads(int numThreads)
+void Interface::invalidateResultViews() noexcept
+{
+    if (impl_ && impl_->viewState)
+    {
+        impl_->viewState->generation.fetch_add(1, std::memory_order_acq_rel);
+    }
+}
+
+void Interface::setFieldThreads(int numThreads)
 {
     ensureAlive();
     if (numThreads < 1)
     {
         throw std::invalid_argument("OpenOcean-Krakenc thread count must be positive");
     }
-    impl_->numThreads = numThreads;
+    impl_->fieldThreads = numThreads;
 }
 
-int Interface::getNumThreads() const
+int Interface::getFieldThreads() const
 {
     ensureAlive();
-    return impl_->numThreads;
+    return impl_->fieldThreads;
 }
+
+void Interface::setNumThreads(int numThreads) { setFieldThreads(numThreads); }
+int Interface::getNumThreads() const { return getFieldThreads(); }
 
 int Interface::getHardwareThreads() const
 {
@@ -437,12 +480,40 @@ int Interface::getHardwareThreads() const
 void Interface::setThreadPool(ThreadPool &threadPool)
 {
     ensureAlive();
-    impl_->threadPool = &threadPool;
+    impl_->ownedProfileExecutor = {};
+    impl_->borrowedProfileExecutor = threadPool.borrowExecutor();
+    impl_->hasBorrowedProfileExecutor = true;
+}
+
+void Interface::setProfileExecutor(std::shared_ptr<ThreadPool> threadPool)
+{
+    ensureAlive();
+    if (!threadPool)
+    {
+        throw std::invalid_argument("profile ThreadPool must not be null");
+    }
+    impl_->ownedProfileExecutor = threadPool->acquireExecutor();
+    impl_->borrowedProfileExecutor = {};
+    impl_->hasBorrowedProfileExecutor = false;
+}
+
+void Interface::setThreadPool(std::shared_ptr<ThreadPool> threadPool)
+{
+    setProfileExecutor(std::move(threadPool));
+}
+
+void Interface::detachThreadPool()
+{
+    ensureAlive();
+    impl_->ownedProfileExecutor = {};
+    impl_->borrowedProfileExecutor = {};
+    impl_->hasBorrowedProfileExecutor = false;
 }
 
 void Interface::runEigen()
 {
     ensureAlive();
+    ThreadPool::ExecutorLease executor = impl_->acquireProfileExecutor();
     OOKC_parameters candidate = impl_->params;
     std::vector<AcousticCase> inputs;
     if (candidate.sspInput.empty())
@@ -461,13 +532,13 @@ void Interface::runEigen()
     }
     std::vector<EigenParams> completed;
     completed.reserve(inputs.size());
-    if (impl_->threadPool && !impl_->threadPool->ownsCurrentThread())
+    if (executor && !executor.ownsCurrentThread())
     {
         std::vector<std::future<EigenParams>> futures;
         futures.reserve(inputs.size());
         for (const AcousticCase &input : inputs)
         {
-            futures.push_back(impl_->threadPool->enqueue([input]() {
+            futures.push_back(executor.enqueue([input]() {
                 return solveInterfaceProfile(input);
             }));
         }
@@ -483,6 +554,7 @@ void Interface::runEigen()
             completed.push_back(solveInterfaceProfile(input));
         }
     }
+    invalidateResultViews();
     impl_->params = std::move(candidate);
     impl_->output.eigen = std::move(completed);
     impl_->output.pressure.clear();
@@ -552,7 +624,7 @@ void Interface::runField()
         candidate.freqinfo.freqvec = Eigen::VectorXd::Constant(1, modes.frequency);
     }
     FieldParameters parameters = toFieldParameters(candidate);
-    parameters.threadCount = impl_->numThreads;
+    parameters.threadCount = impl_->fieldThreads;
     if (!inputs.empty())
     {
         for (double depth : parameters.sourceDepths)
@@ -561,16 +633,7 @@ void Interface::runField()
         }
     }
     PressureField field;
-    if (impl_->threadPool && !impl_->threadPool->ownsCurrentThread())
-    {
-        field = impl_->threadPool->enqueue([&modes, &parameters]() {
-            return evaluateField(modes, parameters);
-        }).get();
-    }
-    else
-    {
-        field = evaluateField(modes, parameters);
-    }
+    field = evaluateField(modes, parameters);
     std::vector<std::complex<float>> pressure(field.values.size());
     std::vector<std::complex<float>> horizontal(field.horizontalValues.size());
     std::vector<std::complex<float>> vertical(field.verticalValues.size());
@@ -589,6 +652,7 @@ void Interface::runField()
                        return std::complex<float>(static_cast<float>(value.real()),
                                                   static_cast<float>(value.imag()));
                    });
+    invalidateResultViews();
     impl_->params = std::move(candidate);
     impl_->output.pressure = std::move(pressure);
     if (impl_->params.is_Velocity)
@@ -670,24 +734,35 @@ void Interface::run()
 void Interface::clearResults()
 {
     ensureAlive();
+    invalidateResultViews();
     impl_->output.clear();
     impl_->eigenSignature.clear();
     impl_->fieldSignature.clear();
 }
 
-void Interface::free()
+void Interface::close()
 {
     if (!impl_ || !impl_->alive)
     {
         return;
     }
 
+    invalidateResultViews();
     impl_->output.clear();
     impl_->eigenSignature.clear();
     impl_->fieldSignature.clear();
-    impl_->threadPool = nullptr;
+    impl_->ownedProfileExecutor = {};
+    impl_->borrowedProfileExecutor = {};
+    impl_->hasBorrowedProfileExecutor = false;
     impl_->alive = false;
 }
+
+bool Interface::isClosed() const noexcept
+{
+    return !impl_ || !impl_->alive;
+}
+
+void Interface::free() { close(); }
 
 namespace
 {
@@ -744,12 +819,43 @@ std::complex<float> *allSourcesView(
     }
     return values.data();
 }
+
+const std::complex<float> *sourceView(
+    const std::vector<std::complex<float>> &values,
+    const OOKC_output &shape, int sourceIndex)
+{
+    const std::size_t block = shape.receiverDepthCount * shape.rangeCount;
+    if (block == 0 || values.size() != shape.sourceCount * block)
+    {
+        throw std::logic_error("OpenOcean-Krakenc field result shape is unavailable");
+    }
+    if (sourceIndex < 0 ||
+        static_cast<std::size_t>(sourceIndex) >= shape.sourceCount)
+    {
+        throw std::out_of_range("OpenOcean-Krakenc source index is out of range");
+    }
+    return values.data() + static_cast<std::size_t>(sourceIndex) * block;
+}
+
+const std::complex<float> *allSourcesView(
+    const std::vector<std::complex<float>> &values,
+    const OOKC_output &shape)
+{
+    const std::size_t expected = shape.sourceCount *
+                                 shape.receiverDepthCount * shape.rangeCount;
+    if (expected == 0 || values.size() != expected)
+    {
+        throw std::logic_error("OpenOcean-Krakenc field result is unavailable");
+    }
+    return values.data();
+}
 }
 
 void Interface::set_Title(const std::string &title)
 {
     ensureAlive();
     impl_->params.Title = title;
+    invalidateResultViews();
     impl_->output.clear();
 }
 
@@ -763,6 +869,7 @@ void Interface::set_Freq(double freq)
     impl_->params.freqinfo.freq = freq;
     impl_->params.freqinfo.Nfreq = 1;
     impl_->params.freqinfo.freqvec = Eigen::VectorXd::Constant(1, freq);
+    invalidateResultViews();
     impl_->output.clear();
 }
 
@@ -777,6 +884,7 @@ void Interface::set_freqvec(const Eigen::VectorXd &freqvec)
     impl_->params.freqinfo.freqvec = freqvec;
     impl_->params.freqinfo.Nfreq = static_cast<int>(freqvec.size());
     impl_->params.freqinfo.freq = freqvec[0];
+    invalidateResultViews();
     impl_->output.clear();
 }
 
@@ -810,14 +918,15 @@ void Interface::set_SSP(const std::vector<ssp::Range_Independent_Area> &sspInput
     impl_->params.sspInput = std::move(candidate.sspInput);
     impl_->params.NProf = candidate.NProf;
     impl_->params.RProf = std::move(candidate.RProf);
+    invalidateResultViews();
     impl_->output.clear();
 }
 
-void Interface::set_AttenUnit(Atten_Mode mode) { ensureAlive(); impl_->params.AttenUnit = mode; impl_->output.clear(); }
-void Interface::set_Sz(const Eigen::VectorXd &v) { ensureAlive(); assignPosition(impl_->params.Pos.Sz, impl_->params.Pos.NSz, impl_->params.Pos.is_Linspace_Sz, v, "Sz"); impl_->output.clear(); }
-void Interface::set_Rr(const Eigen::VectorXd &v) { ensureAlive(); assignPosition(impl_->params.Pos.Rr, impl_->params.Pos.NRr, impl_->params.Pos.is_Linspace_Rr, v, "Rr"); clearFieldResults(impl_->output); impl_->fieldSignature.clear(); }
-void Interface::set_Rz(const Eigen::VectorXd &v) { ensureAlive(); assignPosition(impl_->params.Pos.Rz, impl_->params.Pos.NRz, impl_->params.Pos.is_Linspace_Rz, v, "Rz"); impl_->output.clear(); }
-void Interface::set_Ro(const Eigen::VectorXd &v) { ensureAlive(); assignPosition(impl_->params.Pos.Ro, impl_->params.Pos.NRo, impl_->params.Pos.is_Linspace_Ro, v, "Ro"); clearFieldResults(impl_->output); impl_->fieldSignature.clear(); }
+void Interface::set_AttenUnit(Atten_Mode mode) { ensureAlive(); impl_->params.AttenUnit = mode; invalidateResultViews(); impl_->output.clear(); }
+void Interface::set_Sz(const Eigen::VectorXd &v) { ensureAlive(); assignPosition(impl_->params.Pos.Sz, impl_->params.Pos.NSz, impl_->params.Pos.is_Linspace_Sz, v, "Sz"); invalidateResultViews(); impl_->output.clear(); }
+void Interface::set_Rr(const Eigen::VectorXd &v) { ensureAlive(); assignPosition(impl_->params.Pos.Rr, impl_->params.Pos.NRr, impl_->params.Pos.is_Linspace_Rr, v, "Rr"); invalidateResultViews(); clearFieldResults(impl_->output); impl_->fieldSignature.clear(); }
+void Interface::set_Rz(const Eigen::VectorXd &v) { ensureAlive(); assignPosition(impl_->params.Pos.Rz, impl_->params.Pos.NRz, impl_->params.Pos.is_Linspace_Rz, v, "Rz"); invalidateResultViews(); impl_->output.clear(); }
+void Interface::set_Ro(const Eigen::VectorXd &v) { ensureAlive(); assignPosition(impl_->params.Pos.Ro, impl_->params.Pos.NRo, impl_->params.Pos.is_Linspace_Ro, v, "Ro"); invalidateResultViews(); clearFieldResults(impl_->output); impl_->fieldSignature.clear(); }
 void Interface::set_Sz(double a, double b, int n) { set_Sz(makeLinspace(a, b, n, "Sz")); impl_->params.Pos.is_Linspace_Sz = true; }
 void Interface::set_Rr(double a, double b, int n) { set_Rr(makeLinspace(a, b, n, "Rr")); impl_->params.Pos.is_Linspace_Rr = true; }
 void Interface::set_Rz(double a, double b, int n) { set_Rz(makeLinspace(a, b, n, "Rz")); impl_->params.Pos.is_Linspace_Rz = true; }
@@ -833,14 +942,15 @@ void Interface::set_cPhase(double cLow, double cHigh)
     }
     impl_->params.cLow = cLow;
     impl_->params.cHigh = cHigh;
+    invalidateResultViews();
     impl_->output.clear();
 }
 
-void Interface::set_GridType(Grid_Mode type) { ensureAlive(); impl_->params.Pos.GridType = type; clearFieldResults(impl_->output); impl_->fieldSignature.clear(); }
-void Interface::set_Rmax(double rMax) { ensureAlive(); if (!std::isfinite(rMax) || rMax < 0.0) throw std::invalid_argument("Rmax must be finite and nonnegative"); impl_->params.Rmax = rMax; impl_->output.clear(); }
-void Interface::set_SourceType(Source_Mode type) { ensureAlive(); impl_->params.SourceType = type; clearFieldResults(impl_->output); impl_->fieldSignature.clear(); }
+void Interface::set_GridType(Grid_Mode type) { ensureAlive(); impl_->params.Pos.GridType = type; invalidateResultViews(); clearFieldResults(impl_->output); impl_->fieldSignature.clear(); }
+void Interface::set_Rmax(double rMax) { ensureAlive(); if (!std::isfinite(rMax) || rMax < 0.0) throw std::invalid_argument("Rmax must be finite and nonnegative"); impl_->params.Rmax = rMax; invalidateResultViews(); impl_->output.clear(); }
+void Interface::set_SourceType(Source_Mode type) { ensureAlive(); impl_->params.SourceType = type; invalidateResultViews(); clearFieldResults(impl_->output); impl_->fieldSignature.clear(); }
 void Interface::set_RunMode(Run_Mode mode) { ensureAlive(); impl_->params.runMode = mode; }
-void Interface::set_Velocity_enable(bool enabled) { ensureAlive(); impl_->params.is_Velocity = enabled; clearFieldResults(impl_->output); impl_->fieldSignature.clear(); }
+void Interface::set_Velocity_enable(bool enabled) { ensureAlive(); impl_->params.is_Velocity = enabled; invalidateResultViews(); clearFieldResults(impl_->output); impl_->fieldSignature.clear(); }
 
 void Interface::set_ReflCoef_Top(const std::vector<ReflectionCoef> &values)
 {
@@ -858,6 +968,7 @@ void Interface::set_ReflCoef_Top(const std::vector<ReflectionCoef> &values)
     impl_->params.ReflectionCoef.RTop.resize(1, static_cast<Eigen::Index>(values.size()));
     for (Eigen::Index i = 0; i < impl_->params.ReflectionCoef.RTop.size(); ++i) impl_->params.ReflectionCoef.RTop[i] = values[static_cast<std::size_t>(i)];
     impl_->params.ReflectionCoef.isDeg = false;
+    invalidateResultViews();
     impl_->output.clear();
 }
 
@@ -877,6 +988,7 @@ void Interface::set_ReflCoef_Bottom(const std::vector<ReflectionCoef> &values)
     impl_->params.ReflectionCoef.RBot.resize(1, static_cast<Eigen::Index>(values.size()));
     for (Eigen::Index i = 0; i < impl_->params.ReflectionCoef.RBot.size(); ++i) impl_->params.ReflectionCoef.RBot[i] = values[static_cast<std::size_t>(i)];
     impl_->params.ReflectionCoef.isDeg = false;
+    invalidateResultViews();
     impl_->output.clear();
 }
 
@@ -895,6 +1007,7 @@ void Interface::set_SBP(const Eigen::VectorXd &pattern, const Eigen::VectorXd &a
     impl_->params.SBP.theta = anglesDegrees;
     impl_->params.SBP.NSBPPts = static_cast<int>(pattern.size());
     impl_->params.SBP.isSet = true;
+    invalidateResultViews();
     clearFieldResults(impl_->output);
     impl_->fieldSignature.clear();
 }
@@ -905,6 +1018,63 @@ std::complex<float> *Interface::get_h(int i) { ensureResultsFresh(); return sour
 std::complex<float> *Interface::get_u_AllSources() { ensureResultsFresh(); return allSourcesView(impl_->output.pressure, impl_->output); }
 std::complex<float> *Interface::get_v_AllSources() { ensureResultsFresh(); return allSourcesView(impl_->output.verticalVelocity, impl_->output); }
 std::complex<float> *Interface::get_h_AllSources() { ensureResultsFresh(); return allSourcesView(impl_->output.horizontalVelocity, impl_->output); }
+
+ArrayView<const std::complex<float>> Interface::get_u_view(int i) const
+{
+    ensureResultsFresh();
+    const OOKC_output &output = impl_->output;
+    const std::size_t size = output.receiverDepthCount * output.rangeCount;
+    return {sourceView(output.pressure, output, i), size,
+            impl_->viewState,
+            impl_->viewState->generation.load(std::memory_order_acquire)};
+}
+
+ArrayView<const std::complex<float>> Interface::get_v_view(int i) const
+{
+    ensureResultsFresh();
+    const OOKC_output &output = impl_->output;
+    const std::size_t size = output.receiverDepthCount * output.rangeCount;
+    return {sourceView(output.verticalVelocity, output, i), size,
+            impl_->viewState,
+            impl_->viewState->generation.load(std::memory_order_acquire)};
+}
+
+ArrayView<const std::complex<float>> Interface::get_h_view(int i) const
+{
+    ensureResultsFresh();
+    const OOKC_output &output = impl_->output;
+    const std::size_t size = output.receiverDepthCount * output.rangeCount;
+    return {sourceView(output.horizontalVelocity, output, i), size,
+            impl_->viewState,
+            impl_->viewState->generation.load(std::memory_order_acquire)};
+}
+
+ArrayView<const std::complex<float>> Interface::get_u_view_all_sources() const
+{
+    ensureResultsFresh();
+    const OOKC_output &output = impl_->output;
+    return {allSourcesView(output.pressure, output),
+            output.pressure.size(), impl_->viewState,
+            impl_->viewState->generation.load(std::memory_order_acquire)};
+}
+
+ArrayView<const std::complex<float>> Interface::get_v_view_all_sources() const
+{
+    ensureResultsFresh();
+    const OOKC_output &output = impl_->output;
+    return {allSourcesView(output.verticalVelocity, output),
+            output.verticalVelocity.size(), impl_->viewState,
+            impl_->viewState->generation.load(std::memory_order_acquire)};
+}
+
+ArrayView<const std::complex<float>> Interface::get_h_view_all_sources() const
+{
+    ensureResultsFresh();
+    const OOKC_output &output = impl_->output;
+    return {allSourcesView(output.horizontalVelocity, output),
+            output.horizontalVelocity.size(), impl_->viewState,
+            impl_->viewState->generation.load(std::memory_order_acquire)};
+}
 
 void Interface::export_result(const std::string &root)
 {
@@ -936,42 +1106,62 @@ void Interface::export_shd(const std::string &root, int dataType)
     exportShadeResult(impl_->params, impl_->output,
                       resultPath(root, ".shd"), type);
 }
-bool Interface::from_env(const std::string &envPath)
+LoadResult Interface::loadEnv(const std::string &envPath)
 {
     ensureAlive();
     OOKC_parameters candidate;
-    if (!read_env_file(envPath, candidate))
+    const LoadResult envResult = read_env_file_result(envPath, candidate);
+    if (!envResult.ok)
     {
-        return false;
+        return envResult;
     }
-    if (!read_flp_file(envPath, candidate))
+    const LoadResult flpResult = read_flp_file_result(envPath, candidate);
+    if (!flpResult.ok)
     {
-        return false;
+        return flpResult;
     }
     try
     {
         validatePublicParameters(candidate, Run_Mode::MODE_B_Both);
     }
-    catch (const std::exception &)
+    catch (const std::exception &error)
     {
-        return false;
+        return LoadResult::failure(LoadErrorCode::InvalidField, envPath,
+                                   error.what());
     }
+    invalidateResultViews();
     impl_->params = std::move(candidate);
     impl_->output.clear();
     impl_->eigenSignature.clear();
     impl_->fieldSignature.clear();
-    return true;
+    return LoadResult::success();
 }
-bool Interface::from_json(const std::string &jsonPath)
+
+bool Interface::from_env(const std::string &envPath)
+{
+    return loadEnv(envPath).ok;
+}
+
+LoadResult Interface::loadJson(const std::string &jsonPath)
 {
     ensureAlive();
     OOKC_parameters candidate;
-    if (!read_json_file(jsonPath, candidate)) return false;
+    const LoadResult result = read_json_file_result(jsonPath, candidate);
+    if (!result.ok)
+    {
+        return result;
+    }
+    invalidateResultViews();
     impl_->params = std::move(candidate);
     impl_->output.clear();
     impl_->eigenSignature.clear();
     impl_->fieldSignature.clear();
-    return true;
+    return LoadResult::success();
+}
+
+bool Interface::from_json(const std::string &jsonPath)
+{
+    return loadJson(jsonPath).ok;
 }
 bool Interface::to_json(const std::string &jsonPath) const { ensureAlive(); return write_json_file(jsonPath, impl_->params); }
 std::string Interface::to_json_string() const { ensureAlive(); return parameters_to_json_string(impl_->params); }
@@ -979,6 +1169,7 @@ std::string Interface::to_json_string() const { ensureAlive(); return parameters
 OOKC_parameters &Interface::getParams()
 {
     ensureAlive();
+    invalidateResultViews();
     return impl_->params;
 }
 
@@ -993,6 +1184,7 @@ const OOKC_parameters &Interface::getParams_const() const { return getParams(); 
 OOKC_output &Interface::getOutput()
 {
     ensureResultsFresh();
+    invalidateResultViews();
     return impl_->output;
 }
 

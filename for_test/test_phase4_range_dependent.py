@@ -5,8 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from for_test.oracle_config import resolve_oracle_binary
 from for_test.reference_pipeline import run_reference_pipeline
 from for_test.shd_reader import read_shade_file
+from for_test.fixture_paths import case_root
 
 
 class Phase4RangeDependentTests(unittest.TestCase):
@@ -17,20 +19,20 @@ class Phase4RangeDependentTests(unittest.TestCase):
         cls.binary_dir = Path(os.environ.get(
             "OPENOCEAN_KRAKENC_BINARY_DIR", cls.project / "build"))
         cls.executable = cls.binary_dir / "OpenOcean-Krakenc.exe"
-        cls.fortran_field = (
-            cls.workspace / "krakenFortran" / "build_mingw" / "out" / "field.exe"
-        )
+        cls.fortran_field = resolve_oracle_binary("field.exe")
         cls.reference_dir = cls.project / "build" / "reference" / "stepK_rd"
+        cls.step_root = case_root("stepK_rd")
+        cls.wedge_root = case_root("wedge")
         run_reference_pipeline(
-            cls.workspace / "test" / "stepK_rd",
-            cls.workspace / "krakenFortran" / "build_mingw" / "out" / "krakenc.exe",
+            cls.step_root,
+            resolve_oracle_binary("krakenc.exe"),
             cls.fortran_field,
             cls.reference_dir,
         )
         cls.wedge_reference_dir = cls.project / "build" / "reference" / "wedge"
         run_reference_pipeline(
-            cls.workspace / "test" / "wedge",
-            cls.workspace / "krakenFortran" / "build_mingw" / "out" / "krakenc.exe",
+            cls.wedge_root,
+            resolve_oracle_binary("krakenc.exe"),
             cls.fortran_field,
             cls.wedge_reference_dir,
         )
@@ -42,7 +44,7 @@ class Phase4RangeDependentTests(unittest.TestCase):
             fortran_dir = root / "fortran"
             cpp_dir.mkdir()
             fortran_dir.mkdir()
-            flp = (self.workspace / "test" / "stepK_rd.flp").read_text(
+            flp = self.step_root.with_suffix(".flp").read_text(
                 encoding="utf-8"
             ).replace("'RC'", "'RA'", 1)
             for directory in (cpp_dir, fortran_dir):
@@ -80,7 +82,7 @@ class Phase4RangeDependentTests(unittest.TestCase):
             fortran_dir = root / "fortran"
             cpp_dir.mkdir()
             fortran_dir.mkdir()
-            flp = (self.workspace / "test" / "stepK_rd.flp").read_text(
+            flp = self.step_root.with_suffix(".flp").read_text(
                 encoding="utf-8").replace("'RC'", "'RA*'", 1)
             sbp = "2\n-90.0 -6.020599913\n90.0 -6.020599913\n"
             for directory in (cpp_dir, fortran_dir):
@@ -111,7 +113,7 @@ class Phase4RangeDependentTests(unittest.TestCase):
             fortran_dir = root / "fortran"
             cpp_dir.mkdir()
             fortran_dir.mkdir()
-            flp = (self.workspace / "test" / "stepK_rd.flp").read_text(
+            flp = self.step_root.with_suffix(".flp").read_text(
                 encoding="utf-8").replace("'RC'", "'SC'", 1)
             for directory in (cpp_dir, fortran_dir):
                 shutil.copy2(self.reference_dir / "stepK_rd.mod",
@@ -140,7 +142,7 @@ class Phase4RangeDependentTests(unittest.TestCase):
             cpp_dir.mkdir()
             shutil.copy2(self.reference_dir / "stepK_rd.mod",
                          cpp_dir / "stepK_rd.mod")
-            shutil.copy2(self.workspace / "test" / "stepK_rd.flp",
+            shutil.copy2(self.step_root.with_suffix(".flp"),
                          cpp_dir / "stepK_rd.flp")
             cpp_run = subprocess.run(
                 [str(self.executable), "--field", str(cpp_dir / "stepK_rd")],
@@ -159,11 +161,11 @@ class Phase4RangeDependentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             root = Path(root)
             case_root = root / "stepK_rd"
-            shutil.copy2(self.workspace / "test" / "stepK_rd.flp",
+            shutil.copy2(self.step_root.with_suffix(".flp"),
                          case_root.with_suffix(".flp"))
             mod_run = subprocess.run(
                 [str(self.executable), "--mod",
-                 str(self.workspace / "test" / "stepK_rd.env"),
+                 str(self.step_root.with_suffix(".env")),
                  str(case_root.with_suffix(".mod"))],
                 capture_output=True, text=True, timeout=300, check=False)
             self.assertEqual(mod_run.returncode, 0, mod_run.stderr)
@@ -186,7 +188,7 @@ class Phase4RangeDependentTests(unittest.TestCase):
             fortran_dir = root / "fortran"
             cpp_dir.mkdir()
             fortran_dir.mkdir()
-            original = (self.workspace / "test" / "wedge.flp").read_text(
+            original = self.wedge_root.with_suffix(".flp").read_text(
                 encoding="utf-8")
             flp = original.replace("'RC'", f"'R{propagation_type}'", 1)
             for directory in (cpp_dir, fortran_dir):
@@ -217,11 +219,11 @@ class Phase4RangeDependentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             root = Path(root)
             case_root = root / "wedge"
-            shutil.copy2(self.workspace / "test" / "wedge.flp",
+            shutil.copy2(self.wedge_root.with_suffix(".flp"),
                          case_root.with_suffix(".flp"))
             mod_run = subprocess.run(
                 [str(self.executable), "--mod",
-                 str(self.workspace / "test" / "wedge.env"),
+                 str(self.wedge_root.with_suffix(".env")),
                  str(case_root.with_suffix(".mod"))],
                 capture_output=True, text=True, timeout=300, check=False)
             self.assertEqual(mod_run.returncode, 0, mod_run.stderr)

@@ -900,7 +900,6 @@ PressureField evaluateAdiabaticField(
             {
                 const std::complex<double> k =
                     roundedComplex(profiles[0]->wavenumbers[mode]);
-                const double omega = 2.0 * pi * modes.frequency;
                 const double kz2 = std::max(
                     0.0, (omega * omega / (1500.0 * 1500.0) - k * k).real());
                 const double angle = std::atan(std::sqrt(kz2) / k.real()) *

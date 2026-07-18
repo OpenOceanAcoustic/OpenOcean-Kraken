@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <complex>
+#include <filesystem>
 #include <fstream>
 #include <stdexcept>
 #include <utility>
@@ -170,8 +171,8 @@ void to_json(OpenOcean_json &out, const Media_Mode &v) { enumToJson(out, v, {{Me
 void from_json(const OpenOcean_json &in, Media_Mode &v) { enumFromJson(in, v, {{Media_Mode::MODE_A_Acoustic,"Acoustic"},{Media_Mode::MODE_E_Elastic,"Elastic"}}, "Media_Mode"); }
 void to_json(OpenOcean_json &out, const AttenuationUnit &v) { enumToJson(out, v, {{AttenuationUnit::MODE_F_dB_per_m_kHz,"dB/m/kHz"},{AttenuationUnit::MODE_L_params_lose,"Params_Lose"},{AttenuationUnit::MODE_M_dB_per_m,"dB/m"},{AttenuationUnit::MODE_m_dB_per_m,"dB/m-lowercase"},{AttenuationUnit::MODE_N_Nepers_per_m,"Nepers/m"},{AttenuationUnit::MODE_Q_Quality_Factor,"Quality_Factor"},{AttenuationUnit::MODE_W_db_per_lambda,"dB/lambda"}}, "AttenuationUnit"); }
 void from_json(const OpenOcean_json &in, AttenuationUnit &v) { enumFromJson(in, v, {{AttenuationUnit::MODE_F_dB_per_m_kHz,"dB/m/kHz"},{AttenuationUnit::MODE_L_params_lose,"Params_Lose"},{AttenuationUnit::MODE_M_dB_per_m,"dB/m"},{AttenuationUnit::MODE_m_dB_per_m,"dB/m-lowercase"},{AttenuationUnit::MODE_N_Nepers_per_m,"Nepers/m"},{AttenuationUnit::MODE_Q_Quality_Factor,"Quality_Factor"},{AttenuationUnit::MODE_W_db_per_lambda,"dB/lambda"}}, "AttenuationUnit"); }
-void to_json(OpenOcean_json &out, const OceanAbsorptionModel &v) { enumToJson(out, v, {{OceanAbsorptionModel::None,"None"},{OceanAbsorptionModel::Thorpe,"Thorpe"},{OceanAbsorptionModel::FrancGarr,"FrancGarr"}}, "OceanAbsorptionModel"); }
-void from_json(const OpenOcean_json &in, OceanAbsorptionModel &v) { enumFromJson(in, v, {{OceanAbsorptionModel::None,"None"},{OceanAbsorptionModel::Thorpe,"Thorpe"},{OceanAbsorptionModel::FrancGarr,"FrancGarr"}}, "OceanAbsorptionModel"); }
+void to_json(OpenOcean_json &out, const OceanAbsorptionModel &v) { enumToJson(out, v, {{OceanAbsorptionModel::None,"None"},{OceanAbsorptionModel::Thorpe,"Thorpe"},{OceanAbsorptionModel::FrancGarr,"FrancGarr"},{OceanAbsorptionModel::Biological,"Biological"}}, "OceanAbsorptionModel"); }
+void from_json(const OpenOcean_json &in, OceanAbsorptionModel &v) { enumFromJson(in, v, {{OceanAbsorptionModel::None,"None"},{OceanAbsorptionModel::Thorpe,"Thorpe"},{OceanAbsorptionModel::FrancGarr,"FrancGarr"},{OceanAbsorptionModel::Biological,"Biological"}}, "OceanAbsorptionModel"); }
 void to_json(OpenOcean_json &out, const BC_Mode &v) { enumToJson(out, v, {{BC_Mode::MODE_R_Rigid,"rigid"},{BC_Mode::MODE_V_Vacuum,"vacuum"},{BC_Mode::MODE_F_File,"file"},{BC_Mode::MODE_A_Half_space,"halfspace"},{BC_Mode::MODE_G_Grain,"grain"},{BC_Mode::MODE_P_Precomputed,"precomputed"}}, "BC_Mode"); }
 void from_json(const OpenOcean_json &in, BC_Mode &v) { enumFromJson(in, v, {{BC_Mode::MODE_R_Rigid,"rigid"},{BC_Mode::MODE_V_Vacuum,"vacuum"},{BC_Mode::MODE_F_File,"file"},{BC_Mode::MODE_A_Half_space,"halfspace"},{BC_Mode::MODE_G_Grain,"grain"},{BC_Mode::MODE_P_Precomputed,"precomputed"},{BC_Mode::MODE_R_Rigid,"Rigid"},{BC_Mode::MODE_V_Vacuum,"Vacuum"},{BC_Mode::MODE_F_File,"File"},{BC_Mode::MODE_A_Half_space,"HalfSpace"},{BC_Mode::MODE_G_Grain,"Grain"},{BC_Mode::MODE_P_Precomputed,"Precomputed"}}, "BC_Mode"); }
 void to_json(OpenOcean_json &out, const Source_Mode &v) { enumToJson(out, v, {{Source_Mode::MODE_R_Point,"Point"},{Source_Mode::MODE_X_Line,"Line"},{Source_Mode::MODE_S_ScaledCylindrical,"ScaledCylindrical"}}, "Source_Mode"); }
@@ -185,10 +186,14 @@ void from_json(const OpenOcean_json &in, CoherenceType &v) { enumFromJson(in, v,
 void to_json(OpenOcean_json &out, const ModeType &v) { enumToJson(out, v, {{ModeType::Adiabatic,"Adiabatic"},{ModeType::Couple,"Couple"}}, "ModeType"); }
 void from_json(const OpenOcean_json &in, ModeType &v) { enumFromJson(in, v, {{ModeType::Adiabatic,"Adiabatic"},{ModeType::Couple,"Couple"}}, "ModeType"); }
 
-void to_json(OpenOcean_json &out, const Atten_Mode &v) { out = {{"AttenuationUnit",v.attnUnit},{"OceanAbsorptionModel",v.absModel}}; }
-void from_json(const OpenOcean_json &in, Atten_Mode &v) { const char *unit=in.contains("AttenuationUnit")?"AttenuationUnit":"attnUnit"; const char *model=in.contains("OceanAbsorptionModel")?"OceanAbsorptionModel":"absModel"; in.at(unit).get_to(v.attnUnit); in.at(model).get_to(v.absModel); }
-void to_json(OpenOcean_json &out, const HSInfo &v) { out={{"alphaR",v.alphaR},{"alphaI",v.alphaI},{"betaR",v.betaR},{"betaI",v.betaI},{"beta",v.beta},{"ft",v.ft},{"cp",complexValue(v.cp)},{"cs",complexValue(v.cs)},{"rho",v.rho},{"Depth",v.Depth},{"BC",v.BC}}; }
-void from_json(const OpenOcean_json &in, HSInfo &v) { v.alphaR=in.at("alphaR").get<double>(); v.alphaI=in.at("alphaI").get<double>(); v.betaR=in.at("betaR").get<double>(); v.betaI=in.at("betaI").get<double>(); v.beta=in.value("beta",0.0); v.ft=in.value("ft",0.0); v.cp=in.contains("cp")?readComplex(in.at("cp"),"cp"):std::complex<double>(v.alphaR,v.alphaI); v.cs=in.contains("cs")?readComplex(in.at("cs"),"cs"):std::complex<double>(v.betaR,v.betaI); v.rho=in.at("rho").get<double>(); v.Depth=in.at("Depth").get<double>(); in.at("BC").get_to(v.BC); }
+void to_json(OpenOcean_json &out, const BiologicalAbsorptionLayer &v) { out={{"topDepthMetres",v.topDepthMetres},{"bottomDepthMetres",v.bottomDepthMetres},{"resonanceFrequencyHz",v.resonanceFrequencyHz},{"qualityFactor",v.qualityFactor},{"peakAttenuationDbPerKm",v.peakAttenuationDbPerKm}}; }
+void from_json(const OpenOcean_json &in, BiologicalAbsorptionLayer &v) { v.topDepthMetres=in.at("topDepthMetres").get<double>(); v.bottomDepthMetres=in.at("bottomDepthMetres").get<double>(); v.resonanceFrequencyHz=in.at("resonanceFrequencyHz").get<double>(); v.qualityFactor=in.at("qualityFactor").get<double>(); v.peakAttenuationDbPerKm=in.at("peakAttenuationDbPerKm").get<double>(); }
+void to_json(OpenOcean_json &out, const VolumeAbsorptionParameters &v) { out={{"temperatureCelsius",v.temperatureCelsius},{"salinityPsu",v.salinityPsu},{"ph",v.ph},{"meanDepthMetres",v.meanDepthMetres},{"biologicalLayers",v.biologicalLayers}}; }
+void from_json(const OpenOcean_json &in, VolumeAbsorptionParameters &v) { v.temperatureCelsius=in.value("temperatureCelsius",20.0); v.salinityPsu=in.value("salinityPsu",35.0); v.ph=in.value("ph",8.0); v.meanDepthMetres=in.value("meanDepthMetres",0.0); v.biologicalLayers=in.value("biologicalLayers",std::vector<BiologicalAbsorptionLayer>{}); }
+void to_json(OpenOcean_json &out, const Atten_Mode &v) { out = {{"AttenuationUnit",v.attnUnit},{"OceanAbsorptionModel",v.absModel},{"referenceFrequency",v.referenceFrequency},{"volume",v.volume}}; }
+void from_json(const OpenOcean_json &in, Atten_Mode &v) { const char *unit=in.contains("AttenuationUnit")?"AttenuationUnit":"attnUnit"; const char *model=in.contains("OceanAbsorptionModel")?"OceanAbsorptionModel":"absModel"; in.at(unit).get_to(v.attnUnit); in.at(model).get_to(v.absModel); v.referenceFrequency=in.value("referenceFrequency",0.0); if(in.contains("volume")) in.at("volume").get_to(v.volume); }
+void to_json(OpenOcean_json &out, const HSInfo &v) { out={{"alphaR",v.alphaR},{"alphaI",v.alphaI},{"betaR",v.betaR},{"betaI",v.betaI},{"beta",v.beta},{"ft",v.ft},{"sigma",v.sigma},{"cp",complexValue(v.cp)},{"cs",complexValue(v.cs)},{"rho",v.rho},{"Depth",v.Depth},{"BC",v.BC}}; }
+void from_json(const OpenOcean_json &in, HSInfo &v) { v.alphaR=in.at("alphaR").get<double>(); v.alphaI=in.at("alphaI").get<double>(); v.betaR=in.at("betaR").get<double>(); v.betaI=in.at("betaI").get<double>(); v.beta=in.value("beta",0.0); v.ft=in.value("ft",0.0); v.sigma=in.value("sigma",0.0); v.cp=in.contains("cp")?readComplex(in.at("cp"),"cp"):std::complex<double>(v.alphaR,v.alphaI); v.cs=in.contains("cs")?readComplex(in.at("cs"),"cs"):std::complex<double>(v.betaR,v.betaI); v.rho=in.at("rho").get<double>(); v.Depth=in.at("Depth").get<double>(); in.at("BC").get_to(v.BC); }
 void to_json(OpenOcean_json &out, const Position &v) { const auto encode=[](const Eigen::VectorXd &values,bool linspace,int count,const char *countName){ if(linspace&&values.size()>=2) return OpenOcean_json{{"start",values[0]},{"end",values[values.size()-1]},{countName,count}}; return realVector(values); }; out={{"GridType",v.GridType},{"SrcDepth",encode(v.Sz,v.is_Linspace_Sz,v.NSz,"NSz")},{"RecvRange",encode(v.Rr,v.is_Linspace_Rr,v.NRr,"NRr")},{"RecvDepth",encode(v.Rz,v.is_Linspace_Rz,v.NRz,"NRz")},{"RecvAzim",encode(v.Ro,v.is_Linspace_Ro,v.NRo,"NRo")}}; }
 void from_json(const OpenOcean_json &in, Position &v) { const auto decode=[](const OpenOcean_json &item,const char *countName,const char *field,Eigen::VectorXd &values,int &count,bool &linspace){ if(item.is_object()&&item.contains("start")){ count=item.at(countName).get<int>(); if(count<1) throw std::runtime_error(std::string(field)+" count must be positive"); values=Eigen::VectorXd::LinSpaced(count,item.at("start").get<double>(),item.at("end").get<double>()); linspace=true; } else { values=readRealVector(item,field); count=static_cast<int>(values.size()); linspace=false; } }; if(in.contains("SrcDepth")){ decode(in.at("SrcDepth"),"NSz","SrcDepth",v.Sz,v.NSz,v.is_Linspace_Sz); decode(in.at("RecvRange"),"NRr","RecvRange",v.Rr,v.NRr,v.is_Linspace_Rr); decode(in.at("RecvDepth"),"NRz","RecvDepth",v.Rz,v.NRz,v.is_Linspace_Rz); decode(in.at("RecvAzim"),"NRo","RecvAzim",v.Ro,v.NRo,v.is_Linspace_Ro); } else { v.Sz=readRealVector(in.at("Sz"),"Sz"); v.Rr=readRealVector(in.at("Rr"),"Rr"); v.Rz=readRealVector(in.at("Rz"),"Rz"); v.Ro=readRealVector(in.at("Ro"),"Ro"); v.NSz=in.value("NSz",static_cast<int>(v.Sz.size())); v.NRr=in.value("NRr",static_cast<int>(v.Rr.size())); v.NRz=in.value("NRz",static_cast<int>(v.Rz.size())); v.NRo=in.value("NRo",static_cast<int>(v.Ro.size())); v.is_Linspace_Rr=in.value("is_Linspace_Rr",false); v.is_Linspace_Rz=in.value("is_Linspace_Rz",false); v.is_Linspace_Sz=in.value("is_Linspace_Sz",false); v.is_Linspace_Ro=in.value("is_Linspace_Ro",false); } in.at("GridType").get_to(v.GridType); v.NRz_per_range=in.value("NRz_per_range",v.GridType==Grid_Mode::MODE_I_Irregular?1:v.NRz); v.Delta_r=in.value("Delta_r",0.0); checkPosition(v); }
 void to_json(OpenOcean_json &out, const ReflectionCoef &v) { out={{"theta",v.theta},{"R",v.R},{"phi",v.phi}}; }
@@ -260,9 +265,57 @@ void from_json(const OpenOcean_json &in, OOKC_parameters &p)
     p=std::move(parsed);
 }
 
+LoadResult read_json_file_result(const std::string &path,
+                                 OOKC_parameters &params)
+{
+    std::error_code fileError;
+    if (!std::filesystem::is_regular_file(path, fileError))
+    {
+        return LoadResult::failure(LoadErrorCode::MissingFile, path,
+                                   "JSON file does not exist or is not a regular file");
+    }
+    try
+    {
+        std::ifstream stream(path);
+        if (!stream)
+        {
+            return LoadResult::failure(LoadErrorCode::IoError, path,
+                                       "JSON file could not be opened");
+        }
+        OpenOcean_json document;
+        stream >> document;
+        OOKC_parameters candidate;
+        from_json(document, candidate);
+        params = std::move(candidate);
+        return LoadResult::success();
+    }
+    catch (const OpenOcean_json::parse_error &error)
+    {
+        return LoadResult::failure(LoadErrorCode::ParseError, path, error.what());
+    }
+    catch (const OpenOcean_json::out_of_range &error)
+    {
+        return LoadResult::failure(LoadErrorCode::SchemaError, path, error.what());
+    }
+    catch (const OpenOcean_json::type_error &error)
+    {
+        return LoadResult::failure(LoadErrorCode::SchemaError, path, error.what());
+    }
+    catch (const std::exception &error)
+    {
+        const std::string message = error.what();
+        if (message.find("unsupported") != std::string::npos)
+        {
+            return LoadResult::failure(LoadErrorCode::UnsupportedCapability,
+                                       path, message);
+        }
+        return LoadResult::failure(LoadErrorCode::InvalidField, path, message);
+    }
+}
+
 bool read_json_file(const std::string &path, OOKC_parameters &params)
 {
-    try { std::ifstream stream(path); if(!stream) return false; OpenOcean_json document; stream>>document; OOKC_parameters candidate; from_json(document,candidate); params=std::move(candidate); return true; } catch(...) { return false; }
+    return read_json_file_result(path, params).ok;
 }
 bool write_json_file(const std::string &path, const OOKC_parameters &params)
 {

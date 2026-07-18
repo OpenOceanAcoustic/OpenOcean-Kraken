@@ -1,0 +1,101 @@
+name: build-and-test
+
+"on":
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            cc: gcc
+            cxx: g++
+            label: linux-gcc
+          - os: ubuntu-latest
+            cc: clang
+            cxx: clang++
+            label: linux-clang
+          - os: windows-latest
+            cc: cl
+            cxx: cl
+            label: windows-msvc
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.label }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+      - name: Prepare bundled headers
+        shell: bash
+        run: |
+          mkdir -p third_party
+          git clone --depth 1 --branch 3.4.0 https://gitlab.com/libeigen/eigen.git third_party/eigen
+          git clone --depth 1 --branch v3.11.3 https://github.com/nlohmann/json.git third_party/json
+          mkdir -p third_party/nlohmann
+          cmake -E copy_directory third_party/json/single_include/nlohmann third_party/nlohmann
+      - name: Configure
+        shell: bash
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
+        run: >-
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DOPENOCEANKRAKENC_IPO=OFF
+      - name: Build
+        run: cmake --build build --parallel 2
+      - name: Self-contained native tests
+        shell: bash
+        run: >-
+          ctest --test-dir build --output-on-failure
+          -R 'OpenOceanKrakenc_(api_compatibility|parameter_adapter|interface_in_memory|export_compatibility|contract|phase_d_interface)_tests|OpenOceanKrakenc_cli_version'
+      - name: Install SDK
+        run: cmake --install build --prefix install
+      - name: Configure installed consumer
+        shell: bash
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
+        run: cmake -S for_test/consumer -B consumer-build -G Ninja -DCMAKE_PREFIX_PATH="$PWD/install"
+      - name: Build installed consumer
+        run: cmake --build consumer-build
+
+  sanitizers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare bundled headers
+        run: |
+          mkdir -p third_party
+          git clone --depth 1 --branch 3.4.0 https://gitlab.com/libeigen/eigen.git third_party/eigen
+          git clone --depth 1 --branch v3.11.3 https://github.com/nlohmann/json.git third_party/json
+          mkdir -p third_party/nlohmann
+          cmake -E copy_directory third_party/json/single_include/nlohmann third_party/nlohmann
+      - name: Configure ASan and UBSan
+        env:
+          CC: clang
+          CXX: clang++
+        run: >-
+          cmake -S . -B build-sanitized -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DOPENOCEANKRAKENC_IPO=OFF
+          -DOPENOCEANKRAKENC_ENABLE_ASAN=ON
+          -DOPENOCEANKRAKENC_ENABLE_UBSAN=ON
+      - name: Build sanitized suites
+        run: >-
+          cmake --build build-sanitized --parallel 2 --target
+          OpenOceanKrakenc_interface_in_memory_tests
+          OpenOceanKrakenc_export_compatibility_tests
+          OpenOceanKrakenc_contract_tests
+          OpenOceanKrakenc_phase_d_interface_tests
+      - name: Run sanitized interface, field, and export suites
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+        run: >-
+          ctest --test-dir build-sanitized --output-on-failure
+          -R 'OpenOceanKrakenc_(interface_in_memory|export_compatibility|contract|phase_d_interface)_tests'

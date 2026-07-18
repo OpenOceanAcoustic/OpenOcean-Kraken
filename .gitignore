@@ -9,8 +9,9 @@ out/
 __pycache__/
 *.pyc
 .vscode/
+nlohmann/
+eigen/
 third_party/
-build-debug/
-build-release/
-build-warnings/
-build-perf/
+build*/
+cmake-build-*/
+docs/*

@@ -6,7 +6,9 @@ import unittest
 from pathlib import Path
 
 from for_test.mod_reader import read_first_wavenumber_set
+from for_test.oracle_config import resolve_oracle_binary
 from for_test.reference_pipeline import run_reference_pipeline
+from for_test.fixture_paths import case_root
 
 
 class Phase3ReflectionTests(unittest.TestCase):
@@ -16,14 +18,14 @@ class Phase3ReflectionTests(unittest.TestCase):
         cls.workspace = cls.project.parent
         cls.binary_dir = Path(os.environ.get(
             "OPENOCEAN_KRAKENC_BINARY_DIR", cls.project / "build"))
-        cls.krakenc = cls.workspace / "krakenFortran" / "build_mingw" / "out" / "krakenc.exe"
-        cls.field = cls.workspace / "krakenFortran" / "build_mingw" / "out" / "field.exe"
+        cls.krakenc = resolve_oracle_binary("krakenc.exe")
+        cls.field = resolve_oracle_binary("field.exe")
         cls.runner = cls.binary_dir / "OpenOceanKrakenc_acoustic_case_runner.exe"
 
     def _solve(self, case):
         reference_dir = self.project / "build" / "reference" / case
         run_reference_pipeline(
-            self.workspace / "test" / case,
+            case_root(case),
             self.krakenc,
             self.field,
             reference_dir,
@@ -31,7 +33,7 @@ class Phase3ReflectionTests(unittest.TestCase):
         )
         expected = read_first_wavenumber_set(reference_dir / f"{case}.mod")
         completed = subprocess.run(
-            [str(self.runner), str(self.workspace / "test" / f"{case}.env")],
+            [str(self.runner), str(case_root(case).with_suffix(".env"))],
             cwd=self.project,
             capture_output=True,
             text=True,
@@ -51,7 +53,7 @@ class Phase3ReflectionTests(unittest.TestCase):
 
     def _solve_cpp(self, case):
         completed = subprocess.run(
-            [str(self.runner), str(self.workspace / "test" / f"{case}.env")],
+            [str(self.runner), str(case_root(case).with_suffix(".env"))],
             cwd=self.project,
             capture_output=True,
             text=True,

@@ -26,6 +26,7 @@ struct RootResult
 {
     std::complex<double> root{};
     double log10Residual = 0.0;
+    double relativeCorrection = 0.0;
     int iterations = 0;
     bool converged = false;
     RootFailure failure = RootFailure::None;

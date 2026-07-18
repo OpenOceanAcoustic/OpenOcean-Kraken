@@ -9,7 +9,9 @@ import unittest
 from pathlib import Path
 
 from for_test.mod_reader import read_first_mode_set
+from for_test.oracle_config import resolve_oracle_binary
 from for_test.reference_pipeline import run_reference_pipeline
+from for_test.fixture_paths import case_root
 
 
 class Phase3MunkTests(unittest.TestCase):
@@ -19,11 +21,13 @@ class Phase3MunkTests(unittest.TestCase):
         cls.workspace = cls.project.parent
         cls.binary_dir = Path(os.environ.get(
             "OPENOCEAN_KRAKENC_BINARY_DIR", cls.project / "build"))
-        cls.reference_dir = cls.project / "build" / "reference" / "MunkKleaky"
+        cls.reference_dir = (
+            cls.project / "build" / "reference" / "phase3_munk" / "MunkKleaky"
+        )
         run_reference_pipeline(
-            cls.workspace / "test" / "MunkKleaky",
-            cls.workspace / "krakenFortran" / "build_mingw" / "out" / "krakenc.exe",
-            cls.workspace / "krakenFortran" / "build_mingw" / "out" / "field.exe",
+            case_root("MunkKleaky"),
+            resolve_oracle_binary("krakenc.exe"),
+            resolve_oracle_binary("field.exe"),
             cls.reference_dir,
         )
         cls.reference = read_first_mode_set(cls.reference_dir / "MunkKleaky.mod")
@@ -32,7 +36,7 @@ class Phase3MunkTests(unittest.TestCase):
             cls.output_path = Path(stream.name)
         executable = cls.binary_dir / "OpenOceanKrakenc_phase3_munk_runner.exe"
         completed = subprocess.run(
-            [str(executable), str(cls.workspace / "test" / "MunkKleaky.env"),
+            [str(executable), str(case_root("MunkKleaky").with_suffix(".env")),
              str(cls.output_path)],
             cwd=cls.project,
             capture_output=True,
@@ -87,13 +91,13 @@ class Phase3MunkTests(unittest.TestCase):
     def test_cpp_mod_is_fortran_field_compatible(self):
         with tempfile.TemporaryDirectory() as directory:
             directory = Path(directory)
-            for source in (self.workspace / "test").glob("MunkKleaky.*"):
+            for source in case_root("MunkKleaky").parent.glob("MunkKleaky.*"):
                 shutil.copy2(source, directory / source.name)
             output_mod = directory / "MunkKleaky.mod"
             executable = self.binary_dir / "OpenOcean-Krakenc.exe"
             completed = subprocess.run(
                 [str(executable), "--mod",
-                 str(self.workspace / "test" / "MunkKleaky.env"),
+                 str(case_root("MunkKleaky").with_suffix(".env")),
                  str(output_mod)],
                 cwd=self.project,
                 capture_output=True,
@@ -124,7 +128,7 @@ class Phase3MunkTests(unittest.TestCase):
                 worst_mode_error = max(worst_mode_error, error / scale)
             self.assertLessEqual(worst_mode_error, 2.0e-3)
 
-            field = self.workspace / "krakenFortran" / "build_mingw" / "out" / "field.exe"
+            field = resolve_oracle_binary("field.exe")
             field_run = subprocess.run(
                 [str(field), "MunkKleaky"],
                 cwd=directory,

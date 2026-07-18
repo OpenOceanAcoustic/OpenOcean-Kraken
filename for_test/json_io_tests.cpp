@@ -57,7 +57,8 @@ int main()
     roundTripEnum(Media_Mode::MODE_E_Elastic);
 
     const std::filesystem::path workspace = OPENOCEANKRAKENC_WORKSPACE_DIR;
-    const std::filesystem::path env = workspace / "test" / "MunkKleaky.env";
+    const std::filesystem::path env =
+        workspace / "test" / "toolbox_env" / "MunkKleaky.env";
     const std::filesystem::path output =
         std::filesystem::temp_directory_path() / "openocean_krakenc_roundtrip.json";
     const std::filesystem::path invalid =
@@ -138,16 +139,26 @@ int main()
 
     OpenOcean_json capabilityRoundTripDocument = document;
     capabilityRoundTripDocument["AttenUnit"]["OceanAbsorptionModel"] = "Thorpe";
+    capabilityRoundTripDocument["AttenUnit"]["referenceFrequency"] = 40.0;
+    capabilityRoundTripDocument["AttenUnit"]["volume"]["temperatureCelsius"] = 10.0;
+    capabilityRoundTripDocument["AttenUnit"]["volume"]["salinityPsu"] = 35.0;
+    capabilityRoundTripDocument["AttenUnit"]["volume"]["ph"] = 8.0;
+    capabilityRoundTripDocument["AttenUnit"]["volume"]["meanDepthMetres"] = 500.0;
+    capabilityRoundTripDocument["AttenUnit"]["volume"]["biologicalLayers"] =
+        OpenOcean_json::array();
     capabilityRoundTripDocument["sspInput"].front()["SSPType"] = "cPCHIP";
     capabilityRoundTripDocument["sspInput"].front()["HSTop"]["BC"] = "grain";
     OOKC_parameters capabilityRoundTrip;
     from_json(capabilityRoundTripDocument, capabilityRoundTrip);
     assert(capabilityRoundTrip.AttenUnit.absModel == OceanAbsorptionModel::Thorpe);
+    assert(capabilityRoundTrip.AttenUnit.referenceFrequency == 40.0);
+    assert(capabilityRoundTrip.AttenUnit.volume.temperatureCelsius == 10.0);
     assert(capabilityRoundTrip.sspInput.front().SSPType == SSP_Mode::MODE_P_cPCHIP);
     assert(capabilityRoundTrip.sspInput.front().HSTop.BC == BC_Mode::MODE_G_Grain);
     OpenOcean_json capabilityReencoded;
     to_json(capabilityReencoded, capabilityRoundTrip);
     assert(capabilityReencoded["AttenUnit"]["OceanAbsorptionModel"] == "Thorpe");
+    assert(capabilityReencoded["AttenUnit"]["referenceFrequency"] == 40.0);
     assert(capabilityReencoded["sspInput"].front()["SSPType"] == "cPCHIP");
     assert(capabilityReencoded["sspInput"].front()["HSTop"]["BC"] == "grain");
 

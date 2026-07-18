@@ -482,7 +482,6 @@ PressureField evaluateCoupledField(
                 static_cast<float>(result.sourceDepths[sourceIndex]), modes.frequency);
             if (parameters.beamPattern && sourceIndex == 0)
             {
-                const float omega = 2.0f * piSingle * static_cast<float>(modes.frequency);
                 const ModComplex k = modValue(profiles[0]->wavenumbers[mode]);
                 const float kz2 = std::max(0.0f,
                     std::real(omega * omega / (1500.0f * 1500.0f) - k * k));

@@ -24,7 +24,7 @@ int main()
 {
     const std::filesystem::path workspace = OPENOCEANKRAKENC_WORKSPACE_DIR;
     const FieldParameters munk = readFieldParameters(
-        workspace / "test" / "MunkKleaky.flp");
+        workspace / "test" / "toolbox_env" / "MunkKleaky.flp");
     require(munk.sourceType == 'R' && munk.beamPattern && munk.coherent,
             "Munk FLP options parse mismatch");
     require(munk.rangesMetres.size() == 501 &&
@@ -40,13 +40,13 @@ int main()
             "legal FLP omni flag O was not accepted");
 
     const std::vector<AcousticCase> stepProfiles = readAcousticEnvironments(
-        workspace / "test" / "stepK_rd.env");
+        workspace / "test" / "toolbox_env" / "stepK_rd.env");
     require(stepProfiles.size() == 4,
             "stepK multi-profile ENV count mismatch");
     require(std::abs(soundSpeedAt(stepProfiles.front(), 18.0) - 1476.7) <= 1.0e-9,
             "stepK source sound-speed interpolation mismatch");
     const std::vector<AcousticCase> wedgeProfiles = readAcousticEnvironments(
-        workspace / "test" / "wedge.env");
+        workspace / "test" / "toolbox_env" / "wedge.env");
     require(wedgeProfiles.size() == 51,
             "wedge multi-profile ENV count mismatch");
 

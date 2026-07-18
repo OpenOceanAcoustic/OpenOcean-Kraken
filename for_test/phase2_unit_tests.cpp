@@ -69,6 +69,61 @@ int main()
     require(std::abs(lossy.imag() - expectedImaginary) <= 1.0e-12,
             "W attenuation conversion mismatch");
 
+    AttenuationContext powerLaw;
+    powerLaw.unit = 'm';
+    powerLaw.referenceFrequency = 100.0;
+    powerLaw.beta = 2.0;
+    powerLaw.transitionFrequency = 200.0;
+    for (const double frequency : {50.0, 200.0, 400.0})
+    {
+        powerLaw.frequency = frequency;
+        const double scale = frequency < powerLaw.transitionFrequency
+                                 ? std::pow(frequency / powerLaw.referenceFrequency,
+                                            powerLaw.beta)
+                                 : (frequency / powerLaw.referenceFrequency) *
+                                       std::pow(powerLaw.transitionFrequency /
+                                                    powerLaw.referenceFrequency,
+                                                powerLaw.beta - 1.0);
+        const double nepers = 0.8 / 8.6858896 * scale;
+        const double expected = nepers * 1600.0 * 1600.0 /
+                                (2.0 * pi * frequency);
+        require(near(complexSoundSpeed(75.0, 1600.0, 0.8, powerLaw),
+                     {1600.0, expected}, 1.0e-12),
+                "lowercase-m power-law conversion mismatch");
+    }
+    AttenuationContext metres = powerLaw;
+    metres.unit = 'M';
+    metres.frequency = 50.0;
+    const double metresExpected = (0.8 / 8.6858896) * 1600.0 * 1600.0 /
+                                  (2.0 * pi * metres.frequency);
+    require(near(complexSoundSpeed(75.0, 1600.0, 0.8, metres),
+                 {1600.0, metresExpected}, 1.0e-12),
+            "uppercase M must not use lowercase-m power-law parameters");
+
+    require(std::abs(thorpNepersPerMetre(10000.0) -
+                     1.3698423460369063e-4) <= 1.0e-16,
+            "Thorp 10 kHz reference mismatch");
+    VolumeAbsorptionParameters volume;
+    volume.temperatureCelsius = 10.0;
+    volume.salinityPsu = 35.0;
+    volume.ph = 8.0;
+    volume.meanDepthMetres = 1000.0;
+    require(std::abs(francoisGarrisonNepersPerMetre(10000.0, volume) -
+                     9.732982808053584e-5) <= 1.0e-16,
+            "Francois-Garrison Table-IV reference mismatch");
+    volume.biologicalLayers.push_back({100.0, 200.0, 1000.0, 5.0, 2.0});
+    const double biologicalExpected =
+        2.0 / ((1.0 - 1000.0 * 1000.0 / (2000.0 * 2000.0)) *
+                   (1.0 - 1000.0 * 1000.0 / (2000.0 * 2000.0)) +
+               1.0 / 25.0) /
+        8685.8896;
+    require(std::abs(biologicalNepersPerMetre(150.0, 2000.0, volume) -
+                     biologicalExpected) <= 1.0e-16,
+            "biological in-layer absorption mismatch");
+    require(biologicalNepersPerMetre(99.0, 2000.0, volume) == 0.0 &&
+                biologicalNepersPerMetre(201.0, 2000.0, volume) == 0.0,
+            "biological absorption leaked outside its depth layer");
+
     const ScaledFunction polynomial = [](std::complex<double> z) {
         return ScaledComplex{z * z + std::complex<double>(1.0, 0.0), 0};
     };
@@ -81,13 +136,16 @@ int main()
     const RootResult invalid = complexSecant({1.0, 0.0}, 0.0, 10, polynomial);
     require(!invalid.converged && invalid.failure == RootFailure::InvalidTolerance,
             "non-positive tolerance must be rejected structurally");
+    require(std::isinf(invalid.relativeCorrection),
+            "failed root must not report a zero relative correction");
 
     const RootResult limited = complexSecant({10.0, 10.0}, 1.0e-15, 1, polynomial);
     require(!limited.converged && limited.failure == RootFailure::IterationLimit,
             "iteration limit must be reported structurally");
 
     const std::filesystem::path workspace = OPENOCEANKRAKENC_WORKSPACE_DIR;
-    const AcousticCase munk = readAcousticEnv(workspace / "test" / "MunkKleaky.env");
+    const AcousticCase munk = readAcousticEnv(
+        workspace / "test" / "toolbox_env" / "MunkKleaky.env");
     require(munk.title == "Munk profile, leaky modes", "Munk title parse mismatch");
     require(std::abs(munk.frequency - 50.0) <= 1.0e-14, "Munk frequency parse mismatch");
     require(munk.layers.size() == 1, "Munk acoustic layer count mismatch");
@@ -105,6 +163,50 @@ int main()
             "Munk bottom sound speed mismatch");
     require(std::abs(munk.bottom.alphaP - 0.8) <= 1.0e-14,
             "Munk bottom attenuation mismatch");
+
+    const std::vector<AcousticCase> solve3Profiles = readAcousticEnvironments(
+        workspace / "test" / "toolbox_env" / "solve3_mode_gain.env");
+    require(solve3Profiles.size() == 2,
+            "solve3 continuation ENV profile count mismatch");
+    require(solve3Profiles[0].layers.size() == 1 &&
+                solve3Profiles[1].layers.size() == 1 &&
+                solve3Profiles[0].layers[0].samples.size() == 2 &&
+                solve3Profiles[1].layers[0].samples.size() == 2,
+            "solve3 continuation ENV topology mismatch");
+    for (std::size_t profile = 0; profile < solve3Profiles.size(); ++profile)
+    {
+        const AcousticLayer &layer = solve3Profiles[profile].layers.front();
+        require(layer.samples.front().cs == 0.0 &&
+                    layer.samples.front().rho == 1.0 &&
+                    layer.samples.front().alphaP == 0.0 &&
+                    layer.samples.front().alphaS == 0.0,
+                "solve3 first-row material inheritance mismatch");
+        require(layer.samples.back().cs == 0.0 &&
+                    layer.samples.back().rho == 1.0 &&
+                    layer.samples.back().alphaP == 0.0 &&
+                    layer.samples.back().alphaS == 0.0,
+                "solve3 within-profile material inheritance mismatch");
+    }
+    require(solve3Profiles[0].layers.front().samples.front().cp == 1500.0 &&
+                solve3Profiles[1].layers.front().samples.front().cp == 1485.0,
+            "solve3 profile-specific sound speed was not preserved");
+    bool inheritanceMismatchRejected = false;
+    try
+    {
+        static_cast<void>(readAcousticEnvironments(
+            std::filesystem::path(OPENOCEANKRAKENC_SOURCE_DIR) /
+            "for_test" / "fixtures" / "solve3_inheritance_mismatch.env"));
+    }
+    catch (const std::runtime_error &error)
+    {
+        const std::string message = error.what();
+        inheritanceMismatchRejected =
+            message.find("profile 2") != std::string::npos &&
+            message.find("medium 1") != std::string::npos &&
+            message.find("depth 0") != std::string::npos;
+    }
+    require(inheritanceMismatchRejected,
+            "mismatched profile inheritance lacks profile/medium/depth context");
 
     const std::filesystem::path topHalfSpaceEnv =
         std::filesystem::temp_directory_path() / "openocean_krakenc_top_halfspace.env";
@@ -128,6 +230,72 @@ int main()
                 std::abs(topHalfSpace.top.cp - 1600.0) <= 1.0e-14 &&
                 std::abs(topHalfSpace.top.alphaP - 0.8) <= 1.0e-14,
             "top acoustic half-space parse mismatch");
+
+    const auto parseTemporaryEnv = [](
+        const std::string &name, const std::string &contents) {
+        const std::filesystem::path path =
+            std::filesystem::temp_directory_path() / name;
+        {
+            std::ofstream stream(path);
+            stream << contents;
+        }
+        AcousticCase result = readAcousticEnv(path);
+        std::filesystem::remove(path);
+        return result;
+    };
+    const AcousticCase lowercaseM = parseTemporaryEnv(
+        "openocean_krakenc_lowercase_m.env",
+        "'lowercase m and Thorp'\n"
+        "50.0\n1\n'CVmT  '\n"
+        "10 0.02 100.0 2.0 80.0\n"
+        "0.0 1500.0 0.0 1.0 0.8 0.0\n"
+        "100.0 1500.0 /\n"
+        "'R' 0.03 1.5 90.0\n"
+        "1400.0 2000.0\n0.0\n");
+    require(lowercaseM.attenuationUnit == 'm' &&
+                lowercaseM.absorptionModel == OceanAbsorptionModel::Thorpe &&
+                lowercaseM.layers.front().roughnessRms == 0.02 &&
+                lowercaseM.layers.front().attenuationPower == 2.0 &&
+                lowercaseM.layers.front().transitionFrequency == 80.0 &&
+                lowercaseM.bottom.roughnessRms == 0.03 &&
+                lowercaseM.bottom.attenuationPower == 1.5 &&
+                lowercaseM.bottom.transitionFrequency == 90.0,
+            "lowercase-m/Thorp ENV context parse mismatch");
+    const AcousticMatrix lowercaseMatrix = buildAcousticMatrix(lowercaseM, 1);
+    const std::complex<double> expectedLowercaseCp = complexSoundSpeed(
+        0.0, 1500.0, 0.8,
+        attenuationContext(lowercaseM, 2.0, 80.0));
+    require(near(lowercaseMatrix.cp.front(), expectedLowercaseCp, 1.0e-12),
+            "lowercase-m/Thorp ENV context was not applied to the mesh");
+
+    const AcousticCase francoisGarrison = parseTemporaryEnv(
+        "openocean_krakenc_francois_garrison.env",
+        "'Francois-Garrison'\n"
+        "10000.0\n1\n'CVWF  '\n"
+        "10.0 35.0 8.0 1000.0\n"
+        "10 0.0 100.0\n"
+        "0.0 1500.0 0.0 1.0 0.0 0.0\n"
+        "100.0 1500.0 /\n"
+        "'R' 0.0\n1400.0 2000.0\n0.0\n");
+    require(francoisGarrison.absorptionModel ==
+                OceanAbsorptionModel::FrancGarr &&
+                francoisGarrison.volumeAbsorption.temperatureCelsius == 10.0 &&
+                francoisGarrison.volumeAbsorption.meanDepthMetres == 1000.0,
+            "Francois-Garrison ENV parameters were not parsed");
+
+    const AcousticCase biological = parseTemporaryEnv(
+        "openocean_krakenc_biological.env",
+        "'biological'\n"
+        "2000.0\n1\n'CVWB  '\n"
+        "1\n100.0 200.0 1000.0 5.0 2.0\n"
+        "20 0.0 300.0\n"
+        "0.0 1500.0 0.0 1.0 0.0 0.0\n"
+        "150.0 1500.0 /\n300.0 1500.0 /\n"
+        "'R' 0.0\n1400.0 2000.0\n0.0\n");
+    require(biological.absorptionModel == OceanAbsorptionModel::Biological &&
+                biological.volumeAbsorption.biologicalLayers.size() == 1 &&
+                biological.volumeAbsorption.biologicalLayers.front().qualityFactor == 5.0,
+            "biological ENV parameters were not parsed");
 
     const AcousticMatrix matrix = buildAcousticMatrix(munk, 1);
     require(matrix.depth.size() == 5001, "Munk mesh point count mismatch");

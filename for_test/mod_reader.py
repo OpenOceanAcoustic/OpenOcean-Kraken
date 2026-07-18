@@ -83,3 +83,44 @@ def read_first_wavenumber_set(path: Path) -> list[complex]:
         result.append(complex(real, imaginary))
         cursor += 8
     return result
+
+
+def read_wavenumber_sets(path: Path) -> list[list[complex]]:
+    """Read every one-frequency profile's wavenumbers from a KRAKENC MOD file."""
+    path = Path(path)
+    data = path.read_bytes()
+    if len(data) < 100:
+        raise ModeFileError(f"mode file is too short: {path}")
+    (record_words,) = struct.unpack_from("<i", data, 0)
+    if record_words < 25:
+        raise ModeFileError(f"invalid MOD record length: {record_words}")
+    record_bytes = 4 * record_words
+    complex_per_record = record_words // 2
+    profile_record = 0
+    result = []
+    while profile_record * record_bytes < len(data):
+        header = profile_record * record_bytes
+        if header + 100 > len(data):
+            raise ModeFileError("MOD file is truncated in a profile header")
+        if struct.unpack_from("<i", data, header)[0] != record_words:
+            raise ModeFileError("MOD profile record length mismatch")
+        mode_offset = (profile_record + 5) * record_bytes
+        if mode_offset + 4 > len(data):
+            raise ModeFileError("MOD file is truncated before a mode count")
+        (mode_count,) = struct.unpack_from("<i", data, mode_offset)
+        if mode_count < 1:
+            raise ModeFileError("MOD profile must contain at least one mode")
+        wave_start = profile_record + 7 + mode_count
+        values = []
+        for mode in range(mode_count):
+            wave_record = wave_start + mode // complex_per_record
+            wave_offset = (wave_record * record_bytes +
+                           8 * (mode % complex_per_record))
+            if wave_offset + 8 > len(data):
+                raise ModeFileError("MOD file is truncated in profile wavenumbers")
+            real, imaginary = struct.unpack_from("<ff", data, wave_offset)
+            values.append(complex(real, imaginary))
+        result.append(values)
+        wave_records = (mode_count + complex_per_record - 1) // complex_per_record
+        profile_record += 7 + mode_count + wave_records
+    return result

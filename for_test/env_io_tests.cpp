@@ -13,7 +13,8 @@ using namespace OpenOceanKrakenc;
 int main()
 {
     const std::filesystem::path workspace = OPENOCEANKRAKENC_WORKSPACE_DIR;
-    const std::filesystem::path env = workspace / "test" / "MunkKleaky.env";
+    const std::filesystem::path env =
+        workspace / "test" / "toolbox_env" / "MunkKleaky.env";
 
     OOKC_parameters params;
     assert(read_env_file(env.string(), params));

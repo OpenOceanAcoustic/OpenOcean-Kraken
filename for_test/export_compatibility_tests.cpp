@@ -134,7 +134,8 @@ int main()
 
     Interface elastic;
     const std::filesystem::path elasticEnv =
-        source.parent_path() / "test" / "elastic_fd_two_layer.env";
+        source.parent_path() / "test" / "multilayer_env" /
+        "elastic_fd_two_layer.env";
     require(elastic.from_env(elasticEnv.string()), "elastic export ENV load failed");
     elastic.runEigen();
     const std::filesystem::path elasticRoot = directory / "elastic_mode";

@@ -197,8 +197,7 @@ std::vector<ModeFileWriteResult> writeModeFile(
     {
     const AcousticCase &input = inputs[inputIndex];
     const AcousticSolveResult &solve = solves[inputIndex];
-    if (solve.modes.empty() || solve.meshWavenumberSets.empty() ||
-        solve.meshWavenumberSets.front().size() < solve.modes.size())
+    if (solve.modes.empty() || solve.meshWavenumberSets.empty())
     {
         throw std::runtime_error("base mesh does not contain every output mode");
     }
@@ -283,12 +282,22 @@ std::vector<ModeFileWriteResult> writeModeFile(
         put(record, cursor, boundaryCode(boundary.type));
         cursor += 1;
         const std::complex<double> cp = boundary.cp > 0.0
-                                            ? complexSoundSpeed(boundary.cp, boundary.alphaP,
-                                                                input.frequency, input.attenuationUnit)
+                                            ? complexSoundSpeed(
+                                                  boundary.depth, boundary.cp,
+                                                  boundary.alphaP,
+                                                  attenuationContext(
+                                                      input,
+                                                      boundary.attenuationPower,
+                                                      boundary.transitionFrequency))
                                             : std::complex<double>(0.0, 0.0);
         const std::complex<double> cs = boundary.cs > 0.0
-                                            ? complexSoundSpeed(boundary.cs, boundary.alphaS,
-                                                                input.frequency, input.attenuationUnit)
+                                            ? complexSoundSpeed(
+                                                  boundary.depth, boundary.cs,
+                                                  boundary.alphaS,
+                                                  attenuationContext(
+                                                      input,
+                                                      boundary.attenuationPower,
+                                                      boundary.transitionFrequency))
                                             : std::complex<double>(0.0, 0.0);
         putComplexFloat(record, cursor, cp);
         cursor += 8;
@@ -316,10 +325,14 @@ std::vector<ModeFileWriteResult> writeModeFile(
     const std::size_t extractionThreads = modeCount >= 4 ? threadCount : 1;
     parallelFor(static_cast<std::size_t>(modeCount), extractionThreads,
                 [&](std::size_t preparedIndex) {
-        const int modeIndex = static_cast<int>(preparedIndex);
-        const std::complex<double> baseK =
-            solve.meshWavenumberSets.front()[static_cast<std::size_t>(modeIndex)];
-        const std::complex<double> baseEigenvalue = baseK * baseK;
+        const ModeRoot &mode = solve.modes[preparedIndex];
+        if (!mode.hasCoarseProvenance ||
+            mode.coarseModeIndex >= solve.meshWavenumberSets.front().size())
+        {
+            throw std::runtime_error(
+                "output mode is missing valid coarse-mesh provenance");
+        }
+        const std::complex<double> baseEigenvalue = mode.coarseEigenvalue;
         const ComplexModeResult raw = solveAcousticMode(
             input, matrix, baseEigenvalue);
         if (!raw.converged)

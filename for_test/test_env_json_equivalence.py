@@ -44,7 +44,7 @@ class EnvJsonEquivalenceTests(unittest.TestCase):
         return json.loads(completed.stdout)
 
     def copy_case(self, case, target):
-        for source in self.fixtures.glob(case + ".*"):
+        for source in self.fixtures.rglob(case + ".*"):
             if source.suffix.lower() in INPUT_SUFFIXES:
                 shutil.copy2(source, target / source.name)
 

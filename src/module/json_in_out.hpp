@@ -2,6 +2,7 @@
 #define OPEN_OCEAN_KRAKENC_JSON_IN_OUT_HPP
 
 #include "OpenOceanKrakencParams.h"
+#include "OpenOceanKrakencSafety.h"
 #include "nlohmann/json.hpp"
 
 #include <string>
@@ -18,6 +19,10 @@ void to_json(OpenOcean_json &out, const AttenuationUnit &value);
 void from_json(const OpenOcean_json &in, AttenuationUnit &value);
 void to_json(OpenOcean_json &out, const OceanAbsorptionModel &value);
 void from_json(const OpenOcean_json &in, OceanAbsorptionModel &value);
+void to_json(OpenOcean_json &out, const BiologicalAbsorptionLayer &value);
+void from_json(const OpenOcean_json &in, BiologicalAbsorptionLayer &value);
+void to_json(OpenOcean_json &out, const VolumeAbsorptionParameters &value);
+void from_json(const OpenOcean_json &in, VolumeAbsorptionParameters &value);
 void to_json(OpenOcean_json &out, const BC_Mode &value);
 void from_json(const OpenOcean_json &in, BC_Mode &value);
 void to_json(OpenOcean_json &out, const Source_Mode &value);
@@ -68,6 +73,8 @@ void to_json(OpenOcean_json &out, const OOKC_parameters &params);
 void from_json(const OpenOcean_json &in, OOKC_parameters &params);
 
 bool read_json_file(const std::string &path, OOKC_parameters &params);
+LoadResult read_json_file_result(const std::string &path,
+                                 OOKC_parameters &params);
 bool write_json_file(const std::string &path, const OOKC_parameters &params);
 std::string parameters_to_json_string(const OOKC_parameters &params);
 }

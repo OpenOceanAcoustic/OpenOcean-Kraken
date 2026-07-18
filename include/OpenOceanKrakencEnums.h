@@ -1,6 +1,8 @@
 #ifndef OPEN_OCEAN_KRAKENC_ENUMS_H
 #define OPEN_OCEAN_KRAKENC_ENUMS_H
 
+#include <vector>
+
 namespace OpenOceanKrakenc
 {
 enum class SSP_Mode
@@ -33,7 +35,37 @@ enum class OceanAbsorptionModel
 {
     None,
     Thorpe,
-    FrancGarr
+    FrancGarr,
+    Biological
+};
+
+struct BiologicalAbsorptionLayer
+{
+    double topDepthMetres = 0.0;
+    double bottomDepthMetres = 0.0;
+    double resonanceFrequencyHz = 0.0;
+    double qualityFactor = 0.0;
+    double peakAttenuationDbPerKm = 0.0;
+};
+
+struct VolumeAbsorptionParameters
+{
+    double temperatureCelsius = 20.0;
+    double salinityPsu = 35.0;
+    double ph = 8.0;
+    double meanDepthMetres = 0.0;
+    std::vector<BiologicalAbsorptionLayer> biologicalLayers;
+};
+
+struct AttenuationContext
+{
+    char unit = 'W';
+    OceanAbsorptionModel model = OceanAbsorptionModel::None;
+    double frequency = 0.0;
+    double referenceFrequency = 0.0;
+    double beta = 0.0;
+    double transitionFrequency = 0.0;
+    VolumeAbsorptionParameters volume;
 };
 
 enum class BC_Mode
@@ -82,6 +114,8 @@ struct Atten_Mode
 {
     AttenuationUnit attnUnit = AttenuationUnit::MODE_W_db_per_lambda;
     OceanAbsorptionModel absModel = OceanAbsorptionModel::None;
+    double referenceFrequency = 0.0;
+    VolumeAbsorptionParameters volume;
 };
 }
 

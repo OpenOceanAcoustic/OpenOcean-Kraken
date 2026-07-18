@@ -66,6 +66,21 @@ std::vector<double> numbers(std::string line, const char *field)
     return result;
 }
 
+std::vector<double> numbersAfterQuote(const std::string &line,
+                                      const char *field)
+{
+    const std::size_t first = line.find('\'');
+    const std::size_t second = first == std::string::npos
+                                   ? std::string::npos
+                                   : line.find('\'', first + 1);
+    if (second == std::string::npos)
+    {
+        throw std::runtime_error(std::string("missing quoted ") + field);
+    }
+    const std::string tail = trim(line.substr(second + 1));
+    return tail.empty() ? std::vector<double>{} : numbers(tail, field);
+}
+
 AcousticBoundaryType boundaryType(char value, const char *field)
 {
     switch (value)
@@ -128,6 +143,14 @@ void validate(const AcousticCase &result)
             previousDepth = sample.depth;
         }
         hasAcousticLayer = hasAcousticLayer || layer.samples.front().cs == 0.0;
+        if (layer.roughnessRms < 0.0)
+        {
+            throw std::runtime_error("RMS roughness must be non-negative");
+        }
+        if (layer.samples.front().cs > 0.0 && layer.roughnessRms != 0.0)
+        {
+            throw std::invalid_argument("Rough elastic interfaces are not allowed");
+        }
     }
     if (!hasAcousticLayer)
     {
@@ -160,6 +183,21 @@ void readReflectionTable(const std::filesystem::path &path,
         boundary.reflectionSamples.push_back(sample);
     }
 }
+}
+
+AttenuationContext attenuationContext(const AcousticCase &input,
+                                      double attenuationPower,
+                                      double transitionFrequency)
+{
+    AttenuationContext context;
+    context.unit = input.attenuationUnit;
+    context.model = input.absorptionModel;
+    context.frequency = input.frequency;
+    context.referenceFrequency = input.referenceFrequency;
+    context.beta = attenuationPower;
+    context.transitionFrequency = transitionFrequency;
+    context.volume = input.volumeAbsorption;
+    return context;
 }
 
 std::vector<AcousticCase> readAcousticEnvironments(
@@ -242,6 +280,59 @@ std::vector<AcousticCase> readAcousticEnvironments(
     }
     result.top.type = boundaryType(options[1], "top");
     result.attenuationUnit = options[2];
+    const char absorptionCode = options.size() > 3 ? options[3] : ' ';
+    switch (absorptionCode)
+    {
+    case ' ':
+        result.absorptionModel = OceanAbsorptionModel::None;
+        break;
+    case 'T':
+        result.absorptionModel = OceanAbsorptionModel::Thorpe;
+        break;
+    case 'F':
+    {
+        result.absorptionModel = OceanAbsorptionModel::FrancGarr;
+        const std::vector<double> values = numbers(
+            take("Francois-Garrison parameters"),
+            "Francois-Garrison parameters");
+        if (values.size() < 4)
+        {
+            throw std::runtime_error(
+                "Francois-Garrison requires temperature, salinity, pH and mean depth");
+        }
+        result.volumeAbsorption.temperatureCelsius = values[0];
+        result.volumeAbsorption.salinityPsu = values[1];
+        result.volumeAbsorption.ph = values[2];
+        result.volumeAbsorption.meanDepthMetres = values[3];
+        break;
+    }
+    case 'B':
+    {
+        result.absorptionModel = OceanAbsorptionModel::Biological;
+        const int count = static_cast<int>(numbers(
+            take("biological layer count"),
+            "biological layer count").front());
+        if (count < 0 || count > 200)
+        {
+            throw std::runtime_error("biological layer count must be between 0 and 200");
+        }
+        for (int index = 0; index < count; ++index)
+        {
+            const std::vector<double> values = numbers(
+                take("biological layer"), "biological layer");
+            if (values.size() < 5)
+            {
+                throw std::runtime_error(
+                    "biological layer requires z1, z2, f0, Q and a0");
+            }
+            result.volumeAbsorption.biologicalLayers.push_back(
+                {values[0], values[1], values[2], values[3], values[4]});
+        }
+        break;
+    }
+    default:
+        throw std::runtime_error("unsupported ENV volume-absorption option");
+    }
     result.enableRootRestarts = options.size() >= 5 && options[4] == '.';
     if (result.top.type == AcousticBoundaryType::HalfSpace)
     {
@@ -264,15 +355,61 @@ std::vector<AcousticCase> readAcousticEnvironments(
         layer.baseMesh = static_cast<int>(header[0]);
         layer.topDepth = topDepth;
         layer.bottomDepth = header[2];
+        layer.roughnessRms = header[1];
+        if (result.attenuationUnit == 'm')
+        {
+            if (header.size() < 5)
+            {
+                throw std::runtime_error(
+                    "lowercase-m medium header requires beta and transition frequency");
+            }
+            layer.attenuationPower = header[3];
+            layer.transitionFrequency = header[4];
+        }
 
         AcousticSample previous;
+        previous.rho = 1.0;
         bool firstSample = true;
         while (layer.samples.empty() || layer.samples.back().depth < layer.bottomDepth)
         {
             const std::vector<double> values = numbers(take("SSP sample"), "SSP sample");
-            if (values.size() < 2 || (firstSample && values.size() < 6))
+            if (values.size() < 2)
             {
-                throw std::runtime_error("first SSP sample requires depth, cp, cs, rho, alphaP and alphaS");
+                throw std::runtime_error("SSP sample requires depth and cp");
+            }
+            if (firstSample && values.size() < 6 && !results.empty())
+            {
+                const AcousticCase &priorProfile = results.back();
+                const bool mediumExists =
+                    static_cast<std::size_t>(medium) < priorProfile.layers.size();
+                const AcousticLayer *priorLayer = mediumExists
+                                                       ? &priorProfile.layers[static_cast<std::size_t>(medium)]
+                                                       : nullptr;
+                const bool topologyMatches = priorLayer != nullptr &&
+                    std::abs(priorLayer->topDepth - layer.topDepth) <= 1.0e-8 &&
+                    std::abs(priorLayer->bottomDepth - layer.bottomDepth) <= 1.0e-8;
+                if (!topologyMatches)
+                {
+                    std::ostringstream message;
+                    message << "cannot inherit SSP material at profile "
+                            << (results.size() + 1) << ", medium " << (medium + 1)
+                            << ", depth " << values[0];
+                    throw std::runtime_error(message.str());
+                }
+                const auto inherited = std::find_if(
+                    priorLayer->samples.begin(), priorLayer->samples.end(),
+                    [&](const AcousticSample &sample) {
+                        return std::abs(sample.depth - values[0]) <= 1.0e-8;
+                    });
+                if (inherited == priorLayer->samples.end())
+                {
+                    std::ostringstream message;
+                    message << "cannot inherit SSP material at profile "
+                            << (results.size() + 1) << ", medium " << (medium + 1)
+                            << ", depth " << values[0];
+                    throw std::runtime_error(message.str());
+                }
+                previous = *inherited;
             }
             AcousticSample sample = previous;
             sample.depth = values[0];
@@ -300,9 +437,29 @@ std::vector<AcousticCase> readAcousticEnvironments(
     }
     result.bottom.type = boundaryType(bottomOptions.front(), "bottom");
     result.bottom.depth = topDepth;
+    const std::vector<double> bottomHeader = numbersAfterQuote(
+        lines[cursor - 1], "bottom options");
+    if (!bottomHeader.empty())
+    {
+        result.bottom.roughnessRms = bottomHeader[0];
+    }
+    if (result.attenuationUnit == 'm')
+    {
+        if (bottomHeader.size() < 3)
+        {
+            throw std::runtime_error(
+                "lowercase-m bottom options require roughness, beta and transition frequency");
+        }
+        result.bottom.attenuationPower = bottomHeader[1];
+        result.bottom.transitionFrequency = bottomHeader[2];
+    }
     if (result.bottom.type == AcousticBoundaryType::HalfSpace)
     {
-        result.bottom = readHalfSpace("bottom half-space");
+        AcousticBoundary boundary = readHalfSpace("bottom half-space");
+        boundary.roughnessRms = result.bottom.roughnessRms;
+        boundary.attenuationPower = result.bottom.attenuationPower;
+        boundary.transitionFrequency = result.bottom.transitionFrequency;
+        result.bottom = std::move(boundary);
     }
     else if (result.bottom.type == AcousticBoundaryType::ReflectionCoefficient)
     {

@@ -5,7 +5,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from for_test.oracle_config import resolve_oracle_binary
 from for_test.shd_reader import read_shade_file
+from for_test.fixture_paths import case_root
 
 
 class Phase4FieldTests(unittest.TestCase):
@@ -15,7 +17,7 @@ class Phase4FieldTests(unittest.TestCase):
         binary_dir = Path(os.environ.get(
             "OPENOCEAN_KRAKENC_BINARY_DIR", project / "build"))
         executable = binary_dir / "OpenOcean-Krakenc.exe"
-        fortran_field = workspace / "krakenFortran" / "build_mingw" / "out" / "field.exe"
+        fortran_field = resolve_oracle_binary("field.exe")
         with tempfile.TemporaryDirectory() as root:
             root = Path(root)
             cpp_dir = root / "cpp"
@@ -23,11 +25,11 @@ class Phase4FieldTests(unittest.TestCase):
             cpp_dir.mkdir()
             fortran_dir.mkdir()
             for directory in (cpp_dir, fortran_dir):
-                for source in (workspace / "test").glob("MunkKleaky.*"):
+                for source in case_root("MunkKleaky").parent.glob("MunkKleaky.*"):
                     shutil.copy2(source, directory / source.name)
 
             mod_run = subprocess.run(
-                [str(executable), "--mod", str(workspace / "test" / "MunkKleaky.env"),
+                [str(executable), "--mod", str(case_root("MunkKleaky").with_suffix(".env")),
                  str(cpp_dir / "MunkKleaky.mod")],
                 capture_output=True, text=True, timeout=300, check=False)
             self.assertEqual(mod_run.returncode, 0, mod_run.stderr)

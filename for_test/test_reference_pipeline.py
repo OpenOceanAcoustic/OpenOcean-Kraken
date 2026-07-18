@@ -3,7 +3,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from for_test.oracle_config import resolve_oracle_binary
 from for_test.reference_pipeline import ReferencePipelineError, run_reference_pipeline
+from for_test.fixture_paths import case_root
 
 
 class ReferencePipelineTests(unittest.TestCase):
@@ -20,22 +22,21 @@ class ReferencePipelineTests(unittest.TestCase):
     def test_munk_kleaky_produces_mod_and_shd(self):
         project = Path(__file__).resolve().parents[1]
         workspace = project.parent
+        reference_dir = (
+            project / "build" / "reference" / "reference_pipeline" / "MunkKleaky"
+        )
         result = run_reference_pipeline(
-            workspace / "test" / "MunkKleaky",
-            workspace / "krakenFortran" / "build_mingw" / "out" / "krakenc.exe",
-            workspace / "krakenFortran" / "build_mingw" / "out" / "field.exe",
-            project / "build" / "reference" / "MunkKleaky",
+            case_root("MunkKleaky"),
+            resolve_oracle_binary("krakenc.exe"),
+            resolve_oracle_binary("field.exe"),
+            reference_dir,
         )
         self.assertTrue(result["passes"], result)
         self.assertGreater(result["outputs"]["mod"]["bytes"], 0)
         self.assertGreater(result["outputs"]["shd"]["bytes"], 0)
         manifest = json.loads(
             (
-                project
-                / "build"
-                / "reference"
-                / "MunkKleaky"
-                / "manifest.json"
+                reference_dir / "manifest.json"
             ).read_text(encoding="utf-8")
         )
         self.assertTrue(manifest["passes"])

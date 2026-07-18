@@ -21,6 +21,7 @@ struct HSInfo
     double betaI = 0.0;
     double beta = 0.0;
     double ft = 0.0;
+    double sigma = 0.0;
     std::complex<double> cp{0.0, 0.0};
     std::complex<double> cs{0.0, 0.0};
     double rho = 0.0;

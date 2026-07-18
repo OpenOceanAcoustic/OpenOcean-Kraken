@@ -142,13 +142,17 @@ ComplexDispersion::ComplexDispersion(const AcousticCase &input,
                                  std::complex<double> &cs) {
         if (boundary.cp > 0.0)
         {
-            cp = complexSoundSpeed(boundary.cp, boundary.alphaP,
-                                   input_.frequency, input_.attenuationUnit);
+            cp = complexSoundSpeed(
+                boundary.depth, boundary.cp, boundary.alphaP,
+                attenuationContext(input_, boundary.attenuationPower,
+                                   boundary.transitionFrequency));
         }
         if (boundary.cs > 0.0)
         {
-            cs = complexSoundSpeed(boundary.cs, boundary.alphaS,
-                                   input_.frequency, input_.attenuationUnit);
+            cs = complexSoundSpeed(
+                boundary.depth, boundary.cs, boundary.alphaS,
+                attenuationContext(input_, boundary.attenuationPower,
+                                   boundary.transitionFrequency));
         }
     };
     cacheSpeeds(input_.top, topCp_, topCs_);

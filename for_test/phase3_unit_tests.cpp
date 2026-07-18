@@ -7,6 +7,7 @@
 #include "algorithm/ElasticCompound.h"
 #include "algorithm/ReflectionBoundary.h"
 #include "algorithm/ModeFileWriter.h"
+#include "algorithm/ScatteringLoss.h"
 
 #include <Eigen/Dense>
 
@@ -14,6 +15,7 @@
 #include <complex>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 
 using namespace OpenOceanKrakenc;
@@ -55,6 +57,29 @@ AcousticCase closedWaveguideCase()
 
 int main()
 {
+    require(std::abs(scatterRoot({1.25, -0.2}) -
+                     std::complex<double>(1.1215834543441732,
+                                          -0.08915966048952934)) <= 1.0e-14,
+            "ScatterRoot positive-real branch mismatch");
+    require(std::abs(scatterRoot({-0.75, 0.35}) -
+                     std::complex<double>(-0.19703713845661486,
+                                          -0.8881574375814072)) <= 1.0e-14,
+            "ScatterRoot negative-real branch mismatch");
+    const std::complex<double> kup = kupermanIngenito(
+        0.05, {1.25, -0.2}, 1.1, {-0.75, 0.35}, 1.8,
+        {0.8, -0.1}, {0.02, 0.03});
+    require(std::abs(kup - std::complex<double>(-0.00047246696078479835,
+                                                -0.003784694512041969)) <= 1.0e-15,
+            "Kuperman-Ingenito reference mismatch");
+    const std::complex<double> kupDoubleSigma = kupermanIngenito(
+        0.10, {1.25, -0.2}, 1.1, {-0.75, 0.35}, 1.8,
+        {0.8, -0.1}, {0.02, 0.03});
+    require(kupermanIngenito(0.0, {1.25, -0.2}, 1.1, {-0.75, 0.35}, 1.8,
+                             {0.8, -0.1}, {0.02, 0.03}) ==
+                std::complex<double>(0.0, 0.0) &&
+                std::abs(kupDoubleSigma - 4.0 * kup) <= 1.0e-15,
+            "Kuperman-Ingenito sigma-squared scaling mismatch");
+
     const double eigenvalue = 2.0 - std::sqrt(2.0);
     Eigen::VectorXcd diagonal = Eigen::VectorXcd::Constant(3, 2.0 - eigenvalue);
     Eigen::VectorXcd offDiagonal = Eigen::VectorXcd::Constant(2, -1.0);
@@ -91,8 +116,30 @@ int main()
             "inverse iteration limit must be reported structurally");
 
     const std::filesystem::path workspace = OPENOCEANKRAKENC_WORKSPACE_DIR;
+    const std::filesystem::path source = OPENOCEANKRAKENC_SOURCE_DIR;
+    const AcousticCase scholte = readAcousticEnv(
+        source / "for_test" / "fixtures" / "g3_scholte.env");
+    const SpectralMinimumPhaseSpeed scholteFloor =
+        spectralMinimumPhaseSpeed(scholte);
+    require(scholteFloor.elasticPresent &&
+                std::abs(scholteFloor.speed - 425.0) <= 1.0e-12,
+            "Scholte elastic spectral floor mismatch");
+    const AcousticSolveResult scholteRoots = solveAcousticModes(scholte);
+    require(scholteRoots.modes.size() == 7,
+            "Scholte fixture must expose all seven Fortran modes");
+    double minimumScholtePhaseSpeed = std::numeric_limits<double>::infinity();
+    for (const ModeRoot &root : scholteRoots.modes)
+    {
+        minimumScholtePhaseSpeed = std::min(
+            minimumScholtePhaseSpeed,
+            2.0 * std::acos(-1.0) * scholte.frequency /
+                root.wavenumber.real());
+    }
+    require(std::abs(minimumScholtePhaseSpeed - 446.7375608441422) <= 0.05,
+            "Scholte slow-mode phase speed mismatch");
+
     const AcousticCase elastic = readAcousticEnv(
-        workspace / "test" / "elastic_fd_two_layer.env");
+        workspace / "test" / "multilayer_env" / "elastic_fd_two_layer.env");
     require(elastic.layers.size() == 2 &&
                 elastic.layers[1].samples.front().cs == 1300.0,
             "elastic layer was not parsed from ENV");
@@ -100,6 +147,21 @@ int main()
             "elastic half-space was not parsed from ENV");
     require(!elastic.enableRootRestarts,
             "elastic ENV unexpectedly enabled root restarts");
+    AcousticCase roughElastic = elastic;
+    roughElastic.layers[1].roughnessRms = 0.01;
+    bool roughElasticRejected = false;
+    try
+    {
+        static_cast<void>(buildAcousticMatrix(roughElastic, 1));
+    }
+    catch (const std::invalid_argument &error)
+    {
+        roughElasticRejected =
+            std::string(error.what()).find("Rough elastic interfaces") !=
+            std::string::npos;
+    }
+    require(roughElasticRejected,
+            "rough elastic interfaces must be rejected like Fortran KRAKENC");
     const AcousticMatrix elasticMatrix = buildAcousticMatrix(elastic, 1);
     require(elasticMatrix.layerElastic.size() == 2 &&
                 !elasticMatrix.layerElastic[0] && elasticMatrix.layerElastic[1],
@@ -149,8 +211,38 @@ int main()
                 std::isfinite(normalizedElastic.groupVelocity),
             "elastic case acoustic pressure normalization is non-finite");
 
+    const AcousticCase elasticStack = readAcousticEnv(
+        workspace / "test" / "multilayer_env" /
+            "multilayer_elastic_stack.env");
+    const AcousticSolveResult elasticStackRoots =
+        solveAcousticModes(elasticStack);
+    require(elasticStackRoots.modes.size() == 25,
+            "multilayer elastic stack must match Fortran's 25 modes");
+    for (const ModeRoot &root : elasticStackRoots.modes)
+    {
+        require(root.diagnostic.converged &&
+                    root.diagnostic.relativeCorrection <= 1.0e-9,
+                "multilayer elastic root lacks a converged correction diagnostic");
+        require(root.matchedMeshSets == elasticStackRoots.meshSetsUsed &&
+                    std::isfinite(root.meshRelativeSpread),
+                "multilayer elastic root lacks complete mesh correspondence");
+        require(root.hasCoarseProvenance &&
+                    root.coarseModeIndex <
+                        elasticStackRoots.meshWavenumberSets.front().size(),
+                "multilayer elastic root lacks coarse-mesh provenance");
+        require(root.acceptanceDiagnostic.find("Fortran ordinal") !=
+                    std::string::npos,
+                "multilayer elastic root lacks correspondence diagnostics");
+    }
+
+    const AcousticCase mudSand = readAcousticEnv(
+        workspace / "test" / "multilayer_env" / "multilayer_mud_sand.env");
+    const AcousticSolveResult mudSandRoots = solveAcousticModes(mudSand);
+    require(mudSandRoots.modes.size() == 4,
+            "multilayer mud/sand must match Fortran's 4 modes");
+
     const AcousticCase brc = readAcousticEnv(
-        workspace / "test" / "neggradC_brc.env");
+        workspace / "test" / "toolbox_env" / "neggradC_brc.env");
     require(brc.bottom.type == AcousticBoundaryType::ReflectionCoefficient &&
                 brc.bottom.reflectionSamples.size() == 91,
             "BRC boundary table was not parsed");
@@ -178,9 +270,30 @@ int main()
             "IRC three-point complex polynomial interpolation mismatch");
 
     const AcousticCase closed = closedWaveguideCase();
+    const SpectralMinimumPhaseSpeed closedFloor =
+        spectralMinimumPhaseSpeed(closed);
+    require(!closedFloor.elasticPresent &&
+                std::abs(closedFloor.speed - 1500.0) <= 1.0e-12,
+            "acoustic-only spectral floor changed");
     const AcousticMatrix closedMatrix = buildAcousticMatrix(closed, 1);
     const AcousticSolveResult closedRoots = solveAcousticModes(closed);
     require(!closedRoots.modes.empty(), "closed waveguide roots are unavailable");
+    AcousticCase roughClosed = closed;
+    roughClosed.bottom.roughnessRms = 0.01;
+    const AcousticSolveResult roughRoots = solveAcousticModes(roughClosed);
+    require(roughRoots.modes.size() == closedRoots.modes.size(),
+            "roughness changed the modal count");
+    require(std::abs(roughRoots.modes.front().scatterPerturbation) > 0.0,
+            "non-zero roughness did not perturb the modal eigenvalue");
+    AcousticCase doubleRoughClosed = roughClosed;
+    doubleRoughClosed.bottom.roughnessRms = 0.02;
+    const AcousticSolveResult doubleRoughRoots =
+        solveAcousticModes(doubleRoughClosed);
+    require(std::abs(doubleRoughRoots.modes.front().scatterPerturbation -
+                     4.0 * roughRoots.modes.front().scatterPerturbation) <=
+                1.0e-10 *
+                    std::abs(doubleRoughRoots.modes.front().scatterPerturbation),
+            "modal roughness perturbation does not scale with sigma squared");
     const ComplexModeResult closedMode = solveAcousticMode(
         closed, closedMatrix, closedRoots.modes.front().eigenvalue);
     require(closedMode.converged, "closed waveguide complex mode did not converge");
@@ -218,7 +331,8 @@ int main()
     require(normalizedClosed.mode[normalizedClosed.turningPoint].real() >= 0.0,
             "normalized mode turning-point phase is not deterministic");
 
-    const AcousticCase munk = readAcousticEnv(workspace / "test" / "MunkKleaky.env");
+    const AcousticCase munk = readAcousticEnv(
+        workspace / "test" / "toolbox_env" / "MunkKleaky.env");
     require(munk.sourceDepths.size() == 2 && munk.receiverDepths.size() == 1001,
             "Munk source/receiver depth lists were not parsed");
     const AcousticMatrix munkMatrix = buildAcousticMatrix(munk, 1);

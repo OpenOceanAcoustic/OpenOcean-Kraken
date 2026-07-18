@@ -2,6 +2,7 @@
 
 #include "algorithm/ComplexDispersion.h"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <limits>
@@ -40,6 +41,7 @@ RootResult failureResult(std::complex<double> initialGuess,
     result.iterations = iterations;
     result.failure = failure;
     result.log10Residual = std::numeric_limits<double>::infinity();
+    result.relativeCorrection = std::numeric_limits<double>::infinity();
     return result;
 }
 
@@ -124,6 +126,9 @@ RootResult complexSecantImpl(std::complex<double> initialGuess,
 
         if (std::abs(x2 - x1) + std::abs(x2 - x0) < tolerance)
         {
+            const double relativeCorrection =
+                (std::abs(x2 - x1) + std::abs(x2 - x0)) /
+                std::max(std::abs(x2), std::numeric_limits<double>::min());
             const ScaledComplex finalValue = function(x2);
             if (!finite(finalValue.value))
             {
@@ -133,6 +138,7 @@ RootResult complexSecantImpl(std::complex<double> initialGuess,
             result.initialGuess = initialGuess;
             result.root = x2;
             result.log10Residual = residualLog10(finalValue);
+            result.relativeCorrection = relativeCorrection;
             result.iterations = iteration;
             result.converged = true;
             result.failure = RootFailure::None;

@@ -6,7 +6,9 @@ import unittest
 from pathlib import Path
 
 from for_test.mod_reader import read_first_mode_set, read_first_wavenumber_set
+from for_test.oracle_config import resolve_oracle_binary
 from for_test.reference_pipeline import run_reference_pipeline
+from for_test.fixture_paths import case_root
 
 
 class Phase2MunkTests(unittest.TestCase):
@@ -16,11 +18,13 @@ class Phase2MunkTests(unittest.TestCase):
         cls.workspace = cls.project.parent
         cls.binary_dir = Path(os.environ.get(
             "OPENOCEAN_KRAKENC_BINARY_DIR", cls.project / "build"))
-        cls.reference_dir = cls.project / "build" / "reference" / "MunkKleaky"
+        cls.reference_dir = (
+            cls.project / "build" / "reference" / "phase2_munk" / "MunkKleaky"
+        )
         run_reference_pipeline(
-            cls.workspace / "test" / "MunkKleaky",
-            cls.workspace / "krakenFortran" / "build_mingw" / "out" / "krakenc.exe",
-            cls.workspace / "krakenFortran" / "build_mingw" / "out" / "field.exe",
+            case_root("MunkKleaky"),
+            resolve_oracle_binary("krakenc.exe"),
+            resolve_oracle_binary("field.exe"),
             cls.reference_dir,
         )
 
@@ -45,7 +49,7 @@ class Phase2MunkTests(unittest.TestCase):
     def _run_cpp(self):
         executable = self.binary_dir / "OpenOceanKrakenc_acoustic_case_runner.exe"
         completed = subprocess.run(
-            [str(executable), str(self.workspace / "test" / "MunkKleaky.env")],
+            [str(executable), str(case_root("MunkKleaky").with_suffix(".env"))],
             cwd=self.project,
             capture_output=True,
             text=True,
@@ -61,7 +65,7 @@ class Phase2MunkTests(unittest.TestCase):
             [
                 str(executable),
                 "--eigen",
-                str(self.workspace / "test" / "MunkKleaky.env"),
+                str(case_root("MunkKleaky").with_suffix(".env")),
             ],
             cwd=self.project,
             capture_output=True,

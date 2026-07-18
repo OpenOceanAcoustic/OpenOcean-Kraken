@@ -68,6 +68,33 @@ int main()
     assert(cases[0].receiverDepths.size() == 2);
     assert(std::abs(cases[1].rMaxKm - 10.0) < 1.0e-12);
 
+    OOKC_parameters attenuationParams = params;
+    attenuationParams.AttenUnit.attnUnit = AttenuationUnit::MODE_m_dB_per_m;
+    attenuationParams.AttenUnit.absModel = OceanAbsorptionModel::FrancGarr;
+    attenuationParams.AttenUnit.referenceFrequency = 40.0;
+    attenuationParams.AttenUnit.volume.temperatureCelsius = 10.0;
+    attenuationParams.AttenUnit.volume.meanDepthMetres = 500.0;
+    attenuationParams.sspInput.front().layers.front().beta = 1.7;
+    attenuationParams.sspInput.front().layers.front().ft = 80.0;
+    attenuationParams.sspInput.front().layers.front().sigma = 0.02;
+    attenuationParams.sspInput.front().HSBot.beta = 1.4;
+    attenuationParams.sspInput.front().HSBot.ft = 90.0;
+    attenuationParams.sspInput.front().HSBot.sigma = 0.03;
+    const auto attenuationCases = toAcousticCases(attenuationParams);
+    assert(attenuationCases.front().attenuationUnit == 'm');
+    assert(attenuationCases.front().absorptionModel ==
+           OceanAbsorptionModel::FrancGarr);
+    assert(attenuationCases.front().referenceFrequency == 40.0);
+    assert(attenuationCases.front().layers.front().attenuationPower == 1.7);
+    assert(attenuationCases.front().layers.front().transitionFrequency == 80.0);
+    assert(attenuationCases.front().layers.front().roughnessRms == 0.02);
+    assert(attenuationCases.front().bottom.roughnessRms == 0.03);
+    OOKC_parameters attenuationRoundTrip;
+    updatePublicParameters(attenuationCases, attenuationRoundTrip);
+    assert(attenuationRoundTrip.AttenUnit.absModel ==
+           OceanAbsorptionModel::FrancGarr);
+    assert(attenuationRoundTrip.sspInput.front().layers.front().beta == 1.7);
+
     const FieldParameters field = toFieldParameters(params);
     assert(field.sourceType == 'S');
     assert(field.propagationType == 'C');
@@ -144,7 +171,7 @@ int main()
     {
         OOKC_parameters candidate = pureModField;
         candidate.AttenUnit.absModel = OceanAbsorptionModel::Thorpe;
-        expectFieldConversionRejected(candidate);
+        static_cast<void>(toFieldParameters(candidate));
     }
     {
         OOKC_parameters candidate = pureModField;
@@ -165,12 +192,18 @@ int main()
         candidate.sspInput.front().HSTop.BC = BC_Mode::MODE_G_Grain;
         expectRejected(candidate, Run_Mode::MODE_M_Modes);
     }
-    for (OceanAbsorptionModel unsupported : {OceanAbsorptionModel::Thorpe,
-                                             OceanAbsorptionModel::FrancGarr})
+    for (OceanAbsorptionModel supported : {OceanAbsorptionModel::Thorpe,
+                                           OceanAbsorptionModel::FrancGarr,
+                                           OceanAbsorptionModel::Biological})
     {
         OOKC_parameters candidate = params;
-        candidate.AttenUnit.absModel = unsupported;
-        expectRejected(candidate, Run_Mode::MODE_M_Modes);
+        candidate.AttenUnit.absModel = supported;
+        if (supported == OceanAbsorptionModel::Biological)
+        {
+            candidate.AttenUnit.volume.biologicalLayers.push_back(
+                {0.0, 100.0, 1000.0, 5.0, 2.0});
+        }
+        validatePublicParameters(candidate, Run_Mode::MODE_M_Modes);
     }
     {
         OOKC_parameters candidate = params;

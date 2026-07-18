@@ -99,6 +99,9 @@ AcousticBoundary makeBoundary(
     result.rho = source.rho;
     result.alphaP = source.alphaI;
     result.alphaS = source.betaI;
+    result.roughnessRms = source.sigma;
+    result.attenuationPower = source.beta;
+    result.transitionFrequency = source.ft;
     for (Eigen::Index i = 0; i < reflection.size(); ++i)
     {
         const double phaseRadians = reflectionIsRadians
@@ -133,6 +136,9 @@ HSInfo makeHalfSpace(const AcousticBoundary &source)
     result.alphaI = source.alphaP;
     result.betaR = source.cs;
     result.betaI = source.alphaS;
+    result.sigma = source.roughnessRms;
+    result.beta = source.attenuationPower;
+    result.ft = source.transitionFrequency;
     result.cp = {source.cp, source.alphaP};
     result.cs = {source.cs, source.alphaS};
     result.rho = source.rho;
@@ -394,10 +400,6 @@ void validatePublicExecutionCapabilities(const OOKC_parameters &params,
     {
         throw std::invalid_argument("Krakenc currently accepts one frequency per solve");
     }
-    if (params.AttenUnit.absModel != OceanAbsorptionModel::None)
-    {
-        throw std::invalid_argument("Thorpe and FrancGarr absorption are not implemented");
-    }
     for (const ssp::Range_Independent_Area &area : params.sspInput)
     {
         static_cast<void>(interpolation(area.SSPType));
@@ -430,11 +432,15 @@ std::vector<AcousticCase> toAcousticCases(const OOKC_parameters &params)
         AcousticCase item;
         item.title = area.Title.empty() ? params.Title : area.Title;
         item.frequency = frequency;
-        item.referenceFrequency = frequency;
+        item.referenceFrequency = params.AttenUnit.referenceFrequency > 0.0
+                                      ? params.AttenUnit.referenceFrequency
+                                      : frequency;
         item.cLow = params.cLow;
         item.cHigh = params.cHigh;
         item.rMaxKm = params.Rmax;
         item.attenuationUnit = attenuationCode(params.AttenUnit.attnUnit);
+        item.absorptionModel = params.AttenUnit.absModel;
+        item.volumeAbsorption = params.AttenUnit.volume;
         item.enableRootRestarts = area.enableRootRestarts;
         item.interpolation = interpolation(area.SSPType);
         item.top = makeBoundary(area.HSTop, params.ReflectionCoef.RTop, nullptr,
@@ -451,6 +457,9 @@ std::vector<AcousticCase> toAcousticCases(const OOKC_parameters &params)
             layer.baseMesh = source.nmesh;
             layer.topDepth = source.z[0];
             layer.bottomDepth = source.z[source.z.size() - 1];
+            layer.roughnessRms = source.sigma;
+            layer.attenuationPower = source.beta;
+            layer.transitionFrequency = source.ft;
             for (Eigen::Index i = 0; i < source.z.size(); ++i)
             {
                 layer.samples.push_back({source.z[i], source.alphaR[i], source.betaR[i],
@@ -515,7 +524,9 @@ void updatePublicParameters(const std::vector<AcousticCase> &cases,
     params.cHigh = first.cHigh;
     params.Rmax = first.rMaxKm;
     params.AttenUnit.attnUnit = attenuationUnit(first.attenuationUnit);
-    params.AttenUnit.absModel = OceanAbsorptionModel::None;
+    params.AttenUnit.absModel = first.absorptionModel;
+    params.AttenUnit.referenceFrequency = first.referenceFrequency;
+    params.AttenUnit.volume = first.volumeAbsorption;
     params.Pos.Sz = toEigen(first.sourceDepths);
     params.Pos.NSz = static_cast<int>(first.sourceDepths.size());
     params.Pos.Rz = toEigen(first.receiverDepths);
@@ -538,6 +549,9 @@ void updatePublicParameters(const std::vector<AcousticCase> &cases,
             ssp::SSPLayer layer;
             layer.npts = static_cast<int>(source.samples.size());
             layer.nmesh = source.baseMesh;
+            layer.sigma = source.roughnessRms;
+            layer.beta = source.attenuationPower;
+            layer.ft = source.transitionFrequency;
             layer.Material = !source.samples.empty() &&
                                      std::abs(source.samples.front().cs) > 1.0e-12
                                  ? Media_Mode::MODE_E_Elastic

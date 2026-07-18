@@ -72,9 +72,15 @@ int main(int argc, char **argv)
         try
         {
             OpenOceanKrakenc::Interface api;
-            if (!api.from_env(argv[2]) || !api.to_json(argv[3]))
+            const OpenOceanKrakenc::LoadResult loaded = api.loadEnv(argv[2]);
+            if (!loaded.ok)
             {
-                throw std::runtime_error("ENV conversion failed");
+                throw std::runtime_error("ENV conversion failed: " +
+                                         loaded.error.message);
+            }
+            if (!api.to_json(argv[3]))
+            {
+                throw std::runtime_error("ENV conversion output could not be written");
             }
             nlohmann::ordered_json output;
             output["passes"] = true;
@@ -191,12 +197,15 @@ int main(int argc, char **argv)
             if (inputPath.extension() == ".env" || inputPath.extension() == ".json")
             {
                 OpenOceanKrakenc::Interface api;
-                const bool loaded = inputPath.extension() == ".env"
-                                        ? api.from_env(inputPath.string())
-                                        : api.from_json(inputPath.string());
-                if (!loaded)
+                const OpenOceanKrakenc::LoadResult loaded =
+                    inputPath.extension() == ".env"
+                        ? api.loadEnv(inputPath.string())
+                        : api.loadJson(inputPath.string());
+                if (!loaded.ok)
                 {
-                    throw std::runtime_error("unable to read Krakenc ENV/JSON field input");
+                    throw std::runtime_error(
+                        "unable to read Krakenc ENV/JSON field input: " +
+                        loaded.error.message);
                 }
                 api.runField();
                 std::filesystem::path outputPath = inputPath;

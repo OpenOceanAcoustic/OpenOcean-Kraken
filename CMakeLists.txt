@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.20)
 project(OpenOcean-Krakenc VERSION 0.1.0 LANGUAGES CXX)
 
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+include(CheckCXXSourceCompiles)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -15,8 +19,16 @@ if(OPENOCEANKRAKENC_IPO)
 endif()
 
 option(BUILD_TESTING "Build OpenOcean-Krakenc tests" ON)
+set(OPENOCEANKRAKENC_FORTRAN_ROOT "" CACHE PATH
+    "Directory containing the frozen krakenc and field Fortran executables")
 option(OPENOCEANKRAKENC_NATIVE_OPTIMIZATION
        "Tune Release numerical kernels for the current CPU" OFF)
+option(OPENOCEANKRAKENC_ENABLE_ASAN
+       "Build OpenOcean-Krakenc with AddressSanitizer" OFF)
+option(OPENOCEANKRAKENC_ENABLE_UBSAN
+       "Build OpenOcean-Krakenc with UndefinedBehaviorSanitizer" OFF)
+
+find_package(Threads REQUIRED)
 
 add_library(OpenOceanKrakenc_core STATIC
     src/OpenOceanKrakencEnvironment.cpp
@@ -32,6 +44,7 @@ add_library(OpenOceanKrakenc_core STATIC
     src/algorithm/ComplexModeNormalization.cpp
     src/algorithm/ElasticCompound.cpp
     src/algorithm/ReflectionBoundary.cpp
+    src/algorithm/ScatteringLoss.cpp
     src/algorithm/ModeFileWriter.cpp
     src/algorithm/FieldSolver.cpp
     src/algorithm/CoupledFieldSolver.cpp
@@ -43,11 +56,62 @@ add_library(OpenOceanKrakenc_core STATIC
 )
 target_include_directories(OpenOceanKrakenc_core
     PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/eigen
-        ${CMAKE_CURRENT_SOURCE_DIR}/third_party
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/third_party/eigen>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/third_party>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
+target_link_libraries(OpenOceanKrakenc_core PUBLIC Threads::Threads)
+set_target_properties(OpenOceanKrakenc_core PROPERTIES EXPORT_NAME core)
+if(OPENOCEANKRAKENC_ENABLE_ASAN OR OPENOCEANKRAKENC_ENABLE_UBSAN)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        set(OPENOCEANKRAKENC_SANITIZERS "")
+        if(OPENOCEANKRAKENC_ENABLE_ASAN)
+            list(APPEND OPENOCEANKRAKENC_SANITIZERS address)
+        endif()
+        if(OPENOCEANKRAKENC_ENABLE_UBSAN)
+            list(APPEND OPENOCEANKRAKENC_SANITIZERS undefined)
+        endif()
+        list(JOIN OPENOCEANKRAKENC_SANITIZERS "," OPENOCEANKRAKENC_SANITIZER_LIST)
+        set(OPENOCEANKRAKENC_REQUIRED_FLAGS_SAVED "${CMAKE_REQUIRED_FLAGS}")
+        set(OPENOCEANKRAKENC_REQUIRED_LINK_OPTIONS_SAVED
+            "${CMAKE_REQUIRED_LINK_OPTIONS}")
+        set(CMAKE_REQUIRED_FLAGS
+            "${CMAKE_REQUIRED_FLAGS} -fsanitize=${OPENOCEANKRAKENC_SANITIZER_LIST} -fno-omit-frame-pointer")
+        list(APPEND CMAKE_REQUIRED_LINK_OPTIONS
+            "-fsanitize=${OPENOCEANKRAKENC_SANITIZER_LIST}")
+        string(REPLACE "," "_" OPENOCEANKRAKENC_SANITIZER_CACHE_SUFFIX
+            "${OPENOCEANKRAKENC_SANITIZER_LIST}")
+        set(OPENOCEANKRAKENC_SANITIZER_PROBE
+            "OPENOCEANKRAKENC_SANITIZER_${OPENOCEANKRAKENC_SANITIZER_CACHE_SUFFIX}_AVAILABLE")
+        check_cxx_source_compiles("int main() { return 0; }"
+            ${OPENOCEANKRAKENC_SANITIZER_PROBE})
+        set(CMAKE_REQUIRED_FLAGS "${OPENOCEANKRAKENC_REQUIRED_FLAGS_SAVED}")
+        set(CMAKE_REQUIRED_LINK_OPTIONS
+            "${OPENOCEANKRAKENC_REQUIRED_LINK_OPTIONS_SAVED}")
+        if(NOT ${OPENOCEANKRAKENC_SANITIZER_PROBE})
+            message(FATAL_ERROR
+                "Requested sanitizer runtime is unavailable for ${CMAKE_CXX_COMPILER}; install the ASan/UBSan runtime or select a supported Clang/GCC toolchain")
+        endif()
+        target_compile_options(OpenOceanKrakenc_core PUBLIC
+            "-fsanitize=${OPENOCEANKRAKENC_SANITIZER_LIST}"
+            -fno-omit-frame-pointer
+        )
+        target_link_options(OpenOceanKrakenc_core PUBLIC
+            "-fsanitize=${OPENOCEANKRAKENC_SANITIZER_LIST}"
+        )
+    elseif(MSVC)
+        if(OPENOCEANKRAKENC_ENABLE_UBSAN)
+            message(FATAL_ERROR "UBSan is not supported by the configured MSVC toolchain")
+        endif()
+        target_compile_options(OpenOceanKrakenc_core PUBLIC /fsanitize=address /Oy-)
+        target_link_options(OpenOceanKrakenc_core PUBLIC /fsanitize=address)
+    else()
+        message(FATAL_ERROR
+            "Sanitizers are not configured for compiler ${CMAKE_CXX_COMPILER_ID}")
+    endif()
+endif()
 if(OPENOCEANKRAKENC_NATIVE_OPTIMIZATION AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(OpenOceanKrakenc_core PUBLIC
         $<$<CONFIG:Release>:-march=native>
@@ -67,6 +131,46 @@ add_executable(OpenOceanKrakenc_acoustic_case_runner
 target_link_libraries(OpenOceanKrakenc_acoustic_case_runner PRIVATE OpenOceanKrakenc_core)
 if(MINGW)
     target_link_options(OpenOceanKrakenc_acoustic_case_runner PRIVATE -static-libgcc -static-libstdc++)
+endif()
+
+install(TARGETS OpenOceanKrakenc_core
+    EXPORT OpenOceanKrakencTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        FILES_MATCHING PATTERN "*.h")
+install(DIRECTORY third_party/eigen/Eigen
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(EXPORT OpenOceanKrakencTargets
+    FILE OpenOceanKrakencTargets.cmake
+    NAMESPACE OpenOceanKrakenc::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/OpenOceanKrakenc
+)
+configure_package_config_file(
+    cmake/OpenOceanKrakencConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/OpenOceanKrakencConfig.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/OpenOceanKrakenc
+)
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/OpenOceanKrakencConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/OpenOceanKrakencConfig.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/OpenOceanKrakencConfigVersion.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/OpenOceanKrakenc
+)
+
+add_executable(OpenOceanKrakenc_root_audit_runner
+    for_test/root_audit_runner.cpp
+)
+target_link_libraries(OpenOceanKrakenc_root_audit_runner PRIVATE OpenOceanKrakenc_core)
+if(MINGW)
+    target_link_options(OpenOceanKrakenc_root_audit_runner PRIVATE -static-libgcc -static-libstdc++)
 endif()
 
 add_executable(OpenOceanKrakenc_phase3_munk_runner
@@ -156,10 +260,24 @@ if(BUILD_TESTING)
     endif()
     add_test(NAME OpenOceanKrakenc_contract_tests COMMAND OpenOceanKrakenc_contract_tests)
 
+    add_executable(OpenOceanKrakenc_phase_d_interface_tests
+        for_test/phase_d_interface_tests.cpp
+    )
+    target_link_libraries(OpenOceanKrakenc_phase_d_interface_tests PRIVATE OpenOceanKrakenc_core)
+    target_compile_definitions(OpenOceanKrakenc_phase_d_interface_tests PRIVATE
+        OPENOCEANKRAKENC_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+    )
+    if(MINGW)
+        target_link_options(OpenOceanKrakenc_phase_d_interface_tests PRIVATE -static-libgcc -static-libstdc++)
+    endif()
+    add_test(NAME OpenOceanKrakenc_phase_d_interface_tests
+        COMMAND OpenOceanKrakenc_phase_d_interface_tests)
+
     add_executable(OpenOceanKrakenc_phase2_unit_tests for_test/phase2_unit_tests.cpp)
     target_link_libraries(OpenOceanKrakenc_phase2_unit_tests PRIVATE OpenOceanKrakenc_core)
     target_compile_definitions(OpenOceanKrakenc_phase2_unit_tests PRIVATE
         OPENOCEANKRAKENC_WORKSPACE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/.."
+        OPENOCEANKRAKENC_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
     )
     if(MINGW)
         target_link_options(OpenOceanKrakenc_phase2_unit_tests PRIVATE -static-libgcc -static-libstdc++)
@@ -170,6 +288,7 @@ if(BUILD_TESTING)
     target_link_libraries(OpenOceanKrakenc_phase3_unit_tests PRIVATE OpenOceanKrakenc_core)
     target_compile_definitions(OpenOceanKrakenc_phase3_unit_tests PRIVATE
         OPENOCEANKRAKENC_WORKSPACE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/.."
+        OPENOCEANKRAKENC_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
     )
     if(MINGW)
         target_link_options(OpenOceanKrakenc_phase3_unit_tests PRIVATE -static-libgcc -static-libstdc++)
@@ -194,6 +313,15 @@ endif()
 
 if(BUILD_TESTING AND Python3_Interpreter_FOUND)
     add_test(
+        NAME OpenOceanKrakenc_oracle_configuration_tests
+        COMMAND ${Python3_EXECUTABLE} -m unittest for_test/oracle_configuration_tests.py -v
+    )
+    set_tests_properties(OpenOceanKrakenc_oracle_configuration_tests PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        TIMEOUT 60
+    )
+
+    add_test(
         NAME OpenOceanKrakenc_cli_json_input_tests
         COMMAND ${Python3_EXECUTABLE} -m unittest for_test/test_cli_json_input.py -v
     )
@@ -217,15 +345,25 @@ if(BUILD_TESTING AND Python3_Interpreter_FOUND)
     )
     set_tests_properties(OpenOceanKrakenc_reference_pipeline_tests PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        ENVIRONMENT "OPENOCEANKRAKENC_FORTRAN_ROOT=${OPENOCEANKRAKENC_FORTRAN_ROOT}"
         TIMEOUT 240
     )
     add_test(
         NAME OpenOceanKrakenc_phase2_munk_tests
         COMMAND ${Python3_EXECUTABLE} -m unittest for_test/test_phase2_munk.py -v
     )
+    add_test(
+        NAME OpenOceanKrakenc_phase_b_physics_tests
+        COMMAND ${Python3_EXECUTABLE} -m unittest for_test/test_phase_b_physics.py -v
+    )
+    set_tests_properties(OpenOceanKrakenc_phase_b_physics_tests PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        ENVIRONMENT "OPENOCEAN_KRAKENC_BINARY_DIR=$<TARGET_FILE_DIR:OpenOcean-Krakenc>;OPENOCEANKRAKENC_FORTRAN_ROOT=${OPENOCEANKRAKENC_FORTRAN_ROOT}"
+        TIMEOUT 1800
+    )
     set_tests_properties(OpenOceanKrakenc_phase2_munk_tests PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        ENVIRONMENT "OPENOCEAN_KRAKENC_BINARY_DIR=$<TARGET_FILE_DIR:OpenOcean-Krakenc>"
+        ENVIRONMENT "OPENOCEAN_KRAKENC_BINARY_DIR=$<TARGET_FILE_DIR:OpenOcean-Krakenc>;OPENOCEANKRAKENC_FORTRAN_ROOT=${OPENOCEANKRAKENC_FORTRAN_ROOT}"
         TIMEOUT 360
     )
     add_test(
@@ -234,7 +372,7 @@ if(BUILD_TESTING AND Python3_Interpreter_FOUND)
     )
     set_tests_properties(OpenOceanKrakenc_phase3_munk_tests PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        ENVIRONMENT "OPENOCEAN_KRAKENC_BINARY_DIR=$<TARGET_FILE_DIR:OpenOcean-Krakenc>"
+        ENVIRONMENT "OPENOCEAN_KRAKENC_BINARY_DIR=$<TARGET_FILE_DIR:OpenOcean-Krakenc>;OPENOCEANKRAKENC_FORTRAN_ROOT=${OPENOCEANKRAKENC_FORTRAN_ROOT}"
         TIMEOUT 420
     )
     add_test(
@@ -243,8 +381,17 @@ if(BUILD_TESTING AND Python3_Interpreter_FOUND)
     )
     set_tests_properties(OpenOceanKrakenc_phase3_elastic_tests PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        ENVIRONMENT "OPENOCEAN_KRAKENC_BINARY_DIR=$<TARGET_FILE_DIR:OpenOcean-Krakenc>"
+        ENVIRONMENT "OPENOCEAN_KRAKENC_BINARY_DIR=$<TARGET_FILE_DIR:OpenOcean-Krakenc>;OPENOCEANKRAKENC_FORTRAN_ROOT=${OPENOCEANKRAKENC_FORTRAN_ROOT}"
         TIMEOUT 900
+    )
+    add_test(
+        NAME OpenOceanKrakenc_phase_c_physics_tests
+        COMMAND ${Python3_EXECUTABLE} -m unittest for_test/test_phase_c_physics.py -v
+    )
+    set_tests_properties(OpenOceanKrakenc_phase_c_physics_tests PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        ENVIRONMENT "OPENOCEAN_KRAKENC_BINARY_DIR=$<TARGET_FILE_DIR:OpenOcean-Krakenc>;OPENOCEANKRAKENC_FORTRAN_ROOT=${OPENOCEANKRAKENC_FORTRAN_ROOT}"
+        TIMEOUT 1200
     )
     add_test(
         NAME OpenOceanKrakenc_phase3_reflection_tests
@@ -252,7 +399,7 @@ if(BUILD_TESTING AND Python3_Interpreter_FOUND)
     )
     set_tests_properties(OpenOceanKrakenc_phase3_reflection_tests PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        ENVIRONMENT "OPENOCEAN_KRAKENC_BINARY_DIR=$<TARGET_FILE_DIR:OpenOcean-Krakenc>"
+        ENVIRONMENT "OPENOCEAN_KRAKENC_BINARY_DIR=$<TARGET_FILE_DIR:OpenOcean-Krakenc>;OPENOCEANKRAKENC_FORTRAN_ROOT=${OPENOCEANKRAKENC_FORTRAN_ROOT}"
         TIMEOUT 900
     )
     add_test(
@@ -261,7 +408,7 @@ if(BUILD_TESTING AND Python3_Interpreter_FOUND)
     )
     set_tests_properties(OpenOceanKrakenc_phase4_field_tests PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        ENVIRONMENT "OPENOCEAN_KRAKENC_BINARY_DIR=$<TARGET_FILE_DIR:OpenOcean-Krakenc>"
+        ENVIRONMENT "OPENOCEAN_KRAKENC_BINARY_DIR=$<TARGET_FILE_DIR:OpenOcean-Krakenc>;OPENOCEANKRAKENC_FORTRAN_ROOT=${OPENOCEANKRAKENC_FORTRAN_ROOT}"
         TIMEOUT 900
     )
     add_test(
@@ -270,7 +417,7 @@ if(BUILD_TESTING AND Python3_Interpreter_FOUND)
     )
     set_tests_properties(OpenOceanKrakenc_phase4_range_dependent_tests PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        ENVIRONMENT "OPENOCEAN_KRAKENC_BINARY_DIR=$<TARGET_FILE_DIR:OpenOcean-Krakenc>"
+        ENVIRONMENT "OPENOCEAN_KRAKENC_BINARY_DIR=$<TARGET_FILE_DIR:OpenOcean-Krakenc>;OPENOCEANKRAKENC_FORTRAN_ROOT=${OPENOCEANKRAKENC_FORTRAN_ROOT}"
         TIMEOUT 900
     )
 endif()

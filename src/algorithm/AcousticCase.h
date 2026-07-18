@@ -1,6 +1,8 @@
 #ifndef OPEN_OCEAN_KRAKENC_ACOUSTIC_CASE_H
 #define OPEN_OCEAN_KRAKENC_ACOUSTIC_CASE_H
 
+#include "OpenOceanKrakencEnums.h"
+
 #include <filesystem>
 #include <complex>
 #include <string>
@@ -53,6 +55,9 @@ struct AcousticLayer
     int baseMesh = 0;
     double topDepth = 0.0;
     double bottomDepth = 0.0;
+    double roughnessRms = 0.0;
+    double attenuationPower = 0.0;
+    double transitionFrequency = 0.0;
     std::vector<AcousticSample> samples;
 };
 
@@ -65,6 +70,9 @@ struct AcousticBoundary
     double rho = 0.0;
     double alphaP = 0.0;
     double alphaS = 0.0;
+    double roughnessRms = 0.0;
+    double attenuationPower = 0.0;
+    double transitionFrequency = 0.0;
     std::vector<ReflectionSample> reflectionSamples;
     std::vector<InternalReflectionSample> internalSamples;
 };
@@ -78,6 +86,8 @@ struct AcousticCase
     double cHigh = 0.0;
     double rMaxKm = 0.0;
     char attenuationUnit = 'W';
+    OceanAbsorptionModel absorptionModel = OceanAbsorptionModel::None;
+    VolumeAbsorptionParameters volumeAbsorption;
     bool enableRootRestarts = false;
     AcousticInterpolation interpolation = AcousticInterpolation::CLinear;
     AcousticBoundary top;
@@ -86,6 +96,10 @@ struct AcousticCase
     std::vector<double> sourceDepths;
     std::vector<double> receiverDepths;
 };
+
+AttenuationContext attenuationContext(const AcousticCase &input,
+                                      double attenuationPower = 0.0,
+                                      double transitionFrequency = 0.0);
 
 AcousticCase readAcousticEnv(const std::filesystem::path &path);
 std::vector<AcousticCase> readAcousticEnvironments(

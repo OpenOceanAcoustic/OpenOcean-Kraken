@@ -41,18 +41,21 @@ char boundaryCode(AcousticBoundaryType type)
 }
 
 ModeBoundaryData makeBoundary(const AcousticBoundary &source,
-                              double frequency,
+                              const AcousticCase &input,
                               char attenuationUnit)
 {
+    AttenuationContext context = attenuationContext(
+        input, source.attenuationPower, source.transitionFrequency);
+    context.unit = attenuationUnit;
     ModeBoundaryData result;
     result.type = boundaryCode(source.type);
     result.cp = source.cp > 0.0
-                    ? complexSoundSpeed(source.cp, source.alphaP,
-                                        frequency, attenuationUnit)
+                    ? complexSoundSpeed(source.depth, source.cp,
+                                        source.alphaP, context)
                     : std::complex<double>{};
     result.cs = source.cs > 0.0
-                    ? complexSoundSpeed(source.cs, source.alphaS,
-                                        frequency, attenuationUnit)
+                    ? complexSoundSpeed(source.depth, source.cs,
+                                        source.alphaS, context)
                     : std::complex<double>{};
     result.rho = source.rho;
     result.depth = source.depth;
@@ -106,8 +109,8 @@ ModeProfileData makeProfile(const AcousticCase &input,
         profile.mediumDensities.push_back(
             layer.samples.empty() ? 0.0 : layer.samples.front().rho);
     }
-    profile.top = makeBoundary(input.top, input.frequency, attenuationUnit);
-    profile.bottom = makeBoundary(input.bottom, input.frequency, attenuationUnit);
+    profile.top = makeBoundary(input.top, input, attenuationUnit);
+    profile.bottom = makeBoundary(input.bottom, input, attenuationUnit);
     profile.top.depth = input.layers.front().topDepth;
     profile.bottom.depth = input.layers.back().bottomDepth;
     return profile;

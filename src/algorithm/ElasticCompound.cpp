@@ -92,7 +92,9 @@ CompoundState boundaryState(const AcousticBoundary &boundary,
     }
 
     const std::complex<double> cp = complexSoundSpeed(
-        boundary.cp, boundary.alphaP, input.frequency, input.attenuationUnit);
+        boundary.depth, boundary.cp, boundary.alphaP,
+        attenuationContext(input, boundary.attenuationPower,
+                           boundary.transitionFrequency));
     if (boundary.cs <= 0.0)
     {
         state[0] = pekerisRoot(eigenvalue - matrix.omega2 / (cp * cp));
@@ -100,7 +102,9 @@ CompoundState boundaryState(const AcousticBoundary &boundary,
         return state;
     }
     const std::complex<double> cs = complexSoundSpeed(
-        boundary.cs, boundary.alphaS, input.frequency, input.attenuationUnit);
+        boundary.depth, boundary.cs, boundary.alphaS,
+        attenuationContext(input, boundary.attenuationPower,
+                           boundary.transitionFrequency));
     const std::complex<double> gammaS2 =
         eigenvalue - matrix.omega2 / (cs * cs);
     const std::complex<double> gammaP2 =
