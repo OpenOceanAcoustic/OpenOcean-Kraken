@@ -2,16 +2,50 @@
 #define KKCIFACE_H
 
 #include "OpenOceanKrakenParams.h"
+#include <cstddef>
 #include <memory>
 #include <stdexcept>
 
 namespace OpenOceanKraken
 {
+    struct FieldSnapshot
+    {
+        std::string title;
+        double frequency = 0.0;
+        Grid_Mode grid_type = Grid_Mode::MODE_R_Rectangular;
+        std::size_t source_count = 0;
+        std::size_t range_count = 0;
+        std::size_t depth_count = 0;
+        std::vector<double> source_depths;
+        std::vector<double> receiver_ranges;
+        std::vector<double> receiver_depths;
+        std::vector<std::complex<float>> values;
+    };
+
+    struct ModeProfileSnapshot
+    {
+        double profile_range = 0.0;
+        std::vector<double> depth;
+        std::vector<std::complex<double>> wavenumbers;
+        std::vector<double> group_velocity;
+        Eigen::MatrixXcd mode_shapes;
+    };
+
     class OpenOceanKraken_PIMPL;
     // 只作为一个参数表，不涉及具体的计算过程
     class Interface
     {
     public:
+        void set_RProf(const Eigen::VectorXd &ranges);
+        void set_RProf(double start, double end, int count);
+        void set_MLimit(int limit);
+        void set_CoherenceType(CoherenceType type);
+        void set_ModeType(ModeType type);
+        FieldSnapshot getPressureCopy() const;
+        FieldSnapshot getVerticalVelocityCopy() const;
+        FieldSnapshot getHorizontalVelocityCopy() const;
+        std::vector<ModeProfileSnapshot> getModesCopy() const;
+
         Interface();  // 构造函数
         Interface(ThreadPool &pool); // 计算前需要传入一个线程池
         ~Interface(); // 析构函数

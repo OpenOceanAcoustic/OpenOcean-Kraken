@@ -1,0 +1,60 @@
+from pathlib import Path
+import sys
+import unittest
+
+import numpy as np
+
+
+PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PACKAGE_ROOT))
+
+from py_kraken import OpenOceanKraken_interface
+
+
+class HighLevelInterfaceTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.fixture = (Path(__file__).resolve().parents[3] / "../test/MunkK.env").resolve()
+
+    def test_instances_are_independent_and_singleton_is_optional(self):
+        first = OpenOceanKraken_interface(thread_num=1)
+        second = OpenOceanKraken_interface(thread_num=1)
+        self.assertIsNot(first, second)
+        self.assertIs(
+            OpenOceanKraken_interface.get_instance(1),
+            OpenOceanKraken_interface.get_instance(1),
+        )
+
+    def test_file_and_vector_range_validation(self):
+        interface = OpenOceanKraken_interface(thread_num=1)
+        with self.assertRaises(FileNotFoundError):
+            interface.ook_load_env("missing.env")
+        with self.assertRaises(ValueError):
+            interface.ook_set_receiver_range(start=0.0, end=1000.0, count=None)
+        with self.assertRaises(ValueError):
+            interface.ook_set_receiver_range(values=[0.0], start=0.0, end=1.0, count=2)
+
+    def test_run_returns_owned_pressure_velocity_and_modes(self):
+        interface = OpenOceanKraken_interface(thread_num=1)
+        interface.ook_load_env(self.fixture)
+        interface.ook_set_velocity_enable(True)
+        interface.ook_run()
+
+        pressure = interface.ook_get_pressure()
+        vertical = interface.ook_get_vertical_velocity()
+        horizontal = interface.ook_get_horizontal_velocity()
+        modes = interface.ook_get_modes()
+        self.assertEqual(pressure.values.ndim, 3)
+        self.assertEqual(vertical.values.shape, pressure.values.shape)
+        self.assertEqual(horizontal.values.shape, pressure.values.shape)
+        self.assertGreater(len(modes.profiles), 0)
+
+        saved = pressure.values.copy()
+        config = interface.ook_get_config()
+        self.assertEqual(Path(config.input), self.fixture)
+        interface.ook_clear()
+        np.testing.assert_array_equal(pressure.values, saved)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -14,10 +14,12 @@
 #include "env_in_out.hpp"
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
+#include <utility>
 
 namespace OpenOceanKraken
 {
@@ -1139,6 +1141,166 @@ namespace OpenOceanKraken
             throw std::runtime_error("OpenOceanKraken::Interface output has been freed.");
         }
         return *this->output;
+    }
+
+    void Interface::set_RProf(const Eigen::VectorXd &ranges)
+    {
+        ensureAlive();
+        if (ranges.size() <= 0)
+        {
+            throw std::invalid_argument("Profile ranges must not be empty.");
+        }
+        for (Eigen::Index index = 0; index < ranges.size(); ++index)
+        {
+            if (!std::isfinite(ranges(index)))
+            {
+                throw std::invalid_argument("Profile ranges must be finite.");
+            }
+            if (index > 0 && ranges(index) < ranges(index - 1))
+            {
+                throw std::invalid_argument("Profile ranges must be non-decreasing.");
+            }
+        }
+        auto &input = getParams();
+        input.RProf = ranges;
+        input.NProf = static_cast<int>(ranges.size());
+        markDirty(DirtyKind::All);
+    }
+
+    void Interface::set_RProf(double start, double end, int count)
+    {
+        if (!std::isfinite(start) || !std::isfinite(end) || end < start)
+        {
+            throw std::invalid_argument("Profile range bounds must be finite and non-decreasing.");
+        }
+        if (count <= 0)
+        {
+            throw std::invalid_argument("Profile range count must be greater than zero.");
+        }
+        set_RProf(Eigen::VectorXd::LinSpaced(count, start, end));
+    }
+
+    void Interface::set_MLimit(int limit)
+    {
+        ensureAlive();
+        if (limit <= 0)
+        {
+            throw std::invalid_argument("Mode limit must be greater than zero.");
+        }
+        getParams().MLimit = limit;
+        markDirty(DirtyKind::All);
+    }
+
+    void Interface::set_CoherenceType(CoherenceType type)
+    {
+        ensureAlive();
+        getParams().coherenceType = type;
+        markDirty(DirtyKind::Field);
+    }
+
+    void Interface::set_ModeType(ModeType type)
+    {
+        ensureAlive();
+        getParams().modeType = type;
+        markDirty(DirtyKind::Field);
+    }
+
+    namespace
+    {
+        FieldSnapshot copy_field_snapshot(
+            const OOK_parameters &input,
+            const std::complex<float> *data,
+            const char *label)
+        {
+            if (!data)
+            {
+                throw std::runtime_error(std::string(label) + " output is not available.");
+            }
+            FieldSnapshot snapshot;
+            snapshot.title = input.Title;
+            snapshot.frequency = input.freqinfo.freq;
+            snapshot.grid_type = input.Pos.GridType;
+            snapshot.source_count = static_cast<std::size_t>(input.Pos.NSz);
+            snapshot.range_count = static_cast<std::size_t>(input.Pos.NRr);
+            snapshot.depth_count = static_cast<std::size_t>(input.Pos.NRz_per_range);
+            snapshot.source_depths.assign(input.Pos.Sz.data(), input.Pos.Sz.data() + input.Pos.Sz.size());
+            snapshot.receiver_ranges.assign(input.Pos.Rr.data(), input.Pos.Rr.data() + input.Pos.Rr.size());
+            snapshot.receiver_depths.assign(input.Pos.Rz.data(), input.Pos.Rz.data() + input.Pos.Rz.size());
+            const std::size_t value_count = snapshot.source_count * snapshot.range_count * snapshot.depth_count;
+            snapshot.values.assign(data, data + value_count);
+            return snapshot;
+        }
+    }
+
+    FieldSnapshot Interface::getPressureCopy() const
+    {
+        ensureSetup();
+        return copy_field_snapshot(getParams_const(), getOutput_const().u_AllSources, "Pressure");
+    }
+
+    FieldSnapshot Interface::getVerticalVelocityCopy() const
+    {
+        ensureSetup();
+        return copy_field_snapshot(getParams_const(), getOutput_const().v_AllSources, "Vertical velocity");
+    }
+
+    FieldSnapshot Interface::getHorizontalVelocityCopy() const
+    {
+        ensureSetup();
+        return copy_field_snapshot(getParams_const(), getOutput_const().h_AllSources, "Horizontal velocity");
+    }
+
+    std::vector<ModeProfileSnapshot> Interface::getModesCopy() const
+    {
+        ensureAlive();
+        const auto &input = getParams_const();
+        const auto &result = getOutput_const();
+        if (!result.eigen)
+        {
+            throw std::runtime_error("Eigenmode output is not available. Call runEigen() or run() first.");
+        }
+
+        std::vector<ModeProfileSnapshot> snapshots;
+        snapshots.reserve(static_cast<std::size_t>(input.NProf));
+        for (int profile = 0; profile < input.NProf; ++profile)
+        {
+            const auto &eigen = result.eigen[profile];
+            if (eigen.M < 0 || eigen.k.size() < eigen.M)
+            {
+                throw std::runtime_error("Eigenmode output is incomplete for profile " + std::to_string(profile) + ".");
+            }
+
+            ModeProfileSnapshot snapshot;
+            if (profile < input.RProf.size())
+            {
+                snapshot.profile_range = input.RProf(profile);
+            }
+            snapshot.wavenumbers.assign(eigen.k.data(), eigen.k.data() + eigen.M);
+            if (eigen.VG.size() >= eigen.M)
+            {
+                snapshot.group_velocity.assign(eigen.VG.data(), eigen.VG.data() + eigen.M);
+            }
+
+            if (eigen.ModeZ.size() > 0 &&
+                eigen.PhiMode.rows() >= eigen.M &&
+                eigen.PhiMode.cols() == eigen.ModeZ.size())
+            {
+                snapshot.depth.assign(eigen.ModeZ.data(), eigen.ModeZ.data() + eigen.ModeZ.size());
+                snapshot.mode_shapes = eigen.PhiMode.topRows(eigen.M);
+            }
+            else if (eigen.PsiR.rows() >= eigen.M && eigen.PsiR.cols() > 0)
+            {
+                const Eigen::Index depth_count = std::min(eigen.PsiR.cols(), input.Pos.Rz.size());
+                snapshot.depth.assign(input.Pos.Rz.data(), input.Pos.Rz.data() + depth_count);
+                snapshot.mode_shapes = eigen.PsiR.topLeftCorner(eigen.M, depth_count);
+            }
+            else
+            {
+                snapshot.mode_shapes.resize(eigen.M, 0);
+            }
+            snapshots.push_back(std::move(snapshot));
+        }
+        return snapshots;
     }
 
 }
