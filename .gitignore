@@ -15,3 +15,5 @@ third_party/
 build*/
 cmake-build-*/
 docs/*
+.gitignore
+.github/
