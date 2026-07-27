@@ -1,63 +1,75 @@
-# OOK Biological Attenuation Compatibility Design
+# OOK 生物衰减兼容性设计
 
-**Date:** 2026-07-27  
-**Status:** Approved design  
-**Reference implementation:** `krakenFortran`  
-**Scope:** End-to-end support across the C++ core, ENV, JSON, public C++ API, Python, MATLAB, regression fixtures, Fortran differential checks, and TL acceptance.
+**日期：** 2026-07-27
 
-## 1. Objective
+**状态：** 已确认设计
 
-Add the `B` biological attenuation option to OOK with the same valid-input numerical semantics as `krakenFortran`.
+**参考实现：** `krakenFortran`
 
-The implementation must:
+**范围：** C++ 核心、ENV、JSON、公开 C++ API、Python、MATLAB、回归算例、Fortran 数值差分和 TL 验收的端到端支持。
 
-- preserve the Fortran biological attenuation formula and operation order;
-- preserve closed depth intervals and ordered overlap accumulation;
-- transport biological-layer configuration through both `env_in_out.cpp` and `json_in_out.hpp`;
-- expose the configuration through C++, Python, and MATLAB;
-- reject malformed or physically undefined input before mutating active parameters;
-- keep the current weak-loss complex-sound-speed conversion and SSP interpolation behavior;
-- verify the implementation against `krakenFortran` at formula, modal-wavenumber, and transmission-loss levels.
+## 1. 目标
 
-The feature is incomplete if the core formula works but either the ENV or JSON transport path is missing.
+为 OOK 增加 `B` 生物衰减选项，使其在有效输入范围内与 `krakenFortran` 保持相同的数值语义。
 
-## 2. Approved Decisions
+实现必须满足：
 
-The following decisions were explicitly approved:
+- 保持 Fortran 生物衰减公式及运算顺序；
+- 保持深度闭区间判定和按输入顺序累加重叠层；
+- 通过 `env_in_out.cpp` 和 `json_in_out.hpp` 完整传输生物层配置；
+- 通过 C++、Python 和 MATLAB 对外暴露该配置；
+- 在修改活动参数前拒绝格式错误或物理上未定义的输入；
+- 保持现有弱损耗复声速换算和 SSP 插值行为；
+- 从公式、模态波数和传播损失三个层面对照 `krakenFortran` 验证。
 
-1. Use an end-to-end implementation rather than a core-only patch.
-2. Preserve Fortran behavior for valid input while making invalid input fail fast.
-3. Keep biological attenuation as one global attenuation configuration shared by all profiles.
-4. Reject multi-profile inputs whose attenuation configurations differ.
-5. Extend the existing `Atten_Mode` object rather than adding parallel state.
-6. Accept the C++ ABI change and rebuild all native OOK artifacts together.
-7. Do not change the weak-loss complex-sound-speed formula.
-8. Do not insert biological-layer boundary nodes automatically.
-9. Treat `env_in_out.cpp` and `json_in_out.hpp` as mandatory, separately tested deliverables.
+即使核心公式已经实现，只要 ENV 或 JSON 任一传输接口缺失，该功能仍视为未完成。
 
-## 3. Existing Compatibility Gap
+## 2. 已确认决策
 
-`krakenFortran` supports three mutually exclusive added volume-attenuation options in the fourth Top Option character:
+以下决策已经明确确认：
 
-- `T`: Thorp;
-- `F`: Francois-Garrison;
-- `B`: biological attenuation.
+1. 采用端到端实现，不做只修改核心公式的局部补丁。
+2. 有效输入保持 Fortran 行为，非法输入在 OOK 中快速失败。
+3. 生物衰减作为所有剖面共享的一套全局衰减配置。
+4. 多剖面的衰减配置不一致时明确拒绝。
+5. 扩展现有 `Atten_Mode`，不增加平行状态。
+6. 接受 C++ ABI 变化，统一重新构建全部 OOK 原生二进制产物。
+7. 不修改弱损耗复声速公式。
+8. 不自动插入生物层上下边界节点。
+9. `env_in_out.cpp` 和 `json_in_out.hpp` 是两个必须独立验收的交付项。
 
-OOK currently supports only `None`, `Thorpe`, and `FrancGarr`. An ENV fourth character of `B` falls through to `None`, and the following biological-layer records are not consumed. The next line is then misinterpreted as either top-halfspace data or an internal-medium header.
+## 3. 当前兼容性缺口
 
-OOK also has no JSON model, public parameter type, Python binding, or MATLAB helper capable of representing the biological layers.
+`krakenFortran` 使用 Top Option 的第四个字符选择附加体积衰减：
 
-## 4. Architecture
+- `T`：Thorp；
+- `F`：Francois-Garrison；
+- `B`：生物衰减。
 
-### 4.1 Single ownership
+OOK 当前只支持 `None`、`Thorpe` 和 `FrancGarr`。ENV 第四字符为 `B` 时会落入 `None`，并且后续生物层记录不会被消费。下一行随后会被错误解释为顶部半空间参数或介质头部。
 
-`OOK_parameters::AttenUnit` remains the sole owner of attenuation configuration.
+OOK 当前也没有能够表达生物层的：
 
-No Fortran-style module global such as `bio[]` or `NBioLayers` will be introduced. This preserves OOK's object-based parameter flow, thread safety, reentrancy, and isolation between solver instances.
+- JSON 模型；
+- 公开参数类型；
+- Python 绑定；
+- MATLAB 配置入口。
 
-### 4.2 Public data model
+## 4. 总体架构
 
-Add the following public type near the existing attenuation types in `include/OpenOceanKrakenParams.h`:
+### 4.1 单一所有权
+
+继续由 `OOK_parameters::AttenUnit` 唯一持有衰减配置。
+
+不得仿照 Fortran 引入模块级全局 `bio[]` 或 `NBioLayers`。这样可以保持 OOK 当前的对象参数传递方式，并维持：
+
+- 线程安全；
+- 可重入性；
+- 不同求解器实例之间的状态隔离。
+
+### 4.2 公开数据模型
+
+在 `include/OpenOceanKrakenParams.h` 的现有衰减类型附近新增：
 
 ```cpp
 inline constexpr std::size_t MaxBioLayers = 200;
@@ -67,12 +79,12 @@ struct BiologicalAttenuationLayer
     double Z1 = 0.0;  // m
     double Z2 = 0.0;  // m
     double f0 = 0.0;  // Hz
-    double Q  = 0.0;  // dimensionless
+    double Q  = 0.0;  // 无量纲
     double a0 = 0.0;  // dB/km
 };
 ```
 
-Append the new enum value rather than inserting it between existing values:
+新枚举值追加在末尾，不插入现有枚举值之间：
 
 ```cpp
 enum class OceanAbsorptionModel
@@ -84,7 +96,7 @@ enum class OceanAbsorptionModel
 };
 ```
 
-Extend the existing configuration atomically:
+原子扩展现有配置：
 
 ```cpp
 struct Atten_Mode
@@ -99,24 +111,25 @@ struct Atten_Mode
 };
 ```
 
-The layer count is always derived from `biologicalLayers.size()`. No separate `NBioLayers` field is stored.
+生物层数量始终由 `biologicalLayers.size()` 得到，不再保存独立的 `NBioLayers` 字段。
 
-### 4.3 Global multi-profile semantics
+### 4.3 多剖面全局语义
 
-The biological-layer list belongs to the global `Atten_Mode`, not to an individual SSP medium or `Range_Independent_Area`.
+生物层数组属于全局 `Atten_Mode`，不属于单个 SSP 介质，也不下沉到 `Range_Independent_Area`。
 
-All profiles in a multi-profile input must have identical:
+多剖面输入的以下内容必须完全一致：
 
-- attenuation units;
-- absorption model;
-- biological-layer count;
-- biological-layer values in the same order.
+- 衰减单位；
+- 吸收模型；
+- 生物层数量；
+- 每一层的参数；
+- 生物层排列顺序。
 
-The parser must reject differences. It must not silently retain only the first profile's configuration.
+发现差异时必须拒绝，不能继续沿用“只保留第一个剖面配置”的静默行为。
 
-### 4.4 Function and ownership flow
+### 4.4 函数和数据流
 
-The existing flow remains:
+保持现有主链路：
 
 ```text
 OOK_parameters::AttenUnit
@@ -125,18 +138,18 @@ OOK_parameters::AttenUnit
     → CRCI
     → parseAttenuation
     → addOceanAbsorption
-    → complex cp/cs
+    → 复数 cp/cs
 ```
 
-`Atten_Mode` must be passed as `const Atten_Mode&` through the loss-update and attenuation functions so the vector is not copied.
+`Atten_Mode` 在损耗更新和衰减计算链路中统一通过 `const Atten_Mode&` 传递，避免复制内部 `vector`。
 
-The existing `Interface::set_AttenUnit()` remains the main public C++ and Python-native setter. No second independently mutable biological configuration is introduced.
+继续使用 `Interface::set_AttenUnit()` 作为 C++ 和 Python native 的主要配置入口，不增加可独立修改的第二套生物衰减状态。
 
-## 5. ENV Transport
+## 5. ENV 传输接口
 
-### 5.1 Canonical format
+### 5.1 标准格式
 
-The fourth Top Option character `B` enables biological attenuation:
+Top Option 第四字符 `B` 启用生物衰减：
 
 ```text
 'CVWB'
@@ -145,59 +158,59 @@ The fourth Top Option character `B` enables biological attenuation:
 40.0 60.0 1200.0 4.0 0.02
 ```
 
-The records mean:
+记录含义为：
 
 ```text
 NBioLayers
 Z1 Z2 f0 Q a0
-... one line per biological layer
+... 每个生物层一行
 ```
 
-Units are:
+单位为：
 
-- `Z1`, `Z2`: metres;
-- `f0`: hertz;
-- `Q`: dimensionless;
-- `a0`: dB/km.
+- `Z1`、`Z2`：米；
+- `f0`：赫兹；
+- `Q`：无量纲；
+- `a0`：dB/km。
 
-### 5.2 Required `env_in_out.cpp` changes
+### 5.2 `env_in_out.cpp` 必须修改的内容
 
-`src/module/env_in_out.cpp` must:
+`src/module/env_in_out.cpp` 必须完成：
 
-1. Add an explicit `case 'B'` in the fourth-character switch.
-2. Set `absModel` to `OceanAbsorptionModel::Biological`.
-3. Consume the layer count and layer rows immediately after parsing the Top Option.
-4. Complete this consumption before reading an `A` top-halfspace row or an internal-medium header.
-5. Parse each biological row as exactly five numeric values.
-6. Parse into a temporary `Atten_Mode`.
-7. Validate the complete temporary configuration.
-8. Commit it to `params.AttenUnit` only after successful parsing and validation.
-9. Include the biological-layer index and offending field in error text.
-10. Return `false` through the existing ENV exception path on failure.
-11. Compare complete attenuation configurations when combining multiple profiles.
+1. 在第四字符分支中显式增加 `case 'B'`。
+2. 将 `absModel` 设为 `OceanAbsorptionModel::Biological`。
+3. 在解析 Top Option 后立即读取层数和生物层记录。
+4. 必须在读取 `A` 顶部半空间参数或内部介质头部之前完成上述读取。
+5. 每个生物层必须严格解析为五个数值。
+6. 先解析到临时 `Atten_Mode`。
+7. 对完整临时配置执行统一校验。
+8. 只有解析和校验全部成功后，才能写入 `params.AttenUnit`。
+9. 错误信息必须包含生物层序号和错误字段。
+10. 失败时通过现有 ENV 异常通道使 `from_env()` 返回 `false`。
+11. 合并多剖面时比较完整衰减配置。
 
-This file currently supplies ENV input only; no ENV writer is added by this feature.
+该文件当前只提供 ENV 读取功能，本功能不新增 ENV 写出接口。
 
-### 5.3 ENV compatibility behavior
+### 5.3 ENV 兼容规则
 
-- A missing fourth character continues to mean `None`.
-- `T` and `F` retain their existing OOK behavior.
-- `B` consumes its required records.
-- An unknown non-blank fourth character becomes an explicit parse failure.
-- `NBioLayers=0` is valid and produces no biological contribution.
-- Layer counts greater than 200 are rejected.
-- Missing, incomplete, or extra-invalid biological records are rejected.
+- 缺少第四字符继续表示 `None`。
+- `T` 和 `F` 保持现有 OOK 行为。
+- `B` 必须读取紧随其后的生物层记录。
+- 未知且非空的第四字符必须明确报错。
+- `NBioLayers=0` 合法，对应无生物附加衰减。
+- 层数超过 200 时拒绝。
+- 缺行、字段不足、字段过多或数值非法时拒绝。
 
-Correct handling must be verified for both:
+必须分别验证：
 
-- Biological plus a normal top boundary;
-- Biological plus an `A` top halfspace.
+- Biological + 普通顶部边界；
+- Biological + `A` 顶部半空间。
 
-## 6. JSON Transport
+## 6. JSON 传输接口
 
-### 6.1 Canonical schema
+### 6.1 标准结构
 
-The canonical JSON representation is:
+标准 JSON 表达为：
 
 ```json
 {
@@ -217,56 +230,56 @@ The canonical JSON representation is:
 }
 ```
 
-The existing `"OceanAbsorptionModel"` key is retained for backward compatibility.
+保留现有 `"OceanAbsorptionModel"` 键名，以维持向后兼容。
 
-### 6.2 Required `json_in_out.hpp` changes
+### 6.2 `json_in_out.hpp` 必须修改的内容
 
-`src/module/json_in_out.hpp` must:
+`src/module/json_in_out.hpp` 必须完成：
 
-1. Map `OceanAbsorptionModel::Biological` to and from `"Biological"`.
-2. Add `to_json/from_json` for `BiologicalAttenuationLayer`.
-3. Extend `Atten_Mode` conversion with `"BiologicalLayers"`.
-4. Require the array key when the model is Biological.
-5. Allow an explicitly supplied empty array.
-6. Reject a non-Biological model with a non-empty layer array.
-7. Derive the count from the array length.
-8. Apply the same structural validation used by ENV and C++ setters.
-9. Preserve the existing top-level `OOK_parameters` schema; no parallel top-level biological key is added.
+1. 实现 `OceanAbsorptionModel::Biological` 与字符串 `"Biological"` 的双向转换。
+2. 为 `BiologicalAttenuationLayer` 增加 `to_json/from_json`。
+3. 扩展 `Atten_Mode` 的转换，加入 `"BiologicalLayers"`。
+4. 模型为 Biological 时必须显式存在该数组。
+5. 允许显式提供空数组。
+6. 非 Biological 模型携带非空生物层数组时拒绝。
+7. 层数由数组长度唯一派生。
+8. 使用与 ENV 和 C++ setter 相同的结构校验。
+9. 保持现有 `OOK_parameters` 顶层结构，不增加平行的顶层生物衰减键。
 
-### 6.3 JSON compatibility behavior
+### 6.3 JSON 兼容规则
 
-- Old non-Biological JSON remains readable.
-- Non-Biological output omits `"BiologicalLayers"` so existing canonical JSON and snapshots do not change.
-- New Biological JSON is fail-closed when read by an old OOK build because `"Biological"` is unknown.
-- New JSON does not store a duplicate layer count.
-- ENV `B` → parameters → JSON → parameters must preserve every field and layer order.
+- 旧的非 Biological JSON 继续可以读取。
+- 非 Biological 输出不写 `"BiologicalLayers"`，避免改变现有标准 JSON 和快照。
+- 新 Biological JSON 被旧版 OOK 读取时应因未知 `"Biological"` 而安全失败。
+- JSON 中不保存重复的层数。
+- ENV `B` → 参数 → JSON → 参数，必须保持全部字段和层顺序不变。
 
-## 7. Public Interfaces
+## 7. 公开接口
 
 ### 7.1 C++
 
-The existing setter remains:
+保留现有 setter：
 
 ```cpp
 void Interface::set_AttenUnit(Atten_Mode mode);
 ```
 
-It validates the supplied object before changing active parameters. Failure throws `std::invalid_argument` and leaves the previous configuration unchanged.
+该函数必须先校验传入对象，再修改活动参数。校验失败时抛出 `std::invalid_argument`，原配置保持不变。
 
-Internal hot-path functions accept `const Atten_Mode&`.
+内部高频调用链统一接收 `const Atten_Mode&`。
 
 ### 7.2 Python
 
-The pybind11 layer must expose:
+pybind11 必须公开：
 
-- `OceanAbsorptionModel.Biological`;
-- `BiologicalAttenuationLayer`;
-- all five layer fields;
-- `Atten_Mode.biologicalLayers`.
+- `OceanAbsorptionModel.Biological`；
+- `BiologicalAttenuationLayer`；
+- 生物层的五个字段；
+- `Atten_Mode.biologicalLayers`。
 
-The `.pyi` file must describe these additions.
+`.pyi` 文件必须同步描述上述接口。
 
-The high-level Python wrapper must provide a typed convenience entry point:
+Python 高层封装增加类型化便利入口：
 
 ```python
 ook_set_biological_attenuation(
@@ -275,41 +288,41 @@ ook_set_biological_attenuation(
 )
 ```
 
-Invalid input must surface as `ValueError`.
+非法输入映射为 `ValueError`。
 
 ### 7.3 MATLAB
 
-`krakenDataModel` must provide a Biological configuration helper that produces the canonical JSON structure and preserves layer order.
+`krakenDataModel` 增加 Biological 配置方法，用于生成标准 JSON，并保持生物层输入顺序。
 
-MATLAB-side checks should provide early feedback, while the C++ JSON import remains the authoritative validation boundary.
+MATLAB 高层校验用于尽早提示；C++ JSON 导入仍是最终权威校验边界。
 
-### 7.4 Documentation
+### 7.4 文档
 
-The main README and wrapper READMEs must show:
+主 README 和封装 README 必须说明：
 
-- ENV `B` ordering;
-- units for all five fields;
-- JSON representation;
-- Python native and high-level examples;
-- MATLAB example;
-- closed-interval and overlap semantics;
-- the fact that `a0` is not the resonance peak because `a(f0)=a0·Q²`.
+- ENV `B` 参数块位置；
+- 五个参数的单位；
+- JSON 表达；
+- Python native 和高层示例；
+- MATLAB 示例；
+- 闭区间和重叠层语义；
+- `a0` 不是共振峰值，因为 `a(f0)=a0·Q²`。
 
-## 8. Numerical Semantics
+## 8. 数值语义
 
-### 8.1 Base attenuation
+### 8.1 基础材料衰减
 
-OOK first converts the user-specified material attenuation to Nepers per metre using the existing `N/M/m/F/W/Q/L` logic.
+首先使用现有 `N/M/m/F/W/Q/L` 逻辑，将用户输入的材料衰减转换为 Nepers/m。
 
-### 8.2 Biological attenuation
+### 8.2 生物衰减
 
-For each layer in input order:
+按照输入顺序处理每个生物层：
 
 \[
 I_i(z)=
 \begin{cases}
 1,& Z_{1i}\le z\le Z_{2i}\\
-0,& \text{otherwise}
+0,& \text{其他}
 \end{cases}
 \]
 
@@ -321,40 +334,40 @@ I_i(z)
 \quad[\mathrm{dB/km}]
 \]
 
-For every matching layer, execute:
+每个命中的生物层都执行：
 
 \[
 \alpha_T\leftarrow\alpha_T+\frac{a_i}{8685.8896}
 \quad[\mathrm{Np/m}]
 \]
 
-The operation order is normative:
+以下运算顺序是强制要求：
 
-1. iterate in input order;
-2. perform the closed-interval test without epsilon;
-3. calculate one layer's denominator;
-4. calculate that layer's `a`;
-5. divide that layer's value by `8685.8896`;
-6. add it to the current `alphaT`;
-7. continue to the next layer.
+1. 按输入顺序遍历；
+2. 使用不带 epsilon 的闭区间判断；
+3. 计算当前层分母；
+4. 计算当前层 `a`；
+5. 将当前层结果除以 `8685.8896`；
+6. 加入当前 `alphaT`；
+7. 再进入下一层。
 
-The implementation must not:
+实现不得：
 
-- sort, merge, or deduplicate layers;
-- pre-sum all dB values before conversion;
-- replace division with a precomputed reciprocal when doing so changes rounding;
-- algebraically rewrite the resonance expression into an `f⁴` form;
-- treat `a0` as the peak attenuation.
+- 对生物层排序、合并或去重；
+- 先汇总全部 dB 再统一换算；
+- 在影响舍入顺序的情况下用预计算倒数替代除法；
+- 将共振公式代数改写为 \(f^4\) 形式；
+- 将 `a0` 误认为峰值衰减。
 
-At resonance:
+共振处：
 
 \[
 a(f_0)=a_0Q^2
 \]
 
-### 8.3 Complex sound speed
+### 8.3 复声速
 
-Keep the current Fortran-compatible weak-loss conversion:
+保持现有与 Fortran 对齐的弱损耗换算：
 
 \[
 \omega=2\pi f
@@ -368,87 +381,87 @@ c_I=\frac{\alpha_Tc^2}{\omega}
 \widetilde c=c+i\,c_I
 \]
 
-No exact inverse-wavenumber reformulation is introduced.
+本功能不引入所谓精确的逆波数改写。
 
-### 8.4 SSP and halfspaces
+### 8.4 SSP 与半空间
 
-- Biological attenuation is evaluated at stored SSP control points.
-- The same configuration is applied to P-wave and S-wave calls to `CRCI`.
-- Existing linear, PCHIP, and spline coefficient generation occurs after complex sound speed is updated.
-- No `Z1/Z2` control points are inserted automatically.
-- Overlapping layers accumulate.
-- Shared endpoints are counted in both adjacent layers.
-- `UpdateHSLoss()` excludes Biological attenuation.
-- The existing `1e8` halfspace depth sentinel is replaced with `std::numeric_limits<double>::max()`.
-- The final field continues to obtain loss from complex modal wavenumbers and `exp(-ikr)`; no extra final-pressure multiplier is added.
+- 在已存储 SSP 控制点上计算生物衰减。
+- P 波和 S 波的 `CRCI` 调用使用同一配置。
+- 复声速更新后，再生成线性、PCHIP 或样条系数。
+- 不自动插入 `Z1/Z2` 控制点。
+- 重叠层全部累加。
+- 相邻层共享端点时，该端点计入两层。
+- `UpdateHSLoss()` 排除 Biological。
+- 当前 `1e8` 半空间深度哨兵改为 `std::numeric_limits<double>::max()`。
+- 最终声场继续通过复模态波数和 `exp(-ikr)` 获得衰减，不增加额外的最终压力乘子。
 
-## 9. Validation and Failure Semantics
+## 9. 校验与失败语义
 
-### 9.1 Structural rules
+### 9.1 结构规则
 
-Every layer must satisfy:
+每个生物层必须满足：
 
 ```text
-Z1, Z2, f0, Q, and a0 are finite
+Z1、Z2、f0、Q、a0 全部有限
 Z1 <= Z2
 f0 > 0
 Q > 0
 a0 >= 0
 ```
 
-Model-level rules:
+模型级规则：
 
-- `biologicalLayers.size() <= 200`;
-- Biological plus an empty list is valid;
-- a non-Biological model plus a non-empty list is invalid;
-- overlap is valid;
-- shared endpoints are valid;
-- a zero-thickness layer with `Z1==Z2` is valid;
-- `a0==0` is valid;
-- layer order is preserved.
+- `biologicalLayers.size() <= 200`；
+- Biological + 空数组合法；
+- 非 Biological + 非空数组非法；
+- 重叠层合法；
+- 共享端点合法；
+- `Z1==Z2` 的零厚度层合法；
+- `a0==0` 合法；
+- 保持层顺序。
 
-### 9.2 Runtime rules
+### 9.2 运行时规则
 
-Before updating SSP loss:
+更新 SSP 损耗前检查：
 
-- frequency must be finite and greater than zero;
-- every denominator must be finite and positive;
-- every layer contribution must be finite;
-- cumulative attenuation must be finite;
-- the resulting complex sound speed must be finite.
+- 频率有限且大于零；
+- 所有分母有限且大于零；
+- 每层贡献有限；
+- 累计衰减有限；
+- 最终复声速有限。
 
-If the converted imaginary sound speed exceeds the real sound speed, OOK must preserve the Fortran fatal-error meaning and fail the current solve.
+若换算后的复声速虚部大于实部，必须保留 Fortran 的致命错误语义，使本次求解失败。
 
-Fluid `cS==0` remains valid.
+流体中的 `cS==0` 仍然合法。
 
-### 9.3 Shared validation and atomic mutation
+### 9.3 共享校验与原子修改
 
-ENV, JSON, the public setter, and runtime computation must use shared validation functions rather than duplicating rules.
+ENV、JSON、公开 setter 和运行时计算必须使用共享校验逻辑，不得分别复制规则。
 
-Each mutating input path follows:
+所有修改状态的输入路径遵循：
 
 ```text
-parse into temporary object
-    → validate the complete object
-    → assign active state once
+解析到临时对象
+    → 校验完整对象
+    → 一次性写入活动状态
 ```
 
-No failure may leave a partially populated Biological configuration active.
+任何失败都不能留下只填充了一部分的 Biological 配置。
 
-### 9.4 Error mapping
+### 9.4 错误映射
 
-- ENV: diagnostic plus `from_env()==false`;
-- JSON: diagnostic plus `from_json()==false`;
-- C++ setter: `std::invalid_argument`;
-- Python: `ValueError`;
-- non-finite calculation: `std::domain_error` or `std::overflow_error`;
-- MATLAB: early high-level diagnostic, backed by the authoritative C++ failure.
+- ENV：输出诊断，`from_env()==false`；
+- JSON：输出诊断，`from_json()==false`；
+- C++ setter：`std::invalid_argument`；
+- Python：`ValueError`；
+- 非有限计算：`std::domain_error` 或 `std::overflow_error`；
+- MATLAB：高层尽早提示，底层 C++ 继续作为最终失败边界。
 
-## 10. Testing Strategy
+## 10. 测试策略
 
-### 10.1 Formula unit tests
+### 10.1 公式单元测试
 
-Use:
+使用：
 
 ```text
 Z1=20 m
@@ -457,10 +470,10 @@ f=f0=1000 Hz
 Q=5
 a0=0.04 dB/km
 c=1500 m/s
-base attenuation=0
+基础衰减=0
 ```
 
-Expected resonance attenuation:
+预期共振衰减：
 
 \[
 a_B=1.0\ \mathrm{dB/km}
@@ -471,163 +484,163 @@ a_B=1.0\ \mathrm{dB/km}
 =1.1512925515\times10^{-4}\ \mathrm{Np/m}
 \]
 
-The tests must cover:
+测试必须覆盖：
 
-- lower boundary, interior, and upper boundary;
-- points immediately outside the layer;
-- overlap accumulation;
-- base plus Biological addition;
-- empty layer list;
-- no effect for other models;
-- no cross-test global state;
-- SSP inclusion and halfspace exclusion.
+- 下边界、层内和上边界；
+- 紧邻层外的点；
+- 重叠层累加；
+- 基础衰减与 Biological 相加；
+- 空生物层；
+- 其他模型不受影响；
+- 不同测试之间不存在全局状态残留；
+- SSP 包含 Biological、半空间排除 Biological。
 
-### 10.2 ENV tests
+### 10.2 ENV 测试
 
-Add positive fixtures for:
+增加正例：
 
-- Biological plus normal top boundary;
-- Biological plus `A` top halfspace.
+- Biological + 普通顶部边界；
+- Biological + `A` 顶部半空间。
 
-Add negative fixtures for:
+增加负例：
 
-- missing layer count;
-- count/row mismatch;
-- count greater than 200;
-- incomplete row;
-- non-numeric field;
-- invalid field values;
-- unknown non-blank fourth character;
-- inconsistent multi-profile attenuation configuration.
+- 缺少层数；
+- 层数与行数不一致；
+- 层数超过 200；
+- 生物层行字段不完整；
+- 非数值字段；
+- 字段值非法；
+- 未知非空第四字符；
+- 多剖面衰减配置不一致。
 
-### 10.3 JSON tests
+### 10.3 JSON 测试
 
-Cover:
+覆盖：
 
-- Biological enum conversion;
-- layer object conversion;
-- complete `Atten_Mode` round trip;
-- ENV `B` → JSON → parameters round trip;
-- empty Biological array;
-- missing Biological array;
-- wrong field types;
-- non-Biological plus non-empty array;
-- over-limit array;
-- unchanged output for None, Thorpe, and FrancGarr.
+- Biological 枚举转换；
+- 生物层对象转换；
+- 完整 `Atten_Mode` 往返；
+- ENV `B` → JSON → 参数往返；
+- Biological 空数组；
+- Biological 缺少数组；
+- 字段类型错误；
+- 非 Biological + 非空数组；
+- 数组超过 200 层；
+- None、Thorpe、FrancGarr 输出不变。
 
-### 10.4 Python and MATLAB tests
+### 10.4 Python 与 MATLAB 测试
 
-Python automated tests must verify:
+Python 自动测试必须验证：
 
-- native object construction;
-- vector assignment;
-- high-level convenience setter;
-- JSON round trip;
-- `ValueError` mapping.
+- native 对象创建；
+- 生物层数组赋值；
+- 高层便利 setter；
+- JSON 往返；
+- `ValueError` 映射。
 
-MATLAB tests must verify:
+MATLAB 测试必须验证：
 
-- canonical JSON generation;
-- field and array preservation;
-- OOK CLI acceptance;
-- invalid input rejection.
+- 标准 JSON 生成；
+- 字段和数组完整保留；
+- OOK CLI 可以读取；
+- 非法输入被拒绝。
 
-### 10.5 Fortran modal differential test
+### 10.5 Fortran 模态差分测试
 
-Add fixed cases:
+增加固定算例：
 
 ```text
 bio_uniform_off
 bio_uniform_resonance
 ```
 
-The Biological-on case covers the full water layer to isolate the attenuation formula from SSP boundary interpolation.
+Biological-on 算例覆盖整个水层，以隔离生物衰减公式与 SSP 边界插值的影响。
 
-Use `kraken.exe` as the primary truth implementation.
+使用 `kraken.exe` 作为主要真值实现。
 
-Acceptance:
+验收条件：
 
-- identical mode count;
-- `|ΔRe(k)| <= 1e-7 m^-1`;
-- `|ΔIm(k)| <= max(1e-9, 1e-3·|Im(k_Fortran)|)`;
-- Biological-on `Im(k) < 0`;
-- Biological-on and Biological-off imaginary parts differ materially;
-- Fortran output contains `Biological attenuation`;
-- neither implementation reports fatal errors or no modes.
+- 模态数一致；
+- `|ΔRe(k)| <= 1e-7 m^-1`；
+- `|ΔIm(k)| <= max(1e-9, 1e-3·|Im(k_Fortran)|)`；
+- Biological-on 时 `Im(k) < 0`；
+- Biological-on 与 Biological-off 的波数虚部存在明确差异；
+- Fortran 输出包含 `Biological attenuation`；
+- 两边都不得报告 fatal error 或 no modes。
 
-The new comparison tool must fail with a non-zero exit code when a threshold is exceeded.
+新增比较工具必须在超过阈值时返回非零退出码，不能只输出统计信息。
 
-### 10.6 End-to-end TL acceptance
+### 10.6 TL 端到端验收
 
-Compare Biological-on versus Biological-off at 1, 5, and 10 km.
+在 1、5、10 km 比较 Biological-on 与 Biological-off。
 
-Acceptance:
+验收条件：
 
-- each implementation's attenuation-slope error is at most `0.02 dB/km`;
-- OOK versus Fortran `P95 |ΔTL| <= 0.20 dB`;
-- single-mode `max |ΔTL| <= 0.50 dB`;
-- using the same Fortran `field.exe` with both MOD files gives `P95 <= 0.05 dB`;
-- every pressure sample is finite and non-zero.
+- 每个实现的衰减斜率误差不超过 `0.02 dB/km`；
+- OOK 对 Fortran 的 `P95 |ΔTL| <= 0.20 dB`；
+- 单模态算例 `max |ΔTL| <= 0.50 dB`；
+- 使用同一 Fortran `field.exe` 读取两份 MOD 时，`P95 <= 0.05 dB`；
+- 所有压力样本有限且非零。
 
-### 10.7 Regression gate
+### 10.7 回归门禁
 
-Completion requires:
+完成功能必须同时满足：
 
 ```text
-formula unit tests
-+ env_in_out tests
-+ json_in_out tests
-+ C++/Python/MATLAB interface tests
-+ Fortran modal differential test
-+ TL acceptance test
-+ all pre-existing CTest tests
+公式单元测试
++ env_in_out 测试
++ json_in_out 测试
++ C++/Python/MATLAB 接口测试
++ Fortran 模态差分
++ TL 验收
++ 全部既有 CTest
 ```
 
-## 11. Backward Compatibility and Build Impact
+## 11. 向后兼容与构建影响
 
-### 11.1 Source and data compatibility
+### 11.1 源码和数据兼容
 
-- Existing ENV without `B` remains supported.
-- Existing non-Biological JSON remains supported.
-- MOD and SHD formats do not change.
-- Existing C++ source using the retained fields remains source-compatible in normal use.
-- Unknown non-blank ENV fourth characters change from silent fallback to explicit rejection.
+- 不含 `B` 的现有 ENV 继续支持。
+- 现有非 Biological JSON 继续支持。
+- MOD 和 SHD 格式不变。
+- 正常使用保留字段的现有 C++ 源码保持源代码级兼容。
+- 未知非空 ENV 第四字符从静默回退改为明确拒绝。
 
-### 11.2 Binary compatibility
+### 11.2 二进制兼容
 
-Adding `std::vector` changes the public `Atten_Mode` object layout and the containing `OOK_parameters` layout.
+增加 `std::vector` 会改变公开 `Atten_Mode` 及包含它的 `OOK_parameters` 的对象布局。
 
-This binary ABI change is accepted because there are no external C++ binary clients that must remain compatible.
+由于不存在必须保持兼容且无法重编译的外部 C++ 二进制客户端，本设计接受该 ABI 变化。
 
-The implementation release must rebuild together:
+发布该功能时必须统一重新构建：
 
-- the OOK core library;
-- OOK executables;
-- native tests and runners;
-- the Python `.pyd`;
-- any in-repository native consumers.
+- OOK 核心库；
+- OOK 可执行程序；
+- 原生测试和 runner；
+- Python `.pyd`；
+- 仓库中的其他原生使用方。
 
-Pure Python files, MATLAB `.m` files, ENV files, JSON files, MOD files, and SHD files do not require compilation.
+纯 Python 文件、MATLAB `.m` 文件、ENV、JSON、MOD 和 SHD 不需要编译。
 
-A clean build directory is recommended so stale pre-change objects cannot be mixed with new objects.
+建议使用新的干净构建目录，避免新旧对象文件混用。
 
-## 12. Non-Goals
+## 12. 非目标
 
-This feature does not:
+本功能不负责：
 
-- modify `krakenFortran`;
-- redesign all absorption models;
-- correct the current Francois-Garrison environmental-parameter handling;
-- change the weak-loss sound-speed approximation;
-- insert biological-layer boundaries into SSP grids;
-- support per-profile Biological configurations;
-- add a new ENV writer;
-- change MOD or SHD formats;
-- implement scattering or biological sound-speed dispersion beyond the Fortran attenuation expression.
+- 修改 `krakenFortran`；
+- 重构全部吸收模型；
+- 修正当前 Francois-Garrison 环境参数读取；
+- 改变弱损耗复声速近似；
+- 向 SSP 网格自动插入生物层边界；
+- 支持每个剖面独立的 Biological 配置；
+- 增加 ENV 写出器；
+- 修改 MOD 或 SHD 格式；
+- 实现超出 Fortran 衰减表达式的生物散射或声速频散。
 
-## 13. Component Map
+## 13. 组件范围
 
-Expected implementation areas:
+预计实施涉及：
 
 - `include/OpenOceanKrakenParams.h`
 - `src/algorithm/AttenMod.h`
@@ -654,17 +667,17 @@ Expected implementation areas:
 - `wrappers/py_kraken/README.md`
 - `wrappers/m_kraken/README.md`
 
-## 14. Definition of Done
+## 14. 完成定义
 
-The feature is complete only when:
+只有同时满足以下条件，功能才算完成：
 
-1. OOK can represent Biological attenuation in its public parameter model.
-2. ENV `B` records are consumed in the Fortran-compatible position.
-3. JSON round trips the complete model and layer list.
-4. C++, Python, and MATLAB can configure the feature.
-5. OOK calculates the Fortran formula with the approved operation order.
-6. Halfspaces exclude Biological attenuation.
-7. Invalid inputs fail atomically and consistently.
-8. Multi-profile mismatches are rejected.
-9. Formula, modal, and TL acceptance gates pass.
-10. Existing OOK tests remain green.
+1. OOK 公开参数模型可以表达 Biological。
+2. ENV `B` 参数块在与 Fortran 一致的位置被完整消费。
+3. JSON 可以完整往返模型和生物层数组。
+4. C++、Python 和 MATLAB 都能配置该功能。
+5. OOK 按批准的运算顺序计算 Fortran 公式。
+6. 半空间排除 Biological。
+7. 非法输入以一致方式原子失败。
+8. 多剖面配置不一致时被拒绝。
+9. 公式、模态和 TL 验收全部通过。
+10. OOK 现有测试保持通过。
