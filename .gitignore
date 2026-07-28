@@ -33,7 +33,7 @@ bin/
 *.shd
 /pybind11-master/
 default_params.json
-docs/
+/docs/
 .gitignore
 build*/
 /tmp/
