@@ -1,6 +1,7 @@
 #ifndef PARAMS_H
 #define PARAMS_H
 #include <vector>
+#include <cstddef>
 #include <string>
 #include <complex>
 #include <fstream>
@@ -96,17 +97,30 @@ namespace OpenOceanKraken
         MODE_W_db_per_lambda,  // 衰减单位采用 dB/λ(波长) ——默认
     };
     // 2. 海洋吸收模型（可选附加）
+    inline constexpr std::size_t MaxBioLayers = 200;
+
+    struct BiologicalAttenuationLayer
+    {
+        double Z1 = 0.0;
+        double Z2 = 0.0;
+        double f0 = 0.0;
+        double Q = 0.0;
+        double a0 = 0.0;
+    };
+
     enum class OceanAbsorptionModel
     {
         None,     // 普通
         Thorpe,   // T
-        FrancGarr // F
+        FrancGarr, // F
+        Biological
     };
 
     struct Atten_Mode
     {
         AttenuationUnit attnUnit = AttenuationUnit::MODE_W_db_per_lambda; // 衰减单位类型
         OceanAbsorptionModel absModel = OceanAbsorptionModel::None;       // 海洋吸收模型
+        std::vector<BiologicalAttenuationLayer> biologicalLayers;
     };
 
     // 边界条件类型

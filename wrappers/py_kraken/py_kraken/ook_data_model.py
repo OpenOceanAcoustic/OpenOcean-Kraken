@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,31 @@ class ConfigModel(BaseModel):
     mod: bool = False
     mod_only: bool = False
     export_json: bool = False
+
+
+class BiologicalAttenuationLayerModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    Z1: float
+    Z2: float
+    f0: float
+    Q: float
+    a0: float
+
+    @model_validator(mode="after")
+    def validate_layer(self) -> "BiologicalAttenuationLayerModel":
+        for name in ("Z1", "Z2", "f0", "Q", "a0"):
+            if not math.isfinite(getattr(self, name)):
+                raise ValueError(f"{name} must be finite")
+        if self.Z1 > self.Z2:
+            raise ValueError("Z1 must be less than or equal to Z2")
+        if self.f0 <= 0.0:
+            raise ValueError("f0 must be positive")
+        if self.Q <= 0.0:
+            raise ValueError("Q must be positive")
+        if self.a0 < 0.0:
+            raise ValueError("a0 must be non-negative")
+        return self
 
 
 class _ArrayModel(BaseModel):
@@ -137,4 +163,10 @@ class ModeData(_ArrayModel):
         return self
 
 
-__all__ = ["ConfigModel", "FieldData", "ModeData", "ModeProfileData"]
+__all__ = [
+    "BiologicalAttenuationLayerModel",
+    "ConfigModel",
+    "FieldData",
+    "ModeData",
+    "ModeProfileData",
+]

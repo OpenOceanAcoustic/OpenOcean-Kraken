@@ -94,6 +94,7 @@ PYBIND11_MODULE(OpenOceanKraken, module)
         .value("None_", OceanAbsorptionModel::None)
         .value("Thorpe", OceanAbsorptionModel::Thorpe)
         .value("FrancGarr", OceanAbsorptionModel::FrancGarr)
+        .value("Biological", OceanAbsorptionModel::Biological)
         .export_values();
     py::enum_<BC_Mode>(module, "BC_Mode")
         .value("MODE_R_Rigid", BC_Mode::MODE_R_Rigid)
@@ -125,10 +126,21 @@ PYBIND11_MODULE(OpenOceanKraken, module)
         .value("Couple", ModeType::Couple)
         .export_values();
 
+    py::class_<BiologicalAttenuationLayer>(
+        module, "BiologicalAttenuationLayer")
+        .def(py::init<>())
+        .def_readwrite("Z1", &BiologicalAttenuationLayer::Z1)
+        .def_readwrite("Z2", &BiologicalAttenuationLayer::Z2)
+        .def_readwrite("f0", &BiologicalAttenuationLayer::f0)
+        .def_readwrite("Q", &BiologicalAttenuationLayer::Q)
+        .def_readwrite("a0", &BiologicalAttenuationLayer::a0);
     py::class_<Atten_Mode>(module, "Atten_Mode")
         .def(py::init<>())
         .def_readwrite("attnUnit", &Atten_Mode::attnUnit)
-        .def_readwrite("absModel", &Atten_Mode::absModel);
+        .def_readwrite("absModel", &Atten_Mode::absModel)
+        .def_readwrite(
+            "biologicalLayers",
+            &Atten_Mode::biologicalLayers);
     py::class_<HSInfo>(module, "HSInfo")
         .def(py::init<>())
         .def_readwrite("alphaR", &HSInfo::alphaR)

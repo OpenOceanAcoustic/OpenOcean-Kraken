@@ -4,6 +4,7 @@
 #include "OpenOceanKrakenInterface.h"
 #include "pchipMod.h"
 #include "RefCoef.h"
+#include "run.h"
 #include "Scatter.h"
 #include "splinec.h"
 #include "sspMod.h"
@@ -13,6 +14,7 @@
 #include "EvaluateAD.h"
 #include "EvaluateCM.h"
 #include "MergeVectors.h"
+#include "env_in_out.hpp"
 #include "input_Freq.hpp"
 #include "input_reflcoef.hpp"
 #include "input_sbp.hpp"
@@ -29,6 +31,8 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <sstream>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -40,6 +44,7 @@ namespace OpenOceanKraken
 namespace fs = std::filesystem;
 using OpenOceanKraken::Atten_Mode;
 using OpenOceanKraken::AttenuationUnit;
+using OpenOceanKraken::BiologicalAttenuationLayer;
 using OpenOceanKraken::BCImpedance;
 using OpenOceanKraken::BC_Mode;
 using OpenOceanKraken::CoherenceType;
@@ -60,6 +65,7 @@ using OpenOceanKraken::InternalReflectionCoefInfo;
 using OpenOceanKraken::KupIng;
 using OpenOceanKraken::Media_Mode;
 using OpenOceanKraken::ModeType;
+using OpenOceanKraken::MaxBioLayers;
 using OpenOceanKraken::OceanAbsorptionModel;
 using OpenOceanKraken::OOK_output;
 using OpenOceanKraken::OOK_parameters;
@@ -73,6 +79,7 @@ using OpenOceanKraken::SSP_Mode;
 using OpenOceanKraken::TridMtx;
 using OpenOceanKraken::VSpline;
 using OpenOceanKraken::addOceanAbsorption;
+using OpenOceanKraken::attenuationModesEqual;
 using OpenOceanKraken::field;
 using OpenOceanKraken::fprime_interior;
 using OpenOceanKraken::fprime_left_end;
@@ -87,9 +94,11 @@ using OpenOceanKraken::input_Sz_Rz_RR;
 using OpenOceanKraken::outputBase;
 using OpenOceanKraken::paramsBase;
 using OpenOceanKraken::parseAttenuation;
+using OpenOceanKraken::read_env_file;
 using OpenOceanKraken::read_refCoef_file;
 using OpenOceanKraken::spline;
 using OpenOceanKraken::ssp::Range_Independent_Area;
+using OpenOceanKraken::validateAttenuationMode;
 namespace Util = OpenOceanKraken::Util;
 
 namespace
@@ -137,6 +146,294 @@ namespace
             test.require(ssp.NPts.size() == ssp.NMedia, case_name + ": NPts size mismatch");
             test.require(ssp.NMesh.size() == ssp.NMedia, case_name + ": NMesh size mismatch");
             test.require(ssp.alphaR.size() == ssp.rho.size(), case_name + ": alphaR/rho size mismatch");
+        }
+    }
+
+    std::string biological_env_text(
+        const std::string &top_option,
+        const std::string &biological_block)
+    {
+        std::ostringstream out;
+        out << "'Biological ENV test'\n"
+            << "1000.0\n"
+            << "1\n"
+            << "'" << top_option << "'\n"
+            << biological_block;
+        if (top_option.size() > 1 && top_option[1] == 'A')
+            out << "0.0 1450.0 0.0 1.0 0.0 0.0 /\n";
+        out << "1000 0.0 100.0\n"
+            << "0.0 1500.0 /\n"
+            << "100.0 1500.0 /\n"
+            << "'A' 0.0\n"
+            << "100.0 1600.0 0.0 1.5 0.0 /\n"
+            << "1400.0 20000.0\n"
+            << "10.0\n"
+            << "1\n"
+            << "50.0 /\n"
+            << "1\n"
+            << "50.0 /\n";
+        return out.str();
+    }
+
+    const char *single_profile_flp =
+        "/,\n"
+        "'RA'\n"
+        "1,\n"
+        "1\n"
+        "0.0 /\n"
+        "3\n"
+        "1.0 5.0 10.0 /\n"
+        "1\n"
+        "50.0 /\n"
+        "1\n"
+        "50.0 /\n"
+        "1\n"
+        "0.0 /\n";
+
+    void write_text(const fs::path &path, const std::string &text)
+    {
+        std::ofstream stream(path);
+        stream << text;
+        if (!stream)
+            throw std::runtime_error("cannot write test fixture " + path.string());
+    }
+
+    class ScopedTemporaryDirectory
+    {
+    public:
+        explicit ScopedTemporaryDirectory(fs::path path)
+            : path_(std::move(path))
+        {
+            fs::remove_all(path_);
+            fs::create_directories(path_);
+        }
+
+        ~ScopedTemporaryDirectory()
+        {
+            std::error_code ignored;
+            fs::remove_all(path_, ignored);
+        }
+
+        const fs::path &path() const
+        {
+            return path_;
+        }
+
+    private:
+        fs::path path_;
+    };
+
+    void test_biological_env_transport(ook_test::TestRunner &test)
+    {
+        ScopedTemporaryDirectory root(
+            fs::temp_directory_path() / "ook_biological_env_transport");
+
+        struct EnvVariant
+        {
+            std::string name;
+            std::string option;
+            std::string block;
+            bool expected;
+        };
+
+        const std::vector<EnvVariant> variants = {
+            {"normal_top", "CVWB", "1\n20 40 1000 5 0.04\n", true},
+            {"top_halfspace", "CAWB", "1\n20 40 1000 5 0.04\n", true},
+            {"empty_layers", "CVWB", "0\n", true},
+            {"missing_count", "CVWB", "", false},
+            {"negative_count", "CVWB", "-1\n", false},
+            {"too_many", "CVWB", "201\n", false},
+            {"count_mismatch", "CVWB", "2\n20 40 1000 5 0.04\n", false},
+            {"four_fields", "CVWB", "1\n20 40 1000 5\n", false},
+            {"six_fields", "CVWB", "1\n20 40 1000 5 0.04 9\n", false},
+            {"non_numeric", "CVWB", "1\n20 40 bad 5 0.04\n", false},
+            {"invalid_depths", "CVWB", "1\n40 20 1000 5 0.04\n", false},
+            {"unknown_option", "CVWX", "", false},
+        };
+
+        for (const auto &variant : variants)
+        {
+            const fs::path env_path = root.path() / (variant.name + ".env");
+            fs::path flp_path = env_path;
+            flp_path.replace_extension(".flp");
+            write_text(env_path, biological_env_text(variant.option, variant.block));
+            write_text(flp_path, single_profile_flp);
+
+            Interface iface;
+            if (variant.expected)
+            {
+                test.require(iface.from_env(env_path.string()),
+                             variant.name + ": Biological ENV must load");
+                const auto &mode = iface.getParams_const().AttenUnit;
+                test.require(mode.attnUnit == AttenuationUnit::MODE_W_db_per_lambda,
+                             variant.name + ": attenuation unit mismatch");
+                test.require(mode.absModel == OceanAbsorptionModel::Biological,
+                             variant.name + ": Biological model mismatch");
+                if (variant.block == "0\n")
+                {
+                    test.require(mode.biologicalLayers.empty(),
+                                 variant.name + ": empty Biological layer set mismatch");
+                }
+                else
+                {
+                    test.require(mode.biologicalLayers.size() == 1,
+                                 variant.name + ": Biological layer count mismatch");
+                    const auto &layer = mode.biologicalLayers.front();
+                    test.requireNear(layer.Z1, 20.0, 1.0e-12,
+                                     variant.name + ": Biological Z1 mismatch");
+                    test.requireNear(layer.Z2, 40.0, 1.0e-12,
+                                     variant.name + ": Biological Z2 mismatch");
+                    test.requireNear(layer.f0, 1000.0, 1.0e-12,
+                                     variant.name + ": Biological f0 mismatch");
+                    test.requireNear(layer.Q, 5.0, 1.0e-12,
+                                     variant.name + ": Biological Q mismatch");
+                    test.requireNear(layer.a0, 0.04, 1.0e-12,
+                                     variant.name + ": Biological a0 mismatch");
+                }
+                if (variant.option[1] == 'A')
+                {
+                    test.requireNear(iface.getParams_const().sspInput[0].HSTop.alphaR,
+                                     1450.0, 1.0e-12,
+                                     variant.name + ": top half-space must follow Biological block");
+                }
+            }
+            else
+            {
+                Atten_Mode thorpe;
+                thorpe.absModel = OceanAbsorptionModel::Thorpe;
+                iface.set_AttenUnit(thorpe);
+                test.require(!iface.from_env(env_path.string()),
+                             variant.name + ": invalid Biological ENV must fail");
+                test.require(attenuationModesEqual(
+                                 iface.getParams_const().AttenUnit, thorpe),
+                             variant.name + ": failed ENV import must preserve attenuation mode");
+            }
+        }
+
+        const std::string one_layer = "1\n20 40 1000 5 0.04\n";
+        const std::string two_layers =
+            "2\n20 40 1000 5 0.04\n50 80 2000 6 0.05\n";
+        const fs::path profiles_path = root.path() / "profiles.env";
+        write_text(profiles_path,
+                   biological_env_text("CVWB", one_layer) +
+                       biological_env_text("CVWB", one_layer));
+        OOK_parameters matching_profiles;
+        test.require(read_env_file(profiles_path.string(), matching_profiles),
+                     "identical Biological ENV profiles must load");
+        test.require(matching_profiles.sspInput.size() == 2,
+                     "identical Biological ENV profiles must retain both SSPs");
+        test.require(matching_profiles.AttenUnit.absModel ==
+                         OceanAbsorptionModel::Biological,
+                     "identical Biological ENV profiles must retain Biological mode");
+
+        struct InconsistentProfiles
+        {
+            std::string name;
+            std::string first_option;
+            std::string first_block;
+            std::string second_option;
+            std::string second_block;
+        };
+
+        const std::vector<InconsistentProfiles> inconsistent_profiles = {
+            {"unit", "CVWB", one_layer, "CVMB", one_layer},
+            {"model", "CVWB", one_layer, "CVWT", ""},
+            {"layer_count", "CVWB", one_layer, "CVWB", two_layers},
+            {"layer_field", "CVWB", two_layers, "CVWB",
+             "2\n20 40 1000 5 0.04\n50 80 2000 6 0.06\n"},
+            {"layer_order", "CVWB", two_layers, "CVWB",
+             "2\n50 80 2000 6 0.05\n20 40 1000 5 0.04\n"},
+        };
+
+        for (const auto &variant : inconsistent_profiles)
+        {
+            const fs::path env_path = root.path() /
+                                      ("inconsistent_" + variant.name + ".env");
+            write_text(env_path,
+                       biological_env_text(variant.first_option, variant.first_block) +
+                           biological_env_text(variant.second_option, variant.second_block));
+            OOK_parameters parsed;
+            test.require(!read_env_file(env_path.string(), parsed),
+                         variant.name + ": inconsistent attenuation profiles must fail");
+        }
+    }
+
+    void test_singleton_mode_position_interpolation(
+        ook_test::TestRunner &test)
+    {
+        ScopedTemporaryDirectory root(
+            fs::temp_directory_path() / "ook_singleton_mode_position");
+        const fs::path env_path = root.path() / "singleton.env";
+        fs::path flp_path = env_path;
+        flp_path.replace_extension(".flp");
+        write_text(env_path, biological_env_text("CVW", ""));
+        write_text(flp_path, single_profile_flp);
+
+        ThreadPool pool(1);
+        Interface iface(pool);
+        iface.setNumThreads(1);
+        test.require(
+            iface.from_env(env_path.string()),
+            "singleton ModePos ENV must load");
+
+        const auto &params = iface.getParams_const();
+        test.require(params.hasModePos, "ENV load must preserve ModePos");
+        test.require(
+            params.ModePos.Sz.size() == 1 &&
+                params.ModePos.Rz.size() == 1,
+            "singleton ModePos must contain one source and receiver depth");
+        test.requireNear(
+            params.ModePos.Sz(0), 50.0, 0.0,
+            "singleton ModePos source depth mismatch");
+        test.requireNear(
+            params.ModePos.Rz(0), 50.0, 0.0,
+            "singleton ModePos receiver depth mismatch");
+
+        iface.runEigen();
+        const auto &eigen = iface.getOutput_const().eigen[0];
+        test.require(eigen.M > 0, "singleton ModePos must produce modes");
+        test.require(
+            eigen.ModeZ.size() == 1 && eigen.PhiMode.cols() == 1,
+            "singleton ModePos must retain one interpolation column");
+        for (int mode = 0; mode < eigen.M; ++mode)
+        {
+            const auto psi_s = eigen.PsiS(mode, 0);
+            const auto psi_r = eigen.PsiR(mode, 0);
+            const auto phi = eigen.PhiMode(mode, 0);
+            const auto dpsi_s = eigen.dPsidzS(mode, 0);
+            const auto dpsi_r = eigen.dPsidzR(mode, 0);
+            test.require(
+                std::isfinite(psi_s.real()) && std::isfinite(psi_s.imag()) &&
+                    std::isfinite(psi_r.real()) &&
+                    std::isfinite(psi_r.imag()),
+                "singleton ModePos eigenfunctions must be finite");
+            test.requireNear(
+                std::abs(psi_s - phi), 0.0, 1.0e-12,
+                "singleton source interpolation must use PhiMode col0");
+            test.requireNear(
+                std::abs(psi_r - phi), 0.0, 1.0e-12,
+                "singleton receiver interpolation must use PhiMode col0");
+            test.require(
+                std::isfinite(dpsi_s.real()) &&
+                    std::isfinite(dpsi_s.imag()) &&
+                    std::isfinite(dpsi_r.real()) &&
+                    std::isfinite(dpsi_r.imag()),
+                "singleton ModePos derivatives must be finite");
+            test.requireNear(
+                std::abs(dpsi_s - dpsi_r), 0.0, 1.0e-12,
+                "singleton source and receiver derivatives must agree");
+        }
+
+        iface.runField();
+        const auto pressure = iface.getPressureCopy();
+        test.require(
+            pressure.values.size() == 3,
+            "singleton fixture must retain three field ranges");
+        for (const auto value : pressure.values)
+        {
+            test.require(
+                std::isfinite(value.real()) && std::isfinite(value.imag()),
+                "singleton ModePos field must be finite");
         }
     }
 
@@ -348,8 +645,33 @@ namespace
         test.require(parseAttenuation(100.0, 100.0, 0.2, 200.0, 2.0, 1500.0, unit(AttenuationUnit::MODE_Q_Quality_Factor)) > 0.0, "Q attenuation must be positive");
         test.requireNear(parseAttenuation(100.0, 100.0, 0.0, 200.0, 2.0, 1500.0, unit(AttenuationUnit::MODE_Q_Quality_Factor)), 0.0, 1.0e-12, "Q attenuation zero-alpha guard");
         test.require(parseAttenuation(100.0, 100.0, 0.2, 200.0, 2.0, 1500.0, unit(AttenuationUnit::MODE_L_params_lose)) > 0.0, "L attenuation must be positive");
-        test.require(addOceanAbsorption(0.0, 1000.0, unit(AttenuationUnit::MODE_W_db_per_lambda, OceanAbsorptionModel::Thorpe)) > 0.0, "Thorpe absorption must be positive");
-        test.require(addOceanAbsorption(0.0, 1000.0, unit(AttenuationUnit::MODE_W_db_per_lambda, OceanAbsorptionModel::FrancGarr)) > 0.0, "Franc-Garr absorption must be positive");
+        test.require(addOceanAbsorption(0.0, 0.0, 1000.0, unit(AttenuationUnit::MODE_W_db_per_lambda, OceanAbsorptionModel::Thorpe)) > 0.0, "Thorpe absorption must be positive");
+        test.require(addOceanAbsorption(0.0, 0.0, 1000.0, unit(AttenuationUnit::MODE_W_db_per_lambda, OceanAbsorptionModel::FrancGarr)) > 0.0, "Franc-Garr absorption must be positive");
+
+        Atten_Mode biological;
+        biological.absModel = OceanAbsorptionModel::Biological;
+        biological.biologicalLayers = {{20.0, 40.0, 1000.0, 5.0, 0.04}};
+
+        constexpr double expected_np_per_m = 1.0 / 8685.8896;
+        test.requireNear(addOceanAbsorption(0.0, 20.0, 1000.0, biological), expected_np_per_m, 1.0e-15, "lower boundary must be included");
+        test.requireNear(addOceanAbsorption(0.0, 30.0, 1000.0, biological), expected_np_per_m, 1.0e-15, "layer interior mismatch");
+        test.requireNear(addOceanAbsorption(0.0, 40.0, 1000.0, biological), expected_np_per_m, 1.0e-15, "upper boundary must be included");
+        test.requireNear(addOceanAbsorption(0.0, 30.0, 500.0, biological), 5.0942148298338349e-7, 1.0e-18, "below-resonance f=500 Biological attenuation must use the squared frequency ratio");
+        test.requireNear(addOceanAbsorption(0.0, 30.0, 2000.0, biological), 7.64343602683782e-6, 1.0e-18, "above-resonance f=2000 Biological attenuation must use the squared frequency ratio");
+        test.requireNear(addOceanAbsorption(0.0, 19.999, 1000.0, biological), 0.0, 1.0e-15, "point below layer must be excluded");
+        test.requireNear(addOceanAbsorption(0.0, 40.001, 1000.0, biological), 0.0, 1.0e-15, "point above layer must be excluded");
+
+        Atten_Mode empty_biological = biological;
+        empty_biological.biologicalLayers.clear();
+        test.requireNear(addOceanAbsorption(0.25, 30.0, 1000.0, empty_biological), 0.25, 0.0, "empty Biological layers must add no attenuation");
+
+        Atten_Mode zero_thickness = biological;
+        zero_thickness.biologicalLayers = {{30.0, 30.0, 1000.0, 5.0, 0.04}, {20.0, 40.0, 1000.0, 5.0, 0.0}};
+        test.requireNear(addOceanAbsorption(0.0, 30.0, 1000.0, zero_thickness), expected_np_per_m, 1.0e-15, "zero-thickness layers are valid and a0 zero adds nothing");
+
+        Atten_Mode overlapping = biological;
+        overlapping.biologicalLayers.push_back({30.0, 50.0, 1000.0, 5.0, 0.04});
+        test.requireNear(addOceanAbsorption(0.25, 30.0, 1000.0, overlapping), 0.25 + 2.0 * expected_np_per_m, 1.0e-15, "overlapping layers and shared endpoints must accumulate");
 
         double z = 0.0;
         double c = 1500.0;
@@ -360,6 +682,37 @@ namespace
         double ft = 200.0;
         auto crci = CRCI(z, c, alpha, freq, freq0, unit(AttenuationUnit::MODE_W_db_per_lambda), beta, ft);
         test.requireNear(std::real(crci), 1500.0, 1.0e-12, "CRCI real component mismatch");
+
+        double bio_z = 30.0;
+        double bio_c = 1500.0;
+        double bio_alpha = 0.0;
+        double bio_freq = 1000.0;
+        double bio_freq0 = 1000.0;
+        double bio_beta = 1.0;
+        double bio_ft = 2000.0;
+        const auto bio_crci = CRCI(bio_z, bio_c, bio_alpha, bio_freq, bio_freq0, biological, bio_beta, bio_ft);
+        test.requireNear(std::imag(bio_crci), 0.041227627617643738, 1.0e-12, "weak-loss Biological complex sound speed mismatch");
+        test.requireThrows([&] { double zero_frequency = 0.0; CRCI(bio_z, bio_c, bio_alpha, zero_frequency, bio_freq0, biological, bio_beta, bio_ft); }, "zero attenuation frequency must fail");
+
+        Atten_Mode overflowing = biological;
+        overflowing.biologicalLayers[0].f0 = std::numeric_limits<double>::max();
+        test.requireThrows([&] { addOceanAbsorption(0.0, 30.0, 1000.0, overflowing); }, "non-finite Biological denominator must fail");
+        overflowing = biological;
+        overflowing.biologicalLayers[0].a0 = std::numeric_limits<double>::max();
+        test.requireThrows([&] { addOceanAbsorption(0.0, 30.0, 1000.0, overflowing); }, "non-finite Biological contribution must fail");
+
+        Atten_Mode fatal_loss = biological;
+        fatal_loss.biologicalLayers[0].a0 = 1.0e8;
+        test.requireThrows([&] { CRCI(bio_z, bio_c, bio_alpha, bio_freq, bio_freq0, fatal_loss, bio_beta, bio_ft); }, "imaginary sound speed greater than real sound speed must fail");
+        double fluid_shear_speed = 0.0;
+        const auto fluid_shear = CRCI(bio_z, fluid_shear_speed, bio_alpha, bio_freq, bio_freq0, biological, bio_beta, bio_ft);
+        test.requireNear(std::abs(fluid_shear), 0.0, 0.0, "fluid cS zero must remain valid");
+
+        Interface biological_instance;
+        Interface default_instance;
+        biological_instance.set_AttenUnit(biological);
+        test.require(biological_instance.getParams_const().AttenUnit.absModel == OceanAbsorptionModel::Biological, "first instance must retain Biological mode");
+        test.require(default_instance.getParams_const().AttenUnit.absModel == OceanAbsorptionModel::None && default_instance.getParams_const().AttenUnit.biologicalLayers.empty(), "Biological state must not leak between Interface instances");
 
         Eigen::Matrix<ReflectionCoef, 1, Eigen::Dynamic> table(3);
         table(0).theta = 0.0;
@@ -458,6 +811,65 @@ namespace
         trid.B4.setConstant(0.4);
         trid.rho.setConstant(1.2);
         return trid;
+    }
+
+    void test_biological_attenuation_validation(ook_test::TestRunner &test)
+    {
+        Atten_Mode valid;
+        valid.absModel = OceanAbsorptionModel::Biological;
+        valid.biologicalLayers = {{20.0, 40.0, 1000.0, 5.0, 0.04}};
+        validateAttenuationMode(valid);
+
+        Atten_Mode empty = valid;
+        empty.biologicalLayers.clear();
+        validateAttenuationMode(empty);
+
+        Atten_Mode copy = valid;
+        test.require(attenuationModesEqual(valid, copy),
+                     "identical Biological modes must compare equal");
+        std::swap(copy.biologicalLayers[0].Z1, copy.biologicalLayers[0].Z2);
+        test.require(!attenuationModesEqual(valid, copy),
+                     "layer field or order changes must compare unequal");
+
+        auto require_invalid = [&](Atten_Mode candidate, const std::string &name) {
+            test.requireThrows(
+                [&] { validateAttenuationMode(candidate); },
+                name + " must be rejected");
+        };
+
+        Atten_Mode candidate = valid;
+        candidate.biologicalLayers[0].Z1 =
+            std::numeric_limits<double>::quiet_NaN();
+        require_invalid(candidate, "non-finite Z1");
+        candidate = valid;
+        candidate.biologicalLayers[0].Z1 = 41.0;
+        require_invalid(candidate, "Z1 greater than Z2");
+        candidate = valid;
+        candidate.biologicalLayers[0].f0 = 0.0;
+        require_invalid(candidate, "non-positive f0");
+        candidate = valid;
+        candidate.biologicalLayers[0].Q = 0.0;
+        require_invalid(candidate, "non-positive Q");
+        candidate = valid;
+        candidate.biologicalLayers[0].a0 = -0.01;
+        require_invalid(candidate, "negative a0");
+        candidate = valid;
+        candidate.biologicalLayers.resize(MaxBioLayers + 1, valid.biologicalLayers[0]);
+        require_invalid(candidate, "more than 200 layers");
+        candidate = valid;
+        candidate.absModel = OceanAbsorptionModel::Thorpe;
+        require_invalid(candidate, "non-Biological model with layers");
+
+        Interface iface;
+        Atten_Mode original;
+        original.absModel = OceanAbsorptionModel::Thorpe;
+        iface.set_AttenUnit(original);
+        test.requireThrows(
+            [&] { iface.set_AttenUnit(candidate); },
+            "invalid C++ setter input must throw");
+        test.require(
+            attenuationModesEqual(iface.getParams_const().AttenUnit, original),
+            "failed C++ setter must preserve the original attenuation mode");
     }
 
     void test_boundary_and_scatter_helpers(ook_test::TestRunner &test)
@@ -627,6 +1039,78 @@ namespace
         eigen.dPsidzR << std::complex<double>(0.1, 0.0), std::complex<double>(0.2, 0.0),
             std::complex<double>(0.3, 0.0), std::complex<double>(0.4, 0.0);
         return eigen;
+    }
+
+    void test_field_worker_honors_mode_limit(
+        ook_test::TestRunner &test)
+    {
+        auto params = minimal_field_params();
+        params.is_Velocity = false;
+        params.SBP.isSet = false;
+        params.MLimit = 1;
+        params.Pos.Ro.setZero();
+
+        auto eigen = minimal_eigen();
+        auto limited_eigen = eigen;
+        limited_eigen.M = 1;
+        std::vector<std::complex<float>> expected(4, {0.0f, 0.0f});
+        std::vector<std::complex<float>> unlimited(4, {0.0f, 0.0f});
+        std::vector<std::complex<float>> actual(4, {0.0f, 0.0f});
+        Evaluate(
+            limited_eigen, params, 0, 0, expected.data(), nullptr, nullptr);
+        Evaluate(eigen, params, 0, 0, unlimited.data(), nullptr, nullptr);
+
+        bool second_mode_contributes = false;
+        for (size_t index = 0; index < expected.size(); ++index)
+        {
+            if (std::abs(unlimited[index] - expected[index]) > 1.0e-5f)
+            {
+                second_mode_contributes = true;
+            }
+        }
+        test.require(
+            second_mode_contributes,
+            "FieldWorker MLimit fixture must distinguish the second mode");
+
+        OOK_output output{};
+        output.eigen = &eigen;
+        output.u_AllSources = actual.data();
+        OpenOceanKraken::FieldWorker(0, params, output);
+
+        for (size_t index = 0; index < actual.size(); ++index)
+        {
+            test.require(
+                std::isfinite(actual[index].real()) &&
+                    std::isfinite(actual[index].imag()),
+                "FieldWorker MLimit pressure must be finite");
+            test.requireNear(
+                std::abs(actual[index] - expected[index]), 0.0, 2.0e-5,
+                "FieldWorker MLimit=1 must sum only the first mode");
+        }
+        test.require(
+            output.eigen[0].M == 2,
+            "FieldWorker must not change the solved/exported mode count");
+    }
+
+    void test_field_worker_rejects_nonpositive_mode_limit(
+        ook_test::TestRunner &test)
+    {
+        auto params = minimal_field_params();
+        params.is_Velocity = false;
+        params.SBP.isSet = false;
+        params.MLimit = 0;
+        auto eigen = minimal_eigen();
+        std::vector<std::complex<float>> actual(4, {0.0f, 0.0f});
+        OOK_output output{};
+        output.eigen = &eigen;
+        output.u_AllSources = actual.data();
+
+        test.requireThrows(
+            [&]() { OpenOceanKraken::FieldWorker(0, params, output); },
+            "FieldWorker must preserve Evaluate's no-modes guard");
+        test.require(
+            output.eigen[0].M == 2,
+            "rejected MLimit must not change the solved/exported mode count");
     }
 
     void test_evaluate_ad_identical_profiles_matches_single_profile(ook_test::TestRunner &test)
@@ -912,6 +1396,39 @@ namespace
         bot.alphaR = 1600.0;
         OpenOceanKraken::ssp::UpdateHSLoss(freq, freq0, unit, top, bot);
         test.require(std::real(top.cp) > 0.0 && std::real(bot.cp) > 0.0, "UpdateHSLoss must update half-spaces");
+
+        Atten_Mode biological;
+        biological.absModel = OceanAbsorptionModel::Biological;
+        biological.biologicalLayers = {{0.0, std::numeric_limits<double>::max(), 1000.0, 5.0, 0.04}};
+        HSInfo bio_top = top;
+        HSInfo bio_bottom = bot;
+        HSInfo baseline_top = top;
+        HSInfo baseline_bottom = bot;
+        Atten_Mode no_volume;
+        OpenOceanKraken::ssp::UpdateHSLoss(freq, freq0, biological, bio_top, bio_bottom);
+        OpenOceanKraken::ssp::UpdateHSLoss(freq, freq0, no_volume, baseline_top, baseline_bottom);
+        test.requireNear(std::imag(bio_top.cp), std::imag(baseline_top.cp), 1.0e-15, "top half-space must exclude Biological attenuation");
+        test.requireNear(std::imag(bio_bottom.cp), std::imag(baseline_bottom.cp), 1.0e-15, "bottom half-space must exclude Biological attenuation");
+
+        auto bio_ssp = ssp_fixture();
+        auto baseline_ssp = ssp_fixture();
+        const Eigen::Index stored_points = bio_ssp.z.size();
+        const std::complex<double> nan(std::numeric_limits<double>::quiet_NaN(), 0.0);
+        bio_ssp.cpCoef.setConstant(nan);
+        bio_ssp.csCoef.setConstant(nan);
+        bio_ssp.cpSpline.setConstant(nan);
+        bio_ssp.csSpline.setConstant(nan);
+        Atten_Mode whole_water_bio;
+        whole_water_bio.absModel = OceanAbsorptionModel::Biological;
+        whole_water_bio.biologicalLayers = {{0.0, 100.0, 50.0, 5.0, 0.04}};
+        Atten_Mode no_volume_ssp;
+        OpenOceanKraken::ssp::UpdateSSPLoss(50.0, 50.0, baseline_ssp.NMedia, SSP_Mode::MODE_P_cPCHIP, no_volume_ssp, baseline_ssp);
+        OpenOceanKraken::ssp::UpdateSSPLoss(50.0, 50.0, bio_ssp.NMedia, SSP_Mode::MODE_P_cPCHIP, whole_water_bio, bio_ssp);
+        test.require(bio_ssp.z.size() == stored_points, "Biological attenuation must not insert SSP boundary nodes");
+        test.require(std::imag(bio_ssp.cp(1)) > std::imag(baseline_ssp.cp(1)) && std::imag(bio_ssp.cs(1)) > std::imag(baseline_ssp.cs(1)), "P and non-zero S speed must use the same Biological mode");
+        test.require(bio_ssp.cpCoef.allFinite() && bio_ssp.csCoef.allFinite(), "PCHIP coefficients must be rebuilt after Biological loss");
+        OpenOceanKraken::ssp::UpdateSSPLoss(50.0, 50.0, bio_ssp.NMedia, SSP_Mode::MODE_S_cCubic, whole_water_bio, bio_ssp);
+        test.require(bio_ssp.cpSpline.allFinite() && bio_ssp.csSpline.allFinite(), "spline coefficients must be rebuilt after Biological loss");
 
         OOK_parameters params = minimal_field_params();
         EigenParams eigen = minimal_eigen();
@@ -1214,13 +1731,24 @@ namespace
         OpenOceanKraken::MergeVectors(merge_x, merge_y, merged, merged_count, ix, iy);
         test.require(merged_count == 1 && ix[0] == 0 && iy[0] == 0, "MergeVectors near-duplicate x path mismatch");
 
-        Eigen::VectorXd one(1), tab(1), weights(1);
-        Eigen::VectorXi weight_indices(1);
+        Eigen::VectorXd one(1), tab(3), weights(3);
+        Eigen::VectorXi weight_indices(3);
         one << 5.0;
-        tab << 5.0;
-        OpenOceanKraken::Weight_dble(one, 1, tab, 1, weights, weight_indices);
-        test.requireNear(weights[0], 0.0, 1.0e-12, "Weight_dble singleton weight mismatch");
-        test.require(weight_indices[0] == 0, "Weight_dble singleton index mismatch");
+        tab << 4.0, 5.0, 6.0;
+        weights.setConstant(123.0);
+        weight_indices.setConstant(-7);
+        OpenOceanKraken::Weight_dble(one, 1, tab, 3, weights, weight_indices);
+        for (int query = 0; query < 3; ++query)
+        {
+            test.requireNear(
+                weights[query], 0.0, 1.0e-12,
+                "Weight_dble singleton weight mismatch at query " +
+                    std::to_string(query));
+            test.require(
+                weight_indices[query] == 0,
+                "Weight_dble singleton index mismatch at query " +
+                    std::to_string(query));
+        }
     }
 
     void test_all_env_flp_cases(ook_test::TestRunner &test, const fs::path &test_root)
@@ -1282,6 +1810,13 @@ namespace
             Interface iface;
             const auto env_path = entry.path();
             const auto name = env_path.filename().string();
+            if (name == "option_default_chars.env")
+            {
+                test.require(!iface.from_env(env_path.string()),
+                             name + ": unknown fourth TOP OPTION character must fail");
+                ++parsed;
+                continue;
+            }
             test.require(iface.from_env(env_path.string()), name + ": option fixture from_env must succeed");
             const auto &params = iface.getParams_const();
             require_position_consistency(test, params, name);
@@ -1321,14 +1856,6 @@ namespace
                 test.require(params.modeType == ModeType::Couple, name + ": FLP C mode option mismatch");
                 test.require(params.coherenceType == CoherenceType::Incoherent, name + ": FLP I coherence option mismatch");
                 test.require(!params.SBP.isSet, name + ": FLP O option should leave SBP unset");
-            }
-            else if (name == "option_default_chars.env")
-            {
-                test.require(area.SSPType == SSP_Mode::MODE_C_cLinear, name + ": unknown SSP option should default to C");
-                test.require(area.HSTop.BC == BC_Mode::MODE_V_Vacuum, name + ": unknown top option should default to V");
-                test.require(area.HSBot.BC == BC_Mode::MODE_V_Vacuum, name + ": unknown bottom option should keep V");
-                test.require(params.AttenUnit.attnUnit == AttenuationUnit::MODE_W_db_per_lambda, name + ": unknown attenuation should default to W");
-                test.require(params.AttenUnit.absModel == OceanAbsorptionModel::None, name + ": unknown absorption should default to none");
             }
             else if (name == "option_cfw_top_file.env")
             {
@@ -1542,6 +2069,98 @@ namespace
         test.require(params.SSP.size() == params.sspInput.size(), "JSON params SSP conversion count mismatch");
 
         const auto base_json = OpenOcean_json::parse(params_iface.to_json_string());
+        test.require(
+            !base_json["AttenUnit"].contains("BiologicalLayers"),
+            "non-Biological JSON output must omit BiologicalLayers");
+
+        Atten_Mode biological;
+        biological.absModel = OceanAbsorptionModel::Biological;
+        biological.biologicalLayers = {
+            {10.0, 30.0, 1000.0, 5.0, 0.04},
+            {40.0, 60.0, 1200.0, 4.0, 0.02}};
+        params_iface.set_AttenUnit(biological);
+        const auto biological_json =
+            OpenOcean_json::parse(params_iface.to_json_string());
+        test.require(
+            biological_json["AttenUnit"]["OceanAbsorptionModel"] ==
+                "Biological",
+            "JSON must emit Biological model");
+        test.require(
+            biological_json["AttenUnit"]["BiologicalLayers"].size() == 2,
+            "JSON must preserve Biological layer count");
+        test.requireNear(
+            biological_json["AttenUnit"]["BiologicalLayers"][1]["f0"]
+                .get<double>(),
+            1200.0, 0.0, "JSON must preserve layer order and fields");
+
+        const fs::path biological_params_json =
+            fs::temp_directory_path() / "ook_biological_params_roundtrip.json";
+        test.require(
+            params_iface.to_json(biological_params_json.string()),
+            "Biological params must export to JSON");
+        Interface biological_params_copy;
+        test.require(
+            biological_params_copy.from_json(biological_params_json.string()),
+            "Biological params JSON must reload");
+        test.require(
+            attenuationModesEqual(
+                params_iface.getParams_const().AttenUnit,
+                biological_params_copy.getParams_const().AttenUnit),
+            "JSON must preserve every Biological layer field and order");
+        fs::remove(biological_params_json);
+
+        Atten_Mode empty_biological = biological;
+        empty_biological.biologicalLayers.clear();
+        params_iface.set_AttenUnit(empty_biological);
+        const auto empty_biological_json =
+            OpenOcean_json::parse(params_iface.to_json_string());
+        test.require(
+            empty_biological_json["AttenUnit"]["BiologicalLayers"].empty(),
+            "Biological JSON must preserve an empty layer array");
+        const fs::path empty_biological_path =
+            fs::temp_directory_path() / "ook_empty_biological_roundtrip.json";
+        write_text(empty_biological_path, empty_biological_json.dump(2));
+        Interface empty_biological_copy;
+        test.require(
+            empty_biological_copy.from_json(empty_biological_path.string()),
+            "empty Biological layer array must reload");
+        test.require(
+            attenuationModesEqual(
+                empty_biological,
+                empty_biological_copy.getParams_const().AttenUnit),
+            "empty Biological layer array must round-trip");
+        fs::remove(empty_biological_path);
+
+        const fs::path bio_roundtrip_root =
+            fs::temp_directory_path() / "ook_biological_env_json_roundtrip";
+        fs::create_directories(bio_roundtrip_root);
+        const fs::path valid_bio_env = bio_roundtrip_root / "case.env";
+        write_text(
+            valid_bio_env,
+            biological_env_text(
+                "CVWB", "1\n20 40 1000 5 0.04\n"));
+        write_text(bio_roundtrip_root / "case.flp", single_profile_flp);
+        Interface env_source;
+        test.require(
+            env_source.from_env(valid_bio_env.string()),
+            "Biological ENV must load before JSON round-trip");
+        const fs::path env_json =
+            fs::temp_directory_path() / "ook_biological_env_roundtrip.json";
+        test.require(
+            env_source.to_json(env_json.string()),
+            "Biological ENV must export to JSON");
+        Interface env_json_copy;
+        test.require(
+            env_json_copy.from_json(env_json.string()),
+            "Biological ENV-derived JSON must reload");
+        test.require(
+            attenuationModesEqual(
+                env_source.getParams_const().AttenUnit,
+                env_json_copy.getParams_const().AttenUnit),
+            "ENV to JSON must preserve every layer field and order");
+        fs::remove(env_json);
+        fs::remove_all(bio_roundtrip_root);
+
         auto expect_bad_json = [&](OpenOcean_json bad, const std::string &suffix) {
             const fs::path bad_path = fs::temp_directory_path() / ("ook_bad_json_" + suffix + ".json");
             {
@@ -1549,9 +2168,34 @@ namespace
                 bad_file << bad.dump(2);
             }
             Interface bad_iface;
+            Atten_Mode thorpe;
+            thorpe.absModel = OceanAbsorptionModel::Thorpe;
+            bad_iface.set_AttenUnit(thorpe);
             test.require(!bad_iface.from_json(bad_path.string()), "bad JSON variant must fail: " + suffix);
+            test.require(
+                attenuationModesEqual(
+                    bad_iface.getParams_const().AttenUnit, thorpe),
+                "failed JSON import must preserve Thorpe attenuation mode: " + suffix);
             fs::remove(bad_path);
         };
+
+        const fs::path non_biological_empty_path =
+            fs::temp_directory_path() / "ook_non_biological_empty_layers.json";
+        auto non_biological_empty = base_json;
+        non_biological_empty["AttenUnit"]["BiologicalLayers"] =
+            OpenOcean_json::array();
+        write_text(non_biological_empty_path, non_biological_empty.dump(2));
+        Interface non_biological_empty_copy;
+        test.require(
+            non_biological_empty_copy.from_json(non_biological_empty_path.string()),
+            "non-Biological JSON with empty BiologicalLayers must reload");
+        const auto normalized_non_biological_json = OpenOcean_json::parse(
+            non_biological_empty_copy.to_json_string());
+        test.require(
+            !normalized_non_biological_json["AttenUnit"].contains(
+                "BiologicalLayers"),
+            "non-Biological JSON must normalize away empty BiologicalLayers");
+        fs::remove(non_biological_empty_path);
 
         auto bad = base_json;
         bad["AttenUnit"]["AttenuationUnit"] = 12;
@@ -1574,6 +2218,32 @@ namespace
         bad = base_json;
         bad["sspInput"][0]["layers"][0]["Material"] = 12;
         expect_bad_json(bad, "media_type");
+
+        bad = biological_json;
+        bad["AttenUnit"].erase("BiologicalLayers");
+        expect_bad_json(bad, "biological_layers_missing");
+        bad = biological_json;
+        bad["AttenUnit"]["BiologicalLayers"] = 12;
+        expect_bad_json(bad, "biological_layers_type");
+        bad = biological_json;
+        bad["AttenUnit"]["BiologicalLayers"][0].erase("f0");
+        expect_bad_json(bad, "biological_layer_field_missing");
+        bad = biological_json;
+        bad["AttenUnit"]["BiologicalLayers"][0]["f0"] = "not-a-number";
+        expect_bad_json(bad, "biological_layer_field_type");
+        bad = biological_json;
+        bad["AttenUnit"]["BiologicalLayers"] = OpenOcean_json::array();
+        for (int i = 0; i <= MaxBioLayers; ++i)
+        {
+            bad["AttenUnit"]["BiologicalLayers"].push_back(
+                {{"Z1", 10.0}, {"Z2", 30.0}, {"f0", 1000.0},
+                 {"Q", 5.0}, {"a0", 0.04}});
+        }
+        expect_bad_json(bad, "biological_layers_over_limit");
+        bad = base_json;
+        bad["AttenUnit"]["BiologicalLayers"] =
+            biological_json["AttenUnit"]["BiologicalLayers"];
+        expect_bad_json(bad, "non_biological_layers_nonempty");
         fs::remove(json_path);
     }
 
@@ -1918,7 +2588,10 @@ int main(int argc, char **argv)
         test_top_bottom_line(test);
         test_interpolation_helpers(test);
         test_attenuation_and_reflection_helpers(test);
+        test_biological_attenuation_validation(test);
         test_boundary_and_scatter_helpers(test);
+        test_field_worker_rejects_nonpositive_mode_limit(test);
+        test_field_worker_honors_mode_limit(test);
         test_evaluate_ad_identical_profiles_matches_single_profile(test);
         test_evaluate_ad_modes_and_guards(test);
         test_evaluate_cm_identical_profiles_preserve_amplitude(test);
@@ -1926,6 +2599,8 @@ int main(int argc, char **argv)
         test_ssp_field_and_file_helpers(test);
         test_input_module_helpers(test);
         test_util_helpers(test);
+        test_singleton_mode_position_interpolation(test);
+        test_biological_env_transport(test);
         test_all_env_flp_cases(test, env_root);
         test_option_fixture_cases(test, option_root);
         test_kraken_reflection_option_guards(test, env_root);

@@ -559,7 +559,6 @@ namespace OpenOceanKraken
     bool Interface::from_json(const std::string &jsonPath) // 从json读取参数
     {
 
-        auto &params = this->getParams();
         std::ifstream ifs(jsonPath);
         if (!ifs.is_open())
         {
@@ -570,8 +569,10 @@ namespace OpenOceanKraken
         {
             OpenOcean_json json;
             ifs >> json;
-            params = json.get<OOK_parameters>();
-            this->set_SSP(params.sspInput);
+            OOK_parameters candidate = json.get<OOK_parameters>();
+            this->impl->INPUT_SSP.set_SSP(
+                candidate, candidate.sspInput);
+            this->getParams() = std::move(candidate);
             markDirty(DirtyKind::All);
             return true;
         }
@@ -593,15 +594,26 @@ namespace OpenOceanKraken
 
     bool Interface::from_env(const std::string &envPath)
     {
-        auto &params = this->getParams();
-        if (!read_env_file(envPath, params))
-            return false;
-        if (!read_flp_file(envPath, params))
+        try
         {
+            OOK_parameters candidate;
+            if (!read_env_file(envPath, candidate))
+                return false;
+            if (!read_flp_file(envPath, candidate))
+                return false;
+
+            this->impl->INPUT_SSP.set_SSP(
+                candidate, candidate.sspInput);
+            this->getParams() = std::move(candidate);
+            markDirty(DirtyKind::All);
+            return true;
+        }
+        catch (const std::exception &e)
+        {
+            std::cerr << "Error: Failed to parse ENV file "
+                      << envPath << ": " << e.what() << std::endl;
             return false;
         }
-        this->set_SSP(params.sspInput);// 将sspInput转换到SSP中
-        return true;
     }
 
     std::complex<float> *Interface::get_u(int srcIndex) // 获取某个声源复声压指针

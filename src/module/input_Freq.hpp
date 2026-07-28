@@ -73,8 +73,7 @@ namespace OpenOceanKraken
             // params.RProf[0] = 0;
             params.SourceType = Source_Mode::MODE_R_Point;
             params.runMode = Run_Mode::MODE_B_Both;
-            params.AttenUnit.absModel = OceanAbsorptionModel::None;
-            params.AttenUnit.attnUnit = AttenuationUnit::MODE_W_db_per_lambda;
+            params.AttenUnit = Atten_Mode{};
             params.cLow = 1500;
             params.cHigh = 1600;
             params.Rmax = 50e3;

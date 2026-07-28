@@ -1,5 +1,6 @@
 #include "json_eigen.hpp"
 #include "OpenOceanKrakenParams.h"
+#include "AttenMod.h"
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -60,6 +61,88 @@ namespace OpenOceanKraken
             tokens.push_back(token);
         }
         return tokens;
+    }
+
+    static long long parse_strict_integer(
+        const std::string &token,
+        const std::string &context)
+    {
+        std::size_t consumed = 0;
+        long long value = 0;
+        try
+        {
+            value = std::stoll(token, &consumed);
+        }
+        catch (const std::exception &)
+        {
+            throw std::runtime_error(context + " must be an integer.");
+        }
+        if (consumed != token.size())
+            throw std::runtime_error(context + " must be an integer.");
+        return value;
+    }
+
+    static double parse_strict_double(
+        const std::string &token,
+        const std::string &context)
+    {
+        std::size_t consumed = 0;
+        double value = 0.0;
+        try
+        {
+            value = std::stod(token, &consumed);
+        }
+        catch (const std::exception &)
+        {
+            throw std::runtime_error(context + " must be numeric.");
+        }
+        if (consumed != token.size())
+            throw std::runtime_error(context + " must be numeric.");
+        return value;
+    }
+
+    static std::vector<BiologicalAttenuationLayer> parse_biological_layers(
+        const std::vector<std::string> &lines,
+        std::size_t &line_index)
+    {
+        if (line_index >= lines.size())
+            throw std::runtime_error(
+                "Biological attenuation layer count is missing.");
+
+        const auto count_tokens = fortran_tokens(lines[line_index++]);
+        if (count_tokens.size() != 1)
+            throw std::runtime_error(
+                "Biological attenuation layer count must contain one integer.");
+
+        const long long count = parse_strict_integer(
+            count_tokens[0], "NBioLayers");
+        if (count < 0 || count > static_cast<long long>(MaxBioLayers))
+            throw std::runtime_error(
+                "NBioLayers must be between 0 and 200.");
+
+        std::vector<BiologicalAttenuationLayer> layers;
+        layers.reserve(static_cast<std::size_t>(count));
+        for (long long i = 0; i < count; ++i)
+        {
+            if (line_index >= lines.size())
+                throw std::runtime_error(
+                    "BiologicalLayers[" + std::to_string(i) +
+                    "] record is missing.");
+            const auto tokens = fortran_tokens(lines[line_index++]);
+            if (tokens.size() != 5)
+                throw std::runtime_error(
+                    "BiologicalLayers[" + std::to_string(i) +
+                    "] must contain exactly five fields.");
+            const std::string prefix =
+                "BiologicalLayers[" + std::to_string(i) + "].";
+            layers.push_back({
+                parse_strict_double(tokens[0], prefix + "Z1"),
+                parse_strict_double(tokens[1], prefix + "Z2"),
+                parse_strict_double(tokens[2], prefix + "f0"),
+                parse_strict_double(tokens[3], prefix + "Q"),
+                parse_strict_double(tokens[4], prefix + "a0")});
+        }
+        return layers;
     }
 
     static std::vector<double> parse_numbers(const std::string &line)
@@ -569,6 +652,8 @@ namespace OpenOceanKraken
     {
         try
         {
+            Atten_Mode candidateAttenuation;
+
             // 初始化 sspInput[0] 和其内部的 layers[0]
             params.sspInput.resize(1);
             params.sspInput[0].Range = 0.0;
@@ -675,28 +760,28 @@ namespace OpenOceanKraken
                     switch (option3)
                     {
                     case 'W':
-                        params.AttenUnit.attnUnit = AttenuationUnit::MODE_W_db_per_lambda;
+                        candidateAttenuation.attnUnit = AttenuationUnit::MODE_W_db_per_lambda;
                         break;
                     case 'M':
-                        params.AttenUnit.attnUnit = AttenuationUnit::MODE_M_dB_per_m;
+                        candidateAttenuation.attnUnit = AttenuationUnit::MODE_M_dB_per_m;
                         break;
                     case 'N':
-                        params.AttenUnit.attnUnit = AttenuationUnit::MODE_N_Nepers_per_m;
+                        candidateAttenuation.attnUnit = AttenuationUnit::MODE_N_Nepers_per_m;
                         break;
                     case 'Q':
-                        params.AttenUnit.attnUnit = AttenuationUnit::MODE_Q_Quality_Factor;
+                        candidateAttenuation.attnUnit = AttenuationUnit::MODE_Q_Quality_Factor;
                         break;
                     case 'L':
-                        params.AttenUnit.attnUnit = AttenuationUnit::MODE_L_params_lose;
+                        candidateAttenuation.attnUnit = AttenuationUnit::MODE_L_params_lose;
                         break;
                     case 'F':
-                        params.AttenUnit.attnUnit = AttenuationUnit::MODE_F_dB_per_m_kHz;
+                        candidateAttenuation.attnUnit = AttenuationUnit::MODE_F_dB_per_m_kHz;
                         break;
                     case 'm':
-                        params.AttenUnit.attnUnit = AttenuationUnit::MODE_m_dB_per_m;
+                        candidateAttenuation.attnUnit = AttenuationUnit::MODE_m_dB_per_m;
                         break;
                     default:
-                        params.AttenUnit.attnUnit = AttenuationUnit::MODE_W_db_per_lambda;
+                        candidateAttenuation.attnUnit = AttenuationUnit::MODE_W_db_per_lambda;
                         break;
                     }
 
@@ -706,19 +791,25 @@ namespace OpenOceanKraken
                         switch (option4)
                         {
                         case 'T':
-                            params.AttenUnit.absModel = OceanAbsorptionModel::Thorpe;
+                            candidateAttenuation.absModel = OceanAbsorptionModel::Thorpe;
                             break;
                         case 'F':
-                            params.AttenUnit.absModel = OceanAbsorptionModel::FrancGarr;
+                            candidateAttenuation.absModel = OceanAbsorptionModel::FrancGarr;
+                            break;
+                        case 'B':
+                            candidateAttenuation.absModel = OceanAbsorptionModel::Biological;
+                            candidateAttenuation.biologicalLayers =
+                                parse_biological_layers(lines, line_idx);
                             break;
                         default:
-                            params.AttenUnit.absModel = OceanAbsorptionModel::None;
-                            break;
+                            throw std::runtime_error(
+                                std::string("Unknown top option letter in fourth position: ") +
+                                option4);
                         }
                     }
                     else
                     {
-                        params.AttenUnit.absModel = OceanAbsorptionModel::None;
+                        candidateAttenuation.absModel = OceanAbsorptionModel::None;
                     }
                 }
                 else
@@ -729,6 +820,9 @@ namespace OpenOceanKraken
             }
 
             // A模式表示顶部为声学/弹性半空间；紧接的下一行就是顶部材料参数，因此需要读取多一行
+            validateAttenuationMode(candidateAttenuation);
+            params.AttenUnit = std::move(candidateAttenuation);
+
             if (params.sspInput[0].HSTop.BC == BC_Mode::MODE_A_Half_space)
             {
                 if (line_idx >= lines.size())
@@ -1099,6 +1193,17 @@ namespace OpenOceanKraken
             OOK_parameters single_params;
             if (!parse_single_env(lines, line_idx, single_params, envPath))
             {
+                return false;
+            }
+
+            if (!params.sspInput.empty() &&
+                !attenuationModesEqual(
+                    params.AttenUnit, single_params.AttenUnit))
+            {
+                std::cerr
+                    << "ENV profiles must use identical attenuation unit, "
+                       "absorption model, Biological layer values and layer order."
+                    << std::endl;
                 return false;
             }
 

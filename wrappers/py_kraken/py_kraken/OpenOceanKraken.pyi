@@ -28,6 +28,7 @@ class OceanAbsorptionModel:
     None_: OceanAbsorptionModel
     Thorpe: OceanAbsorptionModel
     FrancGarr: OceanAbsorptionModel
+    Biological: OceanAbsorptionModel
 
 class BC_Mode:
     MODE_R_Rigid: BC_Mode
@@ -58,9 +59,18 @@ class ModeType:
     Adiabatic: ModeType
     Couple: ModeType
 
+class BiologicalAttenuationLayer:
+    Z1: float
+    Z2: float
+    f0: float
+    Q: float
+    a0: float
+    def __init__(self) -> None: ...
+
 class Atten_Mode:
     attnUnit: AttenuationUnit
     absModel: OceanAbsorptionModel
+    biologicalLayers: list[BiologicalAttenuationLayer]
     def __init__(self) -> None: ...
 
 class HSInfo:

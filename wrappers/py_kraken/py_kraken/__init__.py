@@ -2,7 +2,13 @@
 
 import sys
 
-from .ook_data_model import ConfigModel, FieldData, ModeData, ModeProfileData
+from .ook_data_model import (
+    BiologicalAttenuationLayerModel,
+    ConfigModel,
+    FieldData,
+    ModeData,
+    ModeProfileData,
+)
 from .ook_read import read_json, read_mod, read_shd
 
 try:
@@ -23,6 +29,7 @@ else:
 from .ook_plot import plot_field, plot_modes
 
 __all__ = [
+    "BiologicalAttenuationLayerModel",
     "ConfigModel",
     "FieldData",
     "ModeData",

@@ -31,6 +31,21 @@ root = model.run('tmp/json_result', 'Mod', true);
 
 `Write` 保留 OOK schema，并显式保持单元素向量/SSP/layer 为 JSON 数组，避免 MATLAB JSON round-trip 改变输入形状。可运行 `demo_env` 和 `demo_json` 查看完整的无界面 PNG 输出流程。
 
+## Biological 衰减
+
+```matlab
+model.loadJson('case.json');  % 先加载完整的基准配置
+model.setBiologicalAttenuation([
+    10.0 30.0 1000.0 5.0 0.04
+    40.0 60.0 1200.0 4.0 0.02
+], 'dB/lambda');
+jsonPath = model.Write('tmp/biological_case.json');
+```
+
+矩阵列顺序固定为 `[Z1 Z2 f0 Q a0]`，单位依次为 m、m、Hz、无量纲和 dB/km。衰减单位只接受以下六个完整、区分大小写的规范字符串：`dB/m/kHz`、`Params_Lose`、`dB/m`、`Nepers/m`、`Quality_Factor`、`dB/lambda`。
+
+合法空层必须是数值、实数的 `0×5` 矩阵，推荐用 `zeros(0, 5)` 构造；`[]` 的形状是 `0×0`，不会被当作空层配置。`setBiologicalAttenuation` 准备包含 `OceanAbsorptionModel` 和 `BiologicalLayers` 的衰减配置，随后由 `Write` 写入标准顶层 `AttenUnit`。输出的 JSON 最终由真实 OOK CLI 的 `json_in_out` 导入路径校验。
+
 ## 测试
 
 ```powershell

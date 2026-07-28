@@ -1,6 +1,7 @@
 #ifndef Kraken_JSON_IN_OUT_HPP
 #define Kraken_JSON_IN_OUT_HPP
 
+#include "AttenMod.h"
 #include "json_eigen.hpp"
 #include "OpenOceanKrakenParams.h"
 #include "OpenOceanKrakenInterface.h"
@@ -189,6 +190,9 @@ namespace OpenOceanKraken
         case OceanAbsorptionModel::None:
             out = "None";
             break;
+        case OceanAbsorptionModel::Biological:
+            out = "Biological";
+            break;
         default:
             throw std::runtime_error("Unknown OceanAbsorptionModel value");
         }
@@ -213,26 +217,85 @@ namespace OpenOceanKraken
         {
             mode = OceanAbsorptionModel::None;
         }
+        else if (str == "Biological")
+        {
+            mode = OceanAbsorptionModel::Biological;
+        }
         else
         {
             throw std::runtime_error("Invalid OceanAbsorptionModel string: \"" + str + "\"");
         }
     }
 
+    void to_json(
+        OpenOcean_json &out,
+        const BiologicalAttenuationLayer &layer)
+    {
+        out = OpenOcean_json{
+            {"Z1", layer.Z1},
+            {"Z2", layer.Z2},
+            {"f0", layer.f0},
+            {"Q", layer.Q},
+            {"a0", layer.a0}};
+    }
+
+    void from_json(
+        const OpenOcean_json &in,
+        BiologicalAttenuationLayer &layer)
+    {
+        if (!in.is_object())
+            throw std::runtime_error(
+                "Each BiologicalLayers entry must be a JSON object.");
+        BiologicalAttenuationLayer candidate;
+        candidate.Z1 = in.at("Z1").get<double>();
+        candidate.Z2 = in.at("Z2").get<double>();
+        candidate.f0 = in.at("f0").get<double>();
+        candidate.Q = in.at("Q").get<double>();
+        candidate.a0 = in.at("a0").get<double>();
+        layer = candidate;
+    }
+
     void to_json(OpenOcean_json &out, const Atten_Mode &mode)
     {
+        validateAttenuationMode(mode);
         out = OpenOcean_json{
             {"AttenuationUnit", mode.attnUnit},
             {"OceanAbsorptionModel", mode.absModel}};
+        if (isBiological(mode))
+            out["BiologicalLayers"] = mode.biologicalLayers;
     }
     void from_json(const OpenOcean_json &in, Atten_Mode &mode)
     {
         if (!in.is_object())
         {
-            throw std::runtime_error("Atten_Mode must be a JSON object with fields \"AttenuationUnit\" and \"OceanAbsorptionModel\".");
+            throw std::runtime_error(
+                "Atten_Mode must be a JSON object.");
         }
-        mode.attnUnit = in.at("AttenuationUnit").get<AttenuationUnit>();
-        mode.absModel = in.at("OceanAbsorptionModel").get<OceanAbsorptionModel>();
+
+        Atten_Mode candidate;
+        candidate.attnUnit =
+            in.at("AttenuationUnit").get<AttenuationUnit>();
+        candidate.absModel =
+            in.at("OceanAbsorptionModel").get<OceanAbsorptionModel>();
+
+        if (isBiological(candidate))
+        {
+            if (!in.contains("BiologicalLayers"))
+                throw std::runtime_error(
+                    "Biological AttenUnit requires BiologicalLayers.");
+            candidate.biologicalLayers =
+                in.at("BiologicalLayers")
+                    .get<std::vector<BiologicalAttenuationLayer>>();
+        }
+        else if (in.contains("BiologicalLayers"))
+        {
+            candidate.biologicalLayers =
+                in.at("BiologicalLayers")
+                    .get<std::vector<BiologicalAttenuationLayer>>();
+        }
+
+        validateAttenuationMode(candidate);
+        mode = std::move(candidate);
     }
 
     void to_json(OpenOcean_json &out, const BC_Mode &mode)

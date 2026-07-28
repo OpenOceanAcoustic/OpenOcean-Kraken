@@ -45,6 +45,42 @@ bin\OpenOceanKraken.exe tmp\munk.json --output tmp\munk_json --threads 4
 
 普通压力结果为 `<root>.shd`；启用振速后为 `<root>_P.shd`、`<root>_V.shd`、`<root>_H.shd`；模态结果为 `<root>.mod`。
 
+## Biological 体积衰减
+
+ENV 的 Top Option 第四个字符为 `B` 时，其后紧跟 Biological 层数和逐层参数。例如：
+
+```text
+'CVWB'
+2
+10.0 30.0 1000.0 5.0 0.04
+40.0 60.0 1200.0 4.0 0.02
+```
+
+`B` 块必须紧跟 Top Option，并位于可选的顶部 `A` 半空间记录或第一条介质记录之前。每一层固定为 `Z1 Z2 f0 Q a0`：`Z1`、`Z2` 的单位为 m，`f0` 的单位为 Hz，`Q` 为无量纲品质因数，`a0` 的单位为 dB/km。
+
+也可把以下 `AttenUnit` 配置片段合并到完整 OOK JSON 的标准顶层：
+
+```json
+{
+  "AttenUnit": {
+    "AttenuationUnit": "dB/lambda",
+    "OceanAbsorptionModel": "Biological",
+    "BiologicalLayers": [
+      {"Z1": 10.0, "Z2": 30.0, "f0": 1000.0, "Q": 5.0, "a0": 0.04}
+    ]
+  }
+}
+```
+
+Biological 层遵循以下语义：
+
+- 深度范围 `[Z1,Z2]` 是闭区间；共享端点和彼此重叠的层按输入顺序逐层累加，不合并或去重。
+- 在共振频率处 `a(f0)=a0·Q²`，因此 `a0` 不是共振峰值本身。
+- Biological 附加项作用于 SSP 介质中的 P 波和 S 波衰减计算；顶部、底部半空间仍保留各自的材料衰减，但不应用 Biological 附加项。
+- Biological 的空 `BiologicalLayers` 数组可以导入、导出并保持为空；非 Biological 配置的 JSON 输出不会增加 `BiologicalLayers`。
+
+C++ 可通过 `Atten_Mode::biologicalLayers` 配置层，并由 `Interface::set_AttenUnit` 完成最终校验。此版本为公开 C++ 对象增加了布局成员，因而改变了二进制 ABI：核心库、CLI、共享库、Python `.pyd` 以及所有 C++ 二进制客户端必须从同一提交整体干净重编译，不能混用旧对象文件或旧动态库。`.mod`、`.shd` 的存储格式没有改变；变化只发生在内存对象布局和中间计算能力。格式不变不表示数值不变，启用 Biological 后输出的模态和声场数值会反映新增衰减。
+
 ## Wrapper
 
 - Python：见 [`wrappers/py_kraken/README.md`](wrappers/py_kraken/README.md)。

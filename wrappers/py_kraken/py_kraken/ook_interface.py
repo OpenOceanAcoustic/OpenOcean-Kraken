@@ -11,7 +11,13 @@ from typing import Any, Callable
 import numpy as np
 
 from . import native
-from .ook_data_model import ConfigModel, FieldData, ModeData, ModeProfileData
+from .ook_data_model import (
+    BiologicalAttenuationLayerModel,
+    ConfigModel,
+    FieldData,
+    ModeData,
+    ModeProfileData,
+)
 
 
 class OpenOceanKraken_interface:
@@ -174,6 +180,40 @@ class OpenOceanKraken_interface:
         self._interface.set_SSP(areas)
 
     def ook_set_attenuation(self, mode: Any) -> None:
+        self._interface.set_AttenUnit(mode)
+
+    def ook_set_biological_attenuation(
+        self,
+        layers: list[BiologicalAttenuationLayerModel | dict[str, float]],
+        attenuation_unit: Any = None,
+    ) -> None:
+        if not isinstance(layers, list):
+            raise ValueError("layers must be a list")
+        if len(layers) > 200:
+            raise ValueError("layers must contain at most 200 entries")
+
+        parsed = [
+            BiologicalAttenuationLayerModel.model_validate(layer)
+            for layer in layers
+        ]
+        native_layers = []
+        for item in parsed:
+            layer = native.BiologicalAttenuationLayer()
+            layer.Z1 = item.Z1
+            layer.Z2 = item.Z2
+            layer.f0 = item.f0
+            layer.Q = item.Q
+            layer.a0 = item.a0
+            native_layers.append(layer)
+
+        mode = native.Atten_Mode()
+        mode.attnUnit = (
+            native.AttenuationUnit.MODE_W_db_per_lambda
+            if attenuation_unit is None
+            else attenuation_unit
+        )
+        mode.absModel = native.OceanAbsorptionModel.Biological
+        mode.biologicalLayers = native_layers
         self._interface.set_AttenUnit(mode)
 
     def ook_set_grid_type(self, mode: Any) -> None:

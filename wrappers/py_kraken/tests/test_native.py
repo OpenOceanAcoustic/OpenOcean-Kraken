@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import sys
 import unittest
 
@@ -32,6 +33,46 @@ class NativeBindingTests(unittest.TestCase):
             "Range_Independent_Area",
         ):
             self.assertTrue(hasattr(native, name), name)
+
+    def test_biological_attenuation_binding_and_value_error(self):
+        layer = native.BiologicalAttenuationLayer()
+        layer.Z1 = 10.0
+        layer.Z2 = 30.0
+        layer.f0 = 1000.0
+        layer.Q = 5.0
+        layer.a0 = 0.04
+
+        mode = native.Atten_Mode()
+        mode.absModel = native.OceanAbsorptionModel.Biological
+        mode.biologicalLayers = [layer]
+
+        interface = native.Interface()
+        interface.set_AttenUnit(mode)
+        payload = json.loads(interface.to_json_string())
+        self.assertEqual(
+            payload["AttenUnit"]["OceanAbsorptionModel"], "Biological")
+        self.assertEqual(
+            payload["AttenUnit"]["BiologicalLayers"][0]["f0"], 1000.0)
+
+        for description, changes in (
+            ("non-finite Z1", {"Z1": float("nan")}),
+            ("Z1 greater than Z2", {"Z1": 30.0, "Z2": 10.0}),
+            ("non-positive f0", {"f0": 0.0}),
+            ("non-positive Q", {"Q": 0.0}),
+            ("negative a0", {"a0": -0.01}),
+        ):
+            with self.subTest(description=description):
+                invalid = native.BiologicalAttenuationLayer()
+                invalid.Z1 = 10.0
+                invalid.Z2 = 30.0
+                invalid.f0 = 1000.0
+                invalid.Q = 5.0
+                invalid.a0 = 0.04
+                for name, value in changes.items():
+                    setattr(invalid, name, value)
+                mode.biologicalLayers = [invalid]
+                with self.assertRaises(ValueError):
+                    interface.set_AttenUnit(mode)
 
     def test_pressure_is_owned_complex64_source_range_depth_array(self):
         interface = native.Interface()

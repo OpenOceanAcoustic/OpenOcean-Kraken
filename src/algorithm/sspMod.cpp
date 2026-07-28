@@ -1,4 +1,6 @@
 #include "sspMod.h"
+
+#include <limits>
 namespace OpenOceanKraken
 {
     namespace ssp
@@ -475,9 +477,11 @@ namespace OpenOceanKraken
         }
 
         void UpdateSSPLoss(double freq, double freq0,
-                           int NMedia, SSP_Mode SSPType, Atten_Mode AttenUnit,
+                           int NMedia, SSP_Mode SSPType, const Atten_Mode &AttenUnit,
                            SSPStructure &ssp)
         {
+            validateAttenuationMode(AttenUnit);
+            validateAttenuationFrequency(freq);
             for (int iMedium = 0; iMedium < NMedia; ++iMedium)
             {
                 const int start = ssp.get_media_start(iMedium);
@@ -554,22 +558,30 @@ namespace OpenOceanKraken
             }
         }
 
-        void UpdateHSLoss(double &freq, double &freq0, Atten_Mode &AttenUnit, HSInfo &HSTop, HSInfo &HSBot)
+        void UpdateHSLoss(double &freq, double &freq0, const Atten_Mode &AttenUnit, HSInfo &HSTop, HSInfo &HSBot)
         {
-            double huge = 1e8;
+            validateAttenuationMode(AttenUnit);
+            Atten_Mode halfspaceMode = AttenUnit;
+            if (isBiological(halfspaceMode))
+            {
+                halfspaceMode.absModel = OceanAbsorptionModel::None;
+                halfspaceMode.biologicalLayers.clear();
+            }
+            const double huge = std::numeric_limits<double>::max();
+            double z = huge;
             if (HSTop.BC == BC_Mode::MODE_A_Half_space)
             {
-                HSTop.cp = CRCI(huge, HSTop.alphaR, HSTop.alphaI, freq, freq0,
-                                AttenUnit, HSTop.beta, HSTop.ft);
-                HSTop.cs = CRCI(huge, HSTop.betaR, HSTop.betaI, freq, freq0,
-                                AttenUnit, HSTop.beta, HSTop.ft);
+                HSTop.cp = CRCI(z, HSTop.alphaR, HSTop.alphaI, freq, freq0,
+                                halfspaceMode, HSTop.beta, HSTop.ft);
+                HSTop.cs = CRCI(z, HSTop.betaR, HSTop.betaI, freq, freq0,
+                                halfspaceMode, HSTop.beta, HSTop.ft);
             }
             if (HSBot.BC == BC_Mode::MODE_A_Half_space)
             {
-                HSBot.cp = CRCI(huge, HSBot.alphaR, HSBot.alphaI, freq, freq0,
-                                AttenUnit, HSBot.beta, HSBot.ft);
-                HSBot.cs = CRCI(huge, HSBot.betaR, HSBot.betaI, freq, freq0,
-                                AttenUnit, HSBot.beta, HSBot.ft);
+                HSBot.cp = CRCI(z, HSBot.alphaR, HSBot.alphaI, freq, freq0,
+                                halfspaceMode, HSBot.beta, HSBot.ft);
+                HSBot.cs = CRCI(z, HSBot.betaR, HSBot.betaI, freq, freq0,
+                                halfspaceMode, HSBot.beta, HSBot.ft);
             }
         }
     }

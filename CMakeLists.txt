@@ -133,6 +133,57 @@ if(BUILD_TESTING)
     )
 
     find_package(Python3 COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+        add_test(
+            NAME OpenOceanKraken_biological_tool_tests
+            COMMAND ${Python3_EXECUTABLE} -m unittest
+                tools.tests.test_bio_kraken_equivalence -v
+        )
+        set_tests_properties(
+            OpenOceanKraken_biological_tool_tests
+            PROPERTIES
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                ENVIRONMENT "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}"
+        )
+    endif()
+
+    option(
+        OOK_ENABLE_KRAKEN_REFERENCE_TESTS
+        "Enable KrakenFortran Biological modal/TL acceptance gate"
+        OFF
+    )
+    set(OOK_KRAKEN_EXE "" CACHE FILEPATH "Path to KrakenFortran kraken.exe")
+    set(OOK_FIELD_EXE "" CACHE FILEPATH "Path to KrakenFortran field.exe")
+
+    if(OOK_ENABLE_KRAKEN_REFERENCE_TESTS)
+        if(NOT Python3_Interpreter_FOUND)
+            message(FATAL_ERROR
+                "Reference tests require a Python3 interpreter")
+        endif()
+        if(NOT TARGET OpenOceanKraken)
+            message(FATAL_ERROR
+                "Reference tests require BUILD_AS_EXE=ON")
+        endif()
+        if(NOT EXISTS "${OOK_KRAKEN_EXE}" OR NOT EXISTS "${OOK_FIELD_EXE}")
+            message(FATAL_ERROR
+                "Reference tests require valid OOK_KRAKEN_EXE and OOK_FIELD_EXE")
+        endif()
+        add_test(
+            NAME OpenOceanKraken_biological_equivalence_tests
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_bio_kraken_equivalence.py
+                --ook-exe $<TARGET_FILE:OpenOceanKraken>
+                --kraken-exe ${OOK_KRAKEN_EXE}
+                --field-exe ${OOK_FIELD_EXE}
+                --fixture-root
+                    ${CMAKE_CURRENT_SOURCE_DIR}/for_test/fixtures/biological
+        )
+        set_tests_properties(
+            OpenOceanKraken_biological_equivalence_tests
+            PROPERTIES LABELS "biological;integration"
+        )
+    endif()
+
     if(Python3_Interpreter_FOUND AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../test/solve3_mode_loss.env")
         add_test(
             NAME OpenOceanKraken_case_runner_output_tests

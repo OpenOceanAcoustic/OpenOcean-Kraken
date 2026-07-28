@@ -82,6 +82,7 @@ namespace OpenOceanKraken
     void FieldWorker(const size_t &iprof, const OOK_parameters &params, OOK_output &output)
     {
         auto eigen = output.eigen[iprof];
+        eigen.M = std::min(eigen.M, params.MLimit);
         for (int isz = 0; isz < params.Pos.NSz; isz++)
         {
             Evaluate(eigen, params, isz, iprof, output.u_AllSources, output.v_AllSources, output.h_AllSources);
@@ -768,11 +769,19 @@ namespace OpenOceanKraken
                 }
                 else
                 {
-                    int idx = ISzTab(isz);
-                    eigen.PsiS(mode, isz) = eigen.PhiMode(mode, idx) +
-                                            WTS(isz) * (eigen.PhiMode(mode, idx + 1) - eigen.PhiMode(mode, idx));
-                    eigen.dPsidzS(mode, isz) = dPhiMode(mode, idx) +
-                                               WTS(isz) * (dPhiMode(mode, idx + 1) - dPhiMode(mode, idx));
+                    if (NzTab == 1)
+                    {
+                        eigen.PsiS(mode, isz) = eigen.PhiMode(mode, 0);
+                        eigen.dPsidzS(mode, isz) = dPhiMode(mode, 0);
+                    }
+                    else
+                    {
+                        int idx = ISzTab(isz);
+                        eigen.PsiS(mode, isz) = eigen.PhiMode(mode, idx) +
+                                                WTS(isz) * (eigen.PhiMode(mode, idx + 1) - eigen.PhiMode(mode, idx));
+                        eigen.dPsidzS(mode, isz) = dPhiMode(mode, idx) +
+                                                   WTS(isz) * (dPhiMode(mode, idx + 1) - dPhiMode(mode, idx));
+                    }
                 }
             }
 
@@ -785,11 +794,19 @@ namespace OpenOceanKraken
                 }
                 else
                 {
-                    int idx = IRzTab(irz);
-                    eigen.PsiR(mode, irz) = eigen.PhiMode(mode, idx) +
-                                            WTR(irz) * (eigen.PhiMode(mode, idx + 1) - eigen.PhiMode(mode, idx));
-                    eigen.dPsidzR(mode, irz) = dPhiMode(mode, idx) +
-                                               WTR(irz) * (dPhiMode(mode, idx + 1) - dPhiMode(mode, idx));
+                    if (NzTab == 1)
+                    {
+                        eigen.PsiR(mode, irz) = eigen.PhiMode(mode, 0);
+                        eigen.dPsidzR(mode, irz) = dPhiMode(mode, 0);
+                    }
+                    else
+                    {
+                        int idx = IRzTab(irz);
+                        eigen.PsiR(mode, irz) = eigen.PhiMode(mode, idx) +
+                                                WTR(irz) * (eigen.PhiMode(mode, idx + 1) - eigen.PhiMode(mode, idx));
+                        eigen.dPsidzR(mode, irz) = dPhiMode(mode, idx) +
+                                                   WTR(irz) * (dPhiMode(mode, idx + 1) - dPhiMode(mode, idx));
+                    }
                 }
             }
 

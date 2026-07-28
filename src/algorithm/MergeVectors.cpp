@@ -103,8 +103,11 @@ namespace OpenOceanKraken
         // 快速返回：如果插值点只有一个
         if (Nx == 1)
         {
-            w(0) = 0.0;
-            Ix(0) = 0; // 0-based索引
+            for (int IxTab = 0; IxTab < NxTab; ++IxTab)
+            {
+                w(IxTab) = 0.0;
+                Ix(IxTab) = 0; // 0-based索引
+            }
             return;
         }
 

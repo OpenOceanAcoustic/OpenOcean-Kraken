@@ -13,7 +13,7 @@ resultRoot = model.run(outputDir, 'Mod', true);
 
 pressureFigure = figure('Visible', 'off');
 modeFigure = figure('Visible', 'off');
-cleanup = onCleanup(@() close([pressureFigure, modeFigure])); %#ok<NASGU>
+cleanup = onCleanup(@() close([pressureFigure, modeFigure])); 
 model.plotPressure(resultRoot, 'Figure', pressureFigure);
 model.plotModes(resultRoot, 'Figure', modeFigure);
 exportgraphics(pressureFigure, fullfile(outputDir, 'pressure.png'));

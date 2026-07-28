@@ -1,5 +1,7 @@
 #include "paramsBase.h"
+#include "AttenMod.h"
 #include <stdexcept>
+#include <utility>
 namespace OpenOceanKraken
 {
     class input_SSP : public paramsBase
@@ -141,7 +143,8 @@ namespace OpenOceanKraken
 
         void set_AttenUnit(OOK_parameters &params, Atten_Mode unit) const
         {
-            params.AttenUnit = unit;
+            validateAttenuationMode(unit);
+            params.AttenUnit = std::move(unit);
         }
 
         ssp::SSPStructure convert_to_SSPStructure(const ssp::Range_Independent_Area &Area_1D) const

@@ -9,13 +9,21 @@ namespace OpenOceanKraken
 {   
 
     // @brief 在基础衰减上叠加海洋吸收模型
-    double addOceanAbsorption(double alphaT, double freq, const Atten_Mode& AttenUnit);
+    double addOceanAbsorption(
+        double alphaT, double z, double freq, const Atten_Mode &mode);
     double parseAttenuation(double freq, double freq0,double alpha, double ft, double beta, double c,const Atten_Mode& AttenUnit);
 
     std::complex<double> CRCI(double &z, double &c, double &alpha, double &freq, double &freq0,
                               const Atten_Mode &AttenUnit, double &beta, double &ft);
 
     double Franc_Garr(double f);
+
+    void validateAttenuationMode(const Atten_Mode &mode);
+    void validateAttenuationFrequency(double freq);
+    bool attenuationModesEqual(
+        const Atten_Mode &lhs,
+        const Atten_Mode &rhs) noexcept;
+    bool isBiological(const Atten_Mode &mode);
 
     
     bool isThorpe(const Atten_Mode &AttenUnit);     // 判断是否为Thorpe沉积层模型

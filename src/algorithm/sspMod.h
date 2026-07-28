@@ -15,9 +15,9 @@ namespace OpenOceanKraken
         void cCubic(TridMtx &trid, SSPStructure &SSP, int iMedium);
         void Analytic(Eigen::VectorXcd &cp, Eigen::VectorXcd &cs, Eigen::VectorXd &rho, int iMedium, int N1);
         void UpdateSSPLoss(double freq, double freq0,
-                           int NMedia, SSP_Mode SSPType, Atten_Mode AttenUnit,
+                           int NMedia, SSP_Mode SSPType, const Atten_Mode &AttenUnit,
                            SSPStructure &ssp);
-        void UpdateHSLoss(double &freq, double &freq0, Atten_Mode &AttenUnit, HSInfo &HSTop, HSInfo &HSBot);
+        void UpdateHSLoss(double &freq, double &freq0, const Atten_Mode &AttenUnit, HSInfo &HSTop, HSInfo &HSBot);
     }
 }
 #endif

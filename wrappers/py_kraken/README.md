@@ -37,6 +37,47 @@ print(len(modes.profiles))
 
 facade 提供 ENV/JSON 加载与导出、频率/深度/距离/SSP/衰减/模态控制、运行/清理/释放、压力/速度/模态读取以及 SHD/MOD 导出。向量设置支持 `values=[...]` 或完整的 `start=..., end=..., count=...`，不可混用。
 
+### Biological 衰减
+
+高层 facade 接受由字典或 `BiologicalAttenuationLayerModel` 组成的列表：
+
+```python
+from py_kraken import OpenOceanKraken_interface
+
+ook = OpenOceanKraken_interface(thread_num=1)
+ook.ook_set_biological_attenuation([
+    {"Z1": 10.0, "Z2": 30.0, "f0": 1000.0, "Q": 5.0, "a0": 0.04},
+    {"Z1": 40.0, "Z2": 60.0, "f0": 1200.0, "Q": 4.0, "a0": 0.02},
+])
+ook.ook_export_json("tmp/biological_case.json")
+```
+
+原生接口的等价配置如下：
+
+```python
+from py_kraken import native
+
+layer = native.BiologicalAttenuationLayer()
+layer.Z1 = 10.0
+layer.Z2 = 30.0
+layer.f0 = 1000.0
+layer.Q = 5.0
+layer.a0 = 0.04
+
+mode = native.Atten_Mode()
+mode.attnUnit = native.AttenuationUnit.MODE_W_db_per_lambda
+mode.absModel = native.OceanAbsorptionModel.Biological
+mode.biologicalLayers = [layer]
+
+interface = native.Interface()
+interface.set_AttenUnit(mode)
+assert interface.to_json("biological_native.json")
+```
+
+字典键固定为 `Z1`、`Z2`、`f0`、`Q`、`a0`，单位依次为 m、m、Hz、无量纲和 dB/km。facade 未指定 `attenuation_unit` 时默认使用 `dB/lambda`；显式指定时应传入 native `AttenuationUnit` 枚举，而不是 JSON/MATLAB 使用的字符串。向 facade 传入空列表 `[]` 会清除 Biological 层，同时保留合法的 Biological 空数组配置。Python 会把层列表或层字段的类型错误、非有限数、`Z1 > Z2`、`f0 <= 0`、`Q <= 0`、`a0 < 0` 或层数超限等明显非法输入提前映射为 `ValueError`；错误的 `attenuation_unit` 类型不属于这一映射契约。C++ `set_AttenUnit` 仍是所有入口共享的最终权威校验边界。
+
+native 与 facade 最终都写入标准顶层 `AttenUnit` JSON，其中模型名为 `Biological`、层数组为 `BiologicalLayers`。该输出及空数组、非法输入和失败回滚由真实 OOK `json_in_out` 导入路径验证。
+
 ## 文件读取与绘图
 
 ```python

@@ -1,7 +1,90 @@
 #include "AttenMod.h"
 
+#include <stdexcept>
+#include <string>
+
 namespace OpenOceanKraken
 {
+    namespace
+    {
+        [[noreturn]] void invalidLayer(
+            std::size_t index,
+            const char *field,
+            const char *requirement)
+        {
+            throw std::invalid_argument(
+                "BiologicalLayers[" + std::to_string(index) + "]." +
+                field + " " + requirement);
+        }
+    }
+
+    void validateAttenuationMode(const Atten_Mode &mode)
+    {
+        if (mode.biologicalLayers.size() > MaxBioLayers)
+            throw std::invalid_argument(
+                "BiologicalLayers must contain at most 200 layers.");
+
+        if (!isBiological(mode) && !mode.biologicalLayers.empty())
+            throw std::invalid_argument(
+                "BiologicalLayers must be empty unless "
+                "OceanAbsorptionModel is Biological.");
+
+        for (std::size_t i = 0; i < mode.biologicalLayers.size(); ++i)
+        {
+            const auto &layer = mode.biologicalLayers[i];
+            if (!std::isfinite(layer.Z1))
+                invalidLayer(i, "Z1", "must be finite.");
+            if (!std::isfinite(layer.Z2))
+                invalidLayer(i, "Z2", "must be finite.");
+            if (!std::isfinite(layer.f0))
+                invalidLayer(i, "f0", "must be finite.");
+            if (!std::isfinite(layer.Q))
+                invalidLayer(i, "Q", "must be finite.");
+            if (!std::isfinite(layer.a0))
+                invalidLayer(i, "a0", "must be finite.");
+            if (layer.Z1 > layer.Z2)
+                invalidLayer(i, "Z1", "must be less than or equal to Z2.");
+            if (layer.f0 <= 0.0)
+                invalidLayer(i, "f0", "must be greater than zero.");
+            if (layer.Q <= 0.0)
+                invalidLayer(i, "Q", "must be greater than zero.");
+            if (layer.a0 < 0.0)
+                invalidLayer(i, "a0", "must be greater than or equal to zero.");
+        }
+    }
+
+    void validateAttenuationFrequency(double freq)
+    {
+        if (!std::isfinite(freq) || freq <= 0.0)
+            throw std::domain_error(
+                "Attenuation frequency must be finite and greater than zero.");
+    }
+
+    bool attenuationModesEqual(
+        const Atten_Mode &lhs,
+        const Atten_Mode &rhs) noexcept
+    {
+        if (lhs.attnUnit != rhs.attnUnit ||
+            lhs.absModel != rhs.absModel ||
+            lhs.biologicalLayers.size() != rhs.biologicalLayers.size())
+            return false;
+
+        for (std::size_t i = 0; i < lhs.biologicalLayers.size(); ++i)
+        {
+            const auto &a = lhs.biologicalLayers[i];
+            const auto &b = rhs.biologicalLayers[i];
+            if (a.Z1 != b.Z1 || a.Z2 != b.Z2 || a.f0 != b.f0 ||
+                a.Q != b.Q || a.a0 != b.a0)
+                return false;
+        }
+        return true;
+    }
+
+    bool isBiological(const Atten_Mode &mode)
+    {
+        return mode.absModel == OceanAbsorptionModel::Biological;
+    }
+
     double parseAttenuation(double freq, double freq0, double alpha, double ft, double beta, double c, const Atten_Mode &AttenUnit)
     {
         double alphaT = 0.0;
@@ -44,9 +127,10 @@ namespace OpenOceanKraken
 
         return alphaT;
     }
-    double addOceanAbsorption(double alphaT, double freq, const Atten_Mode &AttenUnit)
+    double addOceanAbsorption(
+        double alphaT, double z, double freq, const Atten_Mode &mode)
     {
-        if (isThorpe(AttenUnit))
+        if (isThorpe(mode))
         {
             double f_khz = freq / 1000.0;
             double f2 = f_khz * f_khz;
@@ -55,10 +139,41 @@ namespace OpenOceanKraken
                            8685.8896;
             alphaT += Thorp;
         }
-        else if (isFranc_Garr(AttenUnit))
+        else if (isFranc_Garr(mode))
         {
             double FG = Franc_Garr(freq / 1000.0) / 8685.8896;
             alphaT += FG;
+        }
+        else if (isBiological(mode))
+        {
+            for (const auto &layer : mode.biologicalLayers)
+            {
+                if (z >= layer.Z1 && z <= layer.Z2)
+                {
+                    const double denominator =
+                        std::pow(
+                            1.0 -
+                                std::pow(layer.f0, 2) /
+                                    std::pow(freq, 2),
+                            2) +
+                        1.0 / std::pow(layer.Q, 2);
+                    if (!std::isfinite(denominator) || denominator <= 0.0)
+                        throw std::domain_error(
+                            "Biological attenuation denominator must be "
+                            "finite and greater than zero.");
+
+                    double contribution = layer.a0 / denominator;
+                    if (!std::isfinite(contribution))
+                        throw std::overflow_error(
+                            "Biological attenuation contribution is not finite.");
+
+                    contribution = contribution / 8685.8896;
+                    alphaT = alphaT + contribution;
+                    if (!std::isfinite(alphaT))
+                        throw std::overflow_error(
+                            "Accumulated attenuation is not finite.");
+                }
+            }
         }
         return alphaT;
     }
@@ -68,16 +183,28 @@ namespace OpenOceanKraken
     {
 
         // 1. 解析用户输入 → 标准衰减
-        double alphaT = parseAttenuation(freq, freq0, alpha, ft, beta, c, AttenUnit);
+        validateAttenuationFrequency(freq);
+        double alphaT =
+            parseAttenuation(freq, freq0, alpha, ft, beta, c, AttenUnit);
+        if (!std::isfinite(alphaT))
+            throw std::overflow_error(
+                "Base material attenuation is not finite.");
 
         // 2. 叠加海洋吸收模型
-        alphaT = addOceanAbsorption(alphaT, freq, AttenUnit);
+        alphaT = addOceanAbsorption(alphaT, z, freq, AttenUnit);
 
         // 3. 转为复声速虚部
-        double omega = 2.0 * pi * freq;
-        alphaT = (omega != 0.0) ? alphaT * c * c / omega : 0.0;
+        const double omega = 2.0 * pi * freq;
+        const double cImag = alphaT * c * c / omega;
+        if (!std::isfinite(c) || !std::isfinite(cImag))
+            throw std::overflow_error(
+                "Complex sound speed is not finite.");
+        if (cImag > c)
+            throw std::domain_error(
+                "The complex sound speed has an imaginary part "
+                "greater than its real part.");
 
-        return std::complex<double>(c, alphaT);
+        return std::complex<double>(c, cImag);
     }
 
     double Franc_Garr(double f)
