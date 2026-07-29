@@ -1,4 +1,5 @@
 #include "algorithm/AcousticCase.h"
+#include "algorithm/SspInterpolation.h"
 
 #include <algorithm>
 #include <cctype>
@@ -116,41 +117,12 @@ void validate(const AcousticCase &result)
         throw std::runtime_error("ENV phase-speed interval must satisfy 0 < cLow < cHigh");
     }
     bool hasAcousticLayer = false;
-    for (const AcousticLayer &layer : result.layers)
+    for (std::size_t mediumIndex = 0;
+         mediumIndex < result.layers.size(); ++mediumIndex)
     {
-        if (layer.baseMesh < 1 || !(layer.bottomDepth > layer.topDepth) ||
-            layer.samples.size() < 2)
-        {
-            throw std::runtime_error("invalid acoustic layer mesh or depth range");
-        }
-        if (std::abs(layer.samples.front().depth - layer.topDepth) > 1.0e-8 ||
-            std::abs(layer.samples.back().depth - layer.bottomDepth) > 1.0e-8)
-        {
-            throw std::runtime_error("SSP samples must span the complete acoustic layer");
-        }
-        double previousDepth = layer.topDepth - 1.0;
-        for (const AcousticSample &sample : layer.samples)
-        {
-            if (!(sample.depth > previousDepth) || !(sample.cp > 0.0) ||
-                !(sample.rho > 0.0) || sample.alphaP < 0.0)
-            {
-                throw std::runtime_error("invalid or non-monotonic acoustic SSP sample");
-            }
-            if (sample.cs < 0.0 || sample.alphaS < 0.0)
-            {
-                throw std::runtime_error("invalid elastic SSP sample");
-            }
-            previousDepth = sample.depth;
-        }
+        const AcousticLayer &layer = result.layers[mediumIndex];
+        validateSspLayer(layer, mediumIndex + 1);
         hasAcousticLayer = hasAcousticLayer || layer.samples.front().cs == 0.0;
-        if (layer.roughnessRms < 0.0)
-        {
-            throw std::runtime_error("RMS roughness must be non-negative");
-        }
-        if (layer.samples.front().cs > 0.0 && layer.roughnessRms != 0.0)
-        {
-            throw std::invalid_argument("Rough elastic interfaces are not allowed");
-        }
     }
     if (!hasAcousticLayer)
     {
@@ -275,8 +247,18 @@ std::vector<AcousticCase> readAcousticEnvironments(
     case 'C':
         result.interpolation = AcousticInterpolation::CLinear;
         break;
+    case 'P':
+        result.interpolation = AcousticInterpolation::Pchip;
+        break;
+    case 'S':
+        result.interpolation = AcousticInterpolation::CubicSpline;
+        break;
+    case 'A':
+        throw std::runtime_error(
+            "analytic SSP interpolation is not implemented");
     default:
-        throw std::runtime_error("phase 2 supports only N2-linear and C-linear SSP interpolation");
+        throw std::runtime_error(
+            std::string("unsupported SSP interpolation: ") + options[0]);
     }
     result.top.type = boundaryType(options[1], "top");
     result.attenuationUnit = options[2];
@@ -502,6 +484,11 @@ std::vector<AcousticCase> readAcousticEnvironments(
     result.cLow = phaseSpeeds[0];
     result.cHigh = phaseSpeeds[1];
     result.rMaxKm = numbers(take("RMax"), "RMax").front();
+    if (!std::isfinite(result.rMaxKm) || result.rMaxKm < 0.0)
+    {
+        throw std::runtime_error(
+            "ENV RMax must be finite and non-negative");
+    }
 
     const auto readDepthVector = [&](const char *countField,
                                      const char *valuesField) {
@@ -574,29 +561,20 @@ double soundSpeedAt(const AcousticCase &input, double depth)
         return input.bottom.cp > 0.0 ? input.bottom.cp
                                      : input.layers.back().samples.back().cp;
     }
-    for (const AcousticLayer &layer : input.layers)
+    for (std::size_t mediumIndex = 0;
+         mediumIndex < input.layers.size(); ++mediumIndex)
     {
+        const AcousticLayer &layer = input.layers[mediumIndex];
         if (depth > layer.bottomDepth)
         {
             continue;
         }
-        const auto upper = std::upper_bound(
-            layer.samples.begin(), layer.samples.end(), depth,
-            [](double target, const AcousticSample &sample) {
-                return target < sample.depth;
-            });
-        if (upper == layer.samples.begin())
-        {
-            return upper->cp;
-        }
-        if (upper == layer.samples.end())
+        if (depth == layer.bottomDepth)
         {
             return layer.samples.back().cp;
         }
-        const AcousticSample &right = *upper;
-        const AcousticSample &left = *(upper - 1);
-        const double weight = (depth - left.depth) / (right.depth - left.depth);
-        return left.cp + weight * (right.cp - left.cp);
+        return interpolateRealCp(
+            layer, input.interpolation, depth, mediumIndex + 1);
     }
     throw std::runtime_error("sound-speed interpolation did not locate a layer");
 }

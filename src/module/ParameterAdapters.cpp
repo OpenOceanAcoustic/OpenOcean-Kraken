@@ -45,16 +45,29 @@ AcousticInterpolation interpolation(SSP_Mode type)
     {
     case SSP_Mode::MODE_N_n2Linear: return AcousticInterpolation::N2Linear;
     case SSP_Mode::MODE_C_cLinear: return AcousticInterpolation::CLinear;
-    default:
-        throw std::invalid_argument("Krakenc currently supports only N and C SSP interpolation");
+    case SSP_Mode::MODE_P_cPCHIP: return AcousticInterpolation::Pchip;
+    case SSP_Mode::MODE_S_cCubic: return AcousticInterpolation::CubicSpline;
+    case SSP_Mode::MODE_A_Analytic:
+        throw std::invalid_argument(
+            "analytic SSP interpolation is not implemented");
     }
+    throw std::invalid_argument("unsupported public SSP interpolation");
 }
 
 SSP_Mode interpolation(AcousticInterpolation type)
 {
-    return type == AcousticInterpolation::N2Linear
-               ? SSP_Mode::MODE_N_n2Linear
-               : SSP_Mode::MODE_C_cLinear;
+    switch (type)
+    {
+    case AcousticInterpolation::N2Linear:
+        return SSP_Mode::MODE_N_n2Linear;
+    case AcousticInterpolation::CLinear:
+        return SSP_Mode::MODE_C_cLinear;
+    case AcousticInterpolation::Pchip:
+        return SSP_Mode::MODE_P_cPCHIP;
+    case AcousticInterpolation::CubicSpline:
+        return SSP_Mode::MODE_S_cCubic;
+    }
+    throw std::invalid_argument("unsupported internal SSP interpolation");
 }
 
 AcousticBoundaryType boundaryType(BC_Mode type)
@@ -334,11 +347,21 @@ void validatePublicParameterSemantics(const OOKC_parameters &params,
                 throw std::invalid_argument(
                     "SSP sound speeds, density, or attenuation are invalid");
             }
-            const bool hasShearSpeed =
-                (layer.betaR.array().abs() > 1.0e-12).any();
-            const bool declaredElastic =
-                layer.Material == Media_Mode::MODE_E_Elastic;
-            if (hasShearSpeed != declaredElastic)
+            const bool allCsZero =
+                (layer.betaR.array() == 0.0).all();
+            const bool allCsPositive =
+                (layer.betaR.array() > 0.0).all();
+            if (!allCsZero && !allCsPositive)
+            {
+                throw std::invalid_argument(
+                    "SSP shear sound speeds must be either all zero or all positive");
+            }
+            const bool materialMatches =
+                (allCsZero &&
+                 layer.Material == Media_Mode::MODE_A_Acoustic) ||
+                (allCsPositive &&
+                 layer.Material == Media_Mode::MODE_E_Elastic);
+            if (!materialMatches)
             {
                 throw std::invalid_argument(
                     "SSP layer Material must agree with its shear sound speed");
@@ -552,8 +575,26 @@ void updatePublicParameters(const std::vector<AcousticCase> &cases,
             layer.sigma = source.roughnessRms;
             layer.beta = source.attenuationPower;
             layer.ft = source.transitionFrequency;
-            layer.Material = !source.samples.empty() &&
-                                     std::abs(source.samples.front().cs) > 1.0e-12
+            const bool allCsZero =
+                !source.samples.empty() &&
+                std::all_of(
+                    source.samples.begin(), source.samples.end(),
+                    [](const AcousticSample &sample) {
+                        return sample.cs == 0.0;
+                    });
+            const bool allCsPositive =
+                !source.samples.empty() &&
+                std::all_of(
+                    source.samples.begin(), source.samples.end(),
+                    [](const AcousticSample &sample) {
+                        return sample.cs > 0.0;
+                    });
+            if (!allCsZero && !allCsPositive)
+            {
+                throw std::invalid_argument(
+                    "internal SSP shear sound speeds must be either all zero or all positive");
+            }
+            layer.Material = allCsPositive
                                  ? Media_Mode::MODE_E_Elastic
                                  : Media_Mode::MODE_A_Acoustic;
             layer.z.resize(layer.npts);

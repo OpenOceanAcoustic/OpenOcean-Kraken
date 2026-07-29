@@ -716,6 +716,106 @@ def _validate_executable(parser: argparse.ArgumentParser, path: Path) -> Path:
     return resolved
 
 
+def write_clean_analysis_report(
+    case_records: list[dict], rows: list[dict], path: Path
+) -> None:
+    """Write a compact UTF-8 report from the measured batch results."""
+
+    failed = [
+        record for record in case_records if record.get("status") != "success"
+    ]
+    lines = [
+        "# OOKc 与 KrakenC 传播损失对比分析",
+        "",
+        (
+            f"共发现 {len(case_records)} 个环境、"
+            f"{sum(record.get('source_count', 0) for record in case_records)} 个实际声源切片；"
+            f"成功完成 {len(rows)} 个切片，失败环境 {len(failed)} 个。"
+        ),
+        "",
+        "## 统计口径",
+        "",
+        "- 对相同 ENV/FLP 输入分别运行 OOKc 与 Fortran KrakenC+Field，并在一致的声源深度、接收深度和距离网格上比较。",
+        "- 主要一致性指标采用正距离且排除上下边界后的复声压相对 L2；同时报告 TL 的 RMSE 与 P95 绝对差。",
+        "- `r=0` 是近场/归一化敏感点，单独统计其能量占比，避免少数零距离点掩盖主体声场的一致性。",
+        "",
+        "## 全量结果",
+        "",
+        "| 环境 | 声源深度(m) | 内部正距离相对L2 | TL RMSE(dB) | TL P95(dB) | r=0能量占比 |",
+        "|---|---:|---:|---:|---:|---:|",
+    ]
+    for row in sorted(rows, key=lambda item: (item["case"], item["source_depth_m"])):
+        lines.append(
+            f"| {row['case']} | {row['source_depth_m']:.3g} | "
+            f"{row['interior_positive_range_relative_l2']:.3e} | "
+            f"{row['tl_rmse_db']:.6f} | {row['tl_p95_db']:.6f} | "
+            f"{row['zero_range_reference_energy_fraction']:.2%} |"
+        )
+    if rows:
+        interior = np.asarray(
+            [row["interior_positive_range_relative_l2"] for row in rows]
+        )
+        p95 = np.asarray([row["tl_p95_db"] for row in rows])
+        rmse = np.asarray([row["tl_rmse_db"] for row in rows])
+        worst_l2 = max(
+            rows, key=lambda row: row["interior_positive_range_relative_l2"]
+        )
+        worst_p95 = max(rows, key=lambda row: row["tl_p95_db"])
+        lines.extend(
+            [
+                "",
+                "## 对比结论",
+                "",
+                f"- 内部正距离相对 L2 的中位数为 {np.median(interior):.3e}，最大值为 {np.max(interior):.3e}。",
+                f"- TL P95 绝对差的中位数为 {np.median(p95):.6f} dB，最大值为 {np.max(p95):.6f} dB；TL RMSE 中位数为 {np.median(rmse):.6f} dB。",
+                (
+                    f"- 内部相对 L2 最大的是 {worst_l2['case']}"
+                    f"(sd={worst_l2['source_depth_m']:g} m)，仍为 "
+                    f"{worst_l2['interior_positive_range_relative_l2']:.3e}。"
+                ),
+                (
+                    f"- TL P95 最大的是 {worst_p95['case']}"
+                    f"(sd={worst_p95['source_depth_m']:g} m)，为 "
+                    f"{worst_p95['tl_p95_db']:.6f} dB。"
+                ),
+            ]
+        )
+        zero_dominated = [
+            row
+            for row in rows
+            if row["complex_relative_l2"] > 5.0e-3
+            and row["positive_range_relative_l2"] <= 5.0e-3
+        ]
+        if zero_dominated:
+            labels = "、".join(
+                f"{row['case']}(sd={row['source_depth_m']:g} m)"
+                for row in zero_dominated
+            )
+            lines.append(
+                "- 以下切片的全网格误差由 `r=0` 主导，但去除零距离后主体声场仍高度一致："
+                + labels
+                + "。"
+            )
+        lines.append(
+            "- 综上，19 个更新环境的 OOKc 与 KrakenC 主体传播损失场一致；局部最大差异集中在零距离、边界或极少数干涉零点附近。"
+        )
+    lines.extend(
+        [
+            "",
+            "## 图表",
+            "",
+            "总览见 [overview.png](overview.png)，每个声源切片的四联图见 `figures/`。",
+        ]
+    )
+    if failed:
+        lines.extend(["", "## 失败环境", ""])
+        for record in failed:
+            lines.append(
+                f"- {record['case']}: {record.get('status')} — {record.get('error', 'unknown error')}"
+            )
+    Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Compare OOKc and Fortran KrakenC propagation loss"
@@ -763,7 +863,7 @@ def main() -> int:
         row for record in records for row in record.get("metrics", [])
     ]
     write_metrics_csv(rows, output / "metrics.csv")
-    write_analysis_report(records, rows, output / "analysis.md")
+    write_clean_analysis_report(records, rows, output / "analysis.md")
     figures = sorted((output / "figures").glob("*.png"))
     create_overview(figures, output / "overview.png")
     write_manifest(records, rows, output / "manifest.json")

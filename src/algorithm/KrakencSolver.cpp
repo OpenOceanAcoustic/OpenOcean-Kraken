@@ -33,16 +33,6 @@ bool finite(std::complex<double> value)
     return std::isfinite(value.real()) && std::isfinite(value.imag());
 }
 
-bool duplicateRoot(const std::vector<std::complex<double>> &roots,
-                   std::complex<double> candidate,
-                   double tolerance)
-{
-    return std::any_of(roots.begin(), roots.end(), [&](std::complex<double> root) {
-        return std::abs(root - candidate) <=
-               tolerance * std::max({1.0, std::abs(root), std::abs(candidate)});
-    });
-}
-
 struct MeshSolveResult
 {
     std::vector<ModeRoot> modes;
@@ -74,7 +64,8 @@ MeshSolveResult solveMesh(
                              : 1;
     const int maxRestarts = maxTries - 1;
 
-    std::vector<std::complex<double>> accepted;
+    RootCandidateGate candidateGate(
+        RootUniquenessSpec{}, duplicateAdvanceBudget(maxModes));
     MeshSolveResult result;
     std::complex<double> guess(upperK * upperK, 0.0);
     int restartCount = 0;
@@ -97,18 +88,19 @@ MeshSolveResult solveMesh(
                          ? static_cast<double>(1.00001F)
                          : 1.00001;
         }
-        const double tolerance = std::max(
-            1.0e-14, std::abs(guess) * static_cast<double>(matrix.b1.size()) * 1.0e-14);
+        const double tolerance =
+            std::abs(guess) * static_cast<double>(matrix.b1.size()) * 1.0e-14;
         RootResult diagnostic = complexSecantDispersion(
-            guess, tolerance, 1000, dispersion, accepted);
+            guess, tolerance, 1000, dispersion,
+            candidateGate.acceptedEigenvalues());
         const std::complex<double> candidate = diagnostic.root;
         const std::complex<double> k = finite(candidate)
                                            ? std::sqrt(candidate)
                                            : std::complex<double>(
                                                  std::numeric_limits<double>::quiet_NaN(), 0.0);
-        const bool valid = diagnostic.converged && finite(candidate) && finite(k) &&
-                           k.real() >= lowerK && k.real() <= upperK * 1.01 &&
-                           !duplicateRoot(accepted, candidate, 1.0e-8);
+        const bool baseValid =
+            diagnostic.converged && finite(candidate) && finite(k) &&
+            k.real() >= lowerK && k.real() <= upperK * 1.01;
 
         RootSearchDiagnostic audit;
         audit.meshMultiplier = meshMultiplier;
@@ -118,42 +110,53 @@ MeshSolveResult solveMesh(
         audit.relativeCorrection = diagnostic.relativeCorrection;
         audit.searchLowerWavenumber = lowerK;
         audit.searchUpperWavenumber = upperK;
-        audit.accepted = valid;
-        if (!diagnostic.converged)
-        {
-            audit.decision = "rejected: secant did not converge";
-        }
-        else if (!finite(candidate) || !finite(k))
-        {
-            audit.decision = "rejected: non-finite root";
-        }
-        else if (k.real() < lowerK || k.real() > upperK * 1.01)
-        {
-            audit.decision = "rejected: outside search interval";
-        }
-        else if (duplicateRoot(accepted, candidate, 1.0e-8))
-        {
-            audit.decision = "rejected: duplicate root";
-        }
-        else
-        {
-            audit.decision = "accepted: converged, finite, in-band and unique";
-        }
-        result.diagnostics.push_back(audit);
 
-        if (!valid)
+        if (!baseValid)
         {
+            audit.accepted = false;
+            if (!diagnostic.converged)
+                audit.decision = "rejected: secant did not converge";
+            else if (!finite(candidate) || !finite(k))
+                audit.decision = "rejected: non-finite root";
+            else
+                audit.decision = "rejected: outside search interval";
+            result.diagnostics.push_back(audit);
             if (restartCount >= maxRestarts)
-            {
                 break;
-            }
             ++restartCount;
-            const auto point = deterministicRestartPoint(static_cast<std::size_t>(restartCount));
+            const auto point = deterministicRestartPoint(
+                static_cast<std::size_t>(restartCount));
             const std::complex<double> kz(
                 point.first * upperK, 0.01 * point.second * upperK);
             guess = upperK * upperK - kz * kz;
             continue;
         }
+
+        const RootCandidateAction action =
+            candidateGate.submit(
+                {candidate, diagnostic.absoluteCorrection});
+        if (action == RootCandidateAction::DuplicateAdvance)
+        {
+            audit.accepted = false;
+            audit.decision =
+                "rejected: duplicate root; advanced search seed";
+            result.diagnostics.push_back(audit);
+            guess = candidate;
+            continue;
+        }
+        if (action == RootCandidateAction::DuplicateBudgetExhausted)
+        {
+            audit.accepted = false;
+            audit.decision =
+                "rejected: duplicate root; duplicate budget exhausted";
+            result.diagnostics.push_back(audit);
+            break;
+        }
+
+        audit.accepted = true;
+        audit.decision =
+            "accepted: converged, finite, in-band and unique";
+        result.diagnostics.push_back(audit);
 
         ModeRoot mode;
         mode.eigenvalue = candidate;
@@ -164,7 +167,6 @@ MeshSolveResult solveMesh(
         mode.searchLowerWavenumber = lowerK;
         mode.searchUpperWavenumber = upperK;
         mode.acceptanceDiagnostic = audit.decision;
-        accepted.push_back(candidate);
         result.modes.push_back(mode);
         guess = candidate;
     }
@@ -360,6 +362,111 @@ double trackRelativeSpread(const ModeTrack &track)
 }
 }
 
+bool sameEigenroot(const RootIdentity &candidate,
+                   const RootIdentity &accepted,
+                   double localSpectralSpacing,
+                   const RootUniquenessSpec &spec)
+{
+    const double errorBound =
+        spec.errorMultiplier *
+        (candidate.absoluteError + accepted.absoluteError);
+    const double scale = std::max({
+        std::abs(candidate.eigenvalue),
+        std::abs(accepted.eigenvalue),
+        std::numeric_limits<double>::min()});
+    const double ulpBound =
+        spec.ulpMultiplier *
+        std::numeric_limits<double>::epsilon() * scale;
+    const double threshold = std::min(
+        std::max(errorBound, ulpBound),
+        spec.maximumSpacingFraction * localSpectralSpacing);
+    return std::abs(candidate.eigenvalue - accepted.eigenvalue) <= threshold;
+}
+
+int duplicateAdvanceBudget(std::size_t maxModes)
+{
+    const std::size_t capped = std::min<std::size_t>(maxModes, 2048);
+    return std::max(16, 2 * static_cast<int>(capped));
+}
+
+RootCandidateGate::RootCandidateGate(
+    RootUniquenessSpec spec,
+    int maximumDuplicateAdvances)
+    : spec_(spec),
+      maximumDuplicateAdvances_(maximumDuplicateAdvances)
+{
+    if (maximumDuplicateAdvances_ < 1)
+        throw std::invalid_argument(
+            "duplicate advance budget must be positive");
+}
+
+double RootCandidateGate::localSpectralSpacing(
+    std::size_t acceptedIndex) const
+{
+    if (acceptedIndex >= accepted_.size())
+        throw std::out_of_range("accepted root index is invalid");
+    if (accepted_.size() < 2)
+        return std::numeric_limits<double>::infinity();
+    double spacing = std::numeric_limits<double>::infinity();
+    for (std::size_t index = 0; index < accepted_.size(); ++index)
+    {
+        if (index == acceptedIndex)
+            continue;
+        spacing = std::min(
+            spacing,
+            std::abs(accepted_[acceptedIndex].eigenvalue -
+                     accepted_[index].eigenvalue));
+    }
+    return spacing;
+}
+
+RootCandidateAction RootCandidateGate::submit(
+    const RootIdentity &candidate)
+{
+    bool duplicate = false;
+    for (std::size_t index = 0;
+         index < accepted_.size(); ++index)
+    {
+        if (!sameEigenroot(
+                candidate, accepted_[index],
+                localSpectralSpacing(index), spec_))
+            continue;
+        duplicate = true;
+        break;
+    }
+    if (duplicate)
+    {
+        if (consecutiveDuplicateAdvances_ >=
+            maximumDuplicateAdvances_)
+            return RootCandidateAction::DuplicateBudgetExhausted;
+        ++consecutiveDuplicateAdvances_;
+        return RootCandidateAction::DuplicateAdvance;
+    }
+    accepted_.push_back(candidate);
+    consecutiveDuplicateAdvances_ = 0;
+    return RootCandidateAction::Accepted;
+}
+
+const std::vector<RootIdentity> &RootCandidateGate::accepted() const noexcept
+{
+    return accepted_;
+}
+
+std::vector<std::complex<double>>
+RootCandidateGate::acceptedEigenvalues() const
+{
+    std::vector<std::complex<double>> result;
+    result.reserve(accepted_.size());
+    for (const RootIdentity &root : accepted_)
+        result.push_back(root.eigenvalue);
+    return result;
+}
+
+int RootCandidateGate::consecutiveDuplicateAdvances() const noexcept
+{
+    return consecutiveDuplicateAdvances_;
+}
+
 std::pair<double, double> deterministicRestartPoint(std::size_t index)
 {
     if (index == 0)
@@ -403,6 +510,31 @@ std::complex<double> richardsonExtrapolate(
         }
     }
     return work.front();
+}
+
+std::size_t krakencFinalModeCount(
+    const std::vector<ModeRoot> &modes,
+    double omega,
+    double cHigh)
+{
+    const double cutoff =
+        (omega * omega) / (cHigh * cHigh);
+    std::size_t selectedCount = 0;
+    double minimumQualified = 0.0;
+    bool hasQualified = false;
+
+    for (std::size_t index = 0; index < modes.size(); ++index)
+    {
+        const double value = modes[index].eigenvalue.real();
+        if (value > cutoff &&
+            (!hasQualified || value < minimumQualified))
+        {
+            hasQualified = true;
+            minimumQualified = value;
+            selectedCount = index + 1;
+        }
+    }
+    return selectedCount;
 }
 
 AcousticSolveResult solveAcousticModes(const AcousticCase &input)
@@ -531,16 +663,28 @@ AcousticSolveResult solveAcousticModes(const AcousticCase &input)
         const AcousticMatrix matrix = buildAcousticMatrix(input, 1);
         for (ModeRoot &root : result.modes)
         {
+            const std::complex<double> coarseEigenvalue =
+                root.coarseEigenvalue;
             const ComplexModeResult raw = solveAcousticMode(
-                input, matrix, root.eigenvalue);
+                input, matrix, coarseEigenvalue);
             if (!raw.converged)
             {
                 throw std::runtime_error(
                     "roughness mode extraction failed before scatter correction");
             }
             const NormalizedComplexMode normalized = normalizeAcousticMode(
-                input, matrix, root.eigenvalue, raw.turningPoint, raw.mode);
+                input, matrix, coarseEigenvalue, raw.turningPoint, raw.mode);
             root.scatterPerturbation = normalized.scatterPerturbation;
+        }
+    }
+    const double omega = 2.0 * std::acos(-1.0) * input.frequency;
+    const std::size_t finalModeCount = krakencFinalModeCount(
+        result.modes, omega, input.cHigh);
+    result.modes.resize(finalModeCount);
+    if (hasRoughness)
+    {
+        for (ModeRoot &root : result.modes)
+        {
             root.wavenumber = std::sqrt(
                 root.eigenvalue + root.scatterPerturbation);
         }

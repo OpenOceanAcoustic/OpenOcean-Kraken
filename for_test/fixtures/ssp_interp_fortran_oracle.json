@@ -1,0 +1,495 @@
+{
+  "commands": {
+    "krakenc_runs": {
+      "C": {
+        "command": [
+          "E:\\my_project\\02_ookc_project\\krakenFortran\\build-acceptance-mingw\\out\\krakenc.exe",
+          "ssp_interp_c"
+        ],
+        "cwd": "C:\\Users\\user\\AppData\\Local\\Temp\\ookc-alg022-krakenc-ssp_interp_c-6vyzw_15",
+        "returncode": 0
+      },
+      "N": {
+        "command": [
+          "E:\\my_project\\02_ookc_project\\krakenFortran\\build-acceptance-mingw\\out\\krakenc.exe",
+          "ssp_interp_n"
+        ],
+        "cwd": "C:\\Users\\user\\AppData\\Local\\Temp\\ookc-alg022-krakenc-ssp_interp_n-qj8mtvbl",
+        "returncode": 0
+      },
+      "P": {
+        "command": [
+          "E:\\my_project\\02_ookc_project\\krakenFortran\\build-acceptance-mingw\\out\\krakenc.exe",
+          "ssp_interp_p"
+        ],
+        "cwd": "C:\\Users\\user\\AppData\\Local\\Temp\\ookc-alg022-krakenc-ssp_interp_p-cqvnh1a3",
+        "returncode": 0
+      },
+      "S": {
+        "command": [
+          "E:\\my_project\\02_ookc_project\\krakenFortran\\build-acceptance-mingw\\out\\krakenc.exe",
+          "ssp_interp_s"
+        ],
+        "cwd": "C:\\Users\\user\\AppData\\Local\\Temp\\ookc-alg022-krakenc-ssp_interp_s-fwnlf928",
+        "returncode": 0
+      },
+      "lossy_gradient_interpolation": {
+        "command": [
+          "E:\\my_project\\02_ookc_project\\krakenFortran\\build-acceptance-mingw\\out\\krakenc.exe",
+          "lossy_gradient_interpolation"
+        ],
+        "cwd": "C:\\Users\\user\\AppData\\Local\\Temp\\ookc-alg022-krakenc-lossy_gradient_interpolation-fcm25biu",
+        "returncode": 0
+      }
+    },
+    "profile_runs": {
+      "C": {
+        "command": [
+          "C:\\Users\\user\\AppData\\Local\\Temp\\ookc-alg022-aty0sc68\\fortran_ssp_oracle.exe",
+          "C"
+        ],
+        "cwd": "C:\\Users\\user\\AppData\\Local\\Temp\\ookc-alg022-profile-c-6ef018rc",
+        "returncode": 0
+      },
+      "N": {
+        "command": [
+          "C:\\Users\\user\\AppData\\Local\\Temp\\ookc-alg022-aty0sc68\\fortran_ssp_oracle.exe",
+          "N"
+        ],
+        "cwd": "C:\\Users\\user\\AppData\\Local\\Temp\\ookc-alg022-profile-n-04r49wcg",
+        "returncode": 0
+      },
+      "P": {
+        "command": [
+          "C:\\Users\\user\\AppData\\Local\\Temp\\ookc-alg022-aty0sc68\\fortran_ssp_oracle.exe",
+          "P"
+        ],
+        "cwd": "C:\\Users\\user\\AppData\\Local\\Temp\\ookc-alg022-profile-p-ui3waauo",
+        "returncode": 0
+      },
+      "S": {
+        "command": [
+          "C:\\Users\\user\\AppData\\Local\\Temp\\ookc-alg022-aty0sc68\\fortran_ssp_oracle.exe",
+          "S"
+        ],
+        "cwd": "C:\\Users\\user\\AppData\\Local\\Temp\\ookc-alg022-profile-s-eaiy9u6z",
+        "returncode": 0
+      }
+    }
+  },
+  "generated_date": "2026-07-27",
+  "lossy_gradient_interpolation": {
+    "mode_count": 10,
+    "wavenumbers": [
+      {
+        "imag": -0.003117827931419015,
+        "real": 0.3970642685890198
+      },
+      {
+        "imag": -0.00531683349981904,
+        "real": 0.3811902701854706
+      },
+      {
+        "imag": -0.007041556295007467,
+        "real": 0.36848512291908264
+      },
+      {
+        "imag": -0.008750111795961857,
+        "real": 0.35775402188301086
+      },
+      {
+        "imag": -0.009735435247421265,
+        "real": 0.34937289357185364
+      },
+      {
+        "imag": -0.009109381586313248,
+        "real": 0.3376431465148926
+      },
+      {
+        "imag": -0.00912475399672985,
+        "real": 0.320774108171463
+      },
+      {
+        "imag": -0.009551364928483963,
+        "real": 0.2991544008255005
+      },
+      {
+        "imag": -0.010350651107728481,
+        "real": 0.2719970643520355
+      },
+      {
+        "imag": -0.011731707490980625,
+        "real": 0.23756438493728638
+      }
+    ]
+  },
+  "profiles": {
+    "C": {
+      "mode_count": 7,
+      "samples": [
+        {
+          "cp_im": 6.229952617777276,
+          "cp_re": 1700.0,
+          "cs_im": 1.2826373036600274,
+          "cs_re": 700.0,
+          "depth": 50.0,
+          "rho": 1.4
+        },
+        {
+          "cp_im": 9.054808584171383,
+          "cp_re": 1741.6666666666667,
+          "cs_im": 1.9544949389105177,
+          "cs_re": 750.0,
+          "depth": 62.5,
+          "rho": 1.4833333333333332
+        },
+        {
+          "cp_im": 12.099545231192923,
+          "cp_re": 1796.6666666666665,
+          "cs_im": 2.7729396945792972,
+          "cs_re": 820.0,
+          "depth": 75.0,
+          "rho": 1.6333333333333333
+        },
+        {
+          "cp_im": 14.864850179917102,
+          "cp_re": 1850.0,
+          "cs_im": 3.57878711958713,
+          "cs_re": 887.5,
+          "depth": 87.5,
+          "rho": 1.775
+        },
+        {
+          "cp_im": 17.407220549671802,
+          "cp_re": 1900.0,
+          "cs_im": 4.3518051374179505,
+          "cs_re": 950.0,
+          "depth": 100.0,
+          "rho": 1.9
+        }
+      ],
+      "wavenumbers": [
+        {
+          "imag": -0.0008256928995251656,
+          "real": 0.4152214825153351
+        },
+        {
+          "imag": -0.0012120949104428291,
+          "real": 0.40047886967658997
+        },
+        {
+          "imag": -0.0014550118939951062,
+          "real": 0.38027870655059814
+        },
+        {
+          "imag": -0.001400229288265109,
+          "real": 0.35774341225624084
+        },
+        {
+          "imag": -0.0026890342123806477,
+          "real": 0.34359705448150635
+        },
+        {
+          "imag": -0.002631756477057934,
+          "real": 0.32962727546691895
+        },
+        {
+          "imag": -0.0021562196779996157,
+          "real": 0.3129020929336548
+        }
+      ]
+    },
+    "N": {
+      "mode_count": 7,
+      "samples": [
+        {
+          "cp_im": 6.22995261777728,
+          "cp_re": 1700.0000000000002,
+          "cs_im": 1.2826373036600274,
+          "cs_re": 700.0,
+          "depth": 50.0,
+          "rho": 1.4
+        },
+        {
+          "cp_im": 9.014295351427998,
+          "cp_re": 1741.3610924227169,
+          "cs_im": 1.9275240895928896,
+          "cs_re": 748.9245956636474,
+          "depth": 62.5,
+          "rho": 1.4833333333333332
+        },
+        {
+          "cp_im": 12.006729742407376,
+          "cp_re": 1795.7438214081396,
+          "cs_im": 2.7045223549372492,
+          "cs_re": 816.5450899611119,
+          "depth": 75.0,
+          "rho": 1.6333333333333333
+        },
+        {
+          "cp_im": 14.753325067798546,
+          "cp_re": 1848.803512524324,
+          "cs_im": 3.501132020009338,
+          "cs_re": 883.6889269601896,
+          "depth": 87.5,
+          "rho": 1.775
+        },
+        {
+          "cp_im": 17.407220549671795,
+          "cp_re": 1899.9999999999995,
+          "cs_im": 4.35180513741795,
+          "cs_re": 950.0,
+          "depth": 100.0,
+          "rho": 1.9
+        }
+      ],
+      "wavenumbers": [
+        {
+          "imag": -0.0008177651325240731,
+          "real": 0.41526010632514954
+        },
+        {
+          "imag": -0.0011946957092732191,
+          "real": 0.4005693793296814
+        },
+        {
+          "imag": -0.0014677804429084063,
+          "real": 0.3803684115409851
+        },
+        {
+          "imag": -0.001396265928633511,
+          "real": 0.3578105866909027
+        },
+        {
+          "imag": -0.002685167361050844,
+          "real": 0.34363463521003723
+        },
+        {
+          "imag": -0.002652874682098627,
+          "real": 0.32975608110427856
+        },
+        {
+          "imag": -0.002103740582242608,
+          "real": 0.3130186200141907
+        }
+      ]
+    },
+    "P": {
+      "mode_count": 7,
+      "samples": [
+        {
+          "cp_im": 6.229952617777276,
+          "cp_re": 1700.0,
+          "cs_im": 1.2826373036600274,
+          "cs_re": 700.0,
+          "depth": 50.0,
+          "rho": 1.4
+        },
+        {
+          "cp_im": 9.02185402868777,
+          "cp_re": 1739.9598087098086,
+          "cs_im": 1.9358389270321716,
+          "cs_re": 747.439713064713,
+          "depth": 62.5,
+          "rho": 1.4747990435490435
+        },
+        {
+          "cp_im": 12.120788282297498,
+          "cp_re": 1796.2759462759464,
+          "cs_im": 2.768014864011215,
+          "cs_re": 819.4139194139194,
+          "depth": 75.0,
+          "rho": 1.6313797313797314
+        },
+        {
+          "cp_im": 15.004631312435219,
+          "cp_re": 1852.4296016483518,
+          "cs_im": 3.6032320053438047,
+          "cs_re": 891.1444024725274,
+          "depth": 87.5,
+          "rho": 1.7871480082417581
+        },
+        {
+          "cp_im": 17.407220549671802,
+          "cp_re": 1900.0,
+          "cs_im": 4.3518051374179505,
+          "cs_re": 950.0,
+          "depth": 100.0,
+          "rho": 1.9
+        }
+      ],
+      "wavenumbers": [
+        {
+          "imag": -0.0008529828046448529,
+          "real": 0.4162861406803131
+        },
+        {
+          "imag": -0.0011921774130314589,
+          "real": 0.40194666385650635
+        },
+        {
+          "imag": -0.001455854158848524,
+          "real": 0.381313681602478
+        },
+        {
+          "imag": -0.0013674807269126177,
+          "real": 0.3585463762283325
+        },
+        {
+          "imag": -0.002740789670497179,
+          "real": 0.34411272406578064
+        },
+        {
+          "imag": -0.0026296956930309534,
+          "real": 0.3300090730190277
+        },
+        {
+          "imag": -0.0021236150059849024,
+          "real": 0.3134339451789856
+        }
+      ]
+    },
+    "S": {
+      "mode_count": 7,
+      "samples": [
+        {
+          "cp_im": 6.229952617777276,
+          "cp_re": 1700.0,
+          "cs_im": 1.2826373036600274,
+          "cs_re": 700.0,
+          "depth": 50.0,
+          "rho": 1.4
+        },
+        {
+          "cp_im": 9.009954452272558,
+          "cp_re": 1739.5833333333333,
+          "cs_im": 1.9318292871531324,
+          "cs_re": 746.875,
+          "depth": 62.5,
+          "rho": 1.4729166666666667
+        },
+        {
+          "cp_im": 12.113069638136277,
+          "cp_re": 1796.031746031746,
+          "cs_im": 2.7654140165221084,
+          "cs_re": 819.047619047619,
+          "depth": 75.0,
+          "rho": 1.6301587301587301
+        },
+        {
+          "cp_im": 15.06894329679413,
+          "cp_re": 1854.4642857142858,
+          "cs_im": 3.624902347899525,
+          "cs_re": 894.1964285714286,
+          "depth": 87.5,
+          "rho": 1.7973214285714285
+        },
+        {
+          "cp_im": 17.407220549671802,
+          "cp_re": 1900.0,
+          "cs_im": 4.3518051374179505,
+          "cs_re": 950.0,
+          "depth": 100.0,
+          "rho": 1.9
+        }
+      ],
+      "wavenumbers": [
+        {
+          "imag": -0.0008262586779892445,
+          "real": 0.4163877069950104
+        },
+        {
+          "imag": -0.0012071450473740697,
+          "real": 0.4019988179206848
+        },
+        {
+          "imag": -0.0014482284896075726,
+          "real": 0.38139116764068604
+        },
+        {
+          "imag": -0.001366251497529447,
+          "real": 0.3586689531803131
+        },
+        {
+          "imag": -0.00273675168864429,
+          "real": 0.3441508114337921
+        },
+        {
+          "imag": -0.002629534574225545,
+          "real": 0.32997000217437744
+        },
+        {
+          "imag": -0.0021263083908706903,
+          "real": 0.3133794367313385
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "driver": {
+      "compile_command": [
+        "D:\\program\\msys64\\ucrt64\\bin\\gfortran.exe",
+        "-I",
+        "E:\\my_project\\02_ookc_project\\krakenFortran\\build-acceptance-mingw\\fortran_prj\\module",
+        "E:\\my_project\\02_ookc_project\\OpenOcean-Krakenc\\.worktrees\\remediation-runtime-contracts\\for_test\\fortran_ssp_oracle_driver.f90",
+        "E:\\my_project\\02_ookc_project\\krakenFortran\\build-acceptance-mingw\\out\\libMisc.a",
+        "-o",
+        "C:\\Users\\user\\AppData\\Local\\Temp\\ookc-alg022-aty0sc68\\fortran_ssp_oracle.exe"
+      ],
+      "compile_cwd": "C:\\Users\\user\\AppData\\Local\\Temp\\ookc-alg022-aty0sc68",
+      "compile_returncode": 0,
+      "path": "E:\\my_project\\02_ookc_project\\OpenOcean-Krakenc\\.worktrees\\remediation-runtime-contracts\\for_test\\fortran_ssp_oracle_driver.f90",
+      "sha256": "df34932d67e317c92d34efabcf049950d34b732bbae2ab48c8664c2db17042db"
+    },
+    "inputs": {
+      "C": {
+        "path": "E:\\my_project\\02_ookc_project\\OpenOcean-Krakenc\\.worktrees\\remediation-runtime-contracts\\for_test\\fixtures\\ssp_interp_c.env",
+        "sha256": "b30c2ac0c609571e2952289852099978596480d964e8e24a40b1b612bb80f545"
+      },
+      "N": {
+        "path": "E:\\my_project\\02_ookc_project\\OpenOcean-Krakenc\\.worktrees\\remediation-runtime-contracts\\for_test\\fixtures\\ssp_interp_n.env",
+        "sha256": "8a19a4aed30d1c106293460453c19c7b788be791108daff87aae0b1085b61be7"
+      },
+      "P": {
+        "path": "E:\\my_project\\02_ookc_project\\OpenOcean-Krakenc\\.worktrees\\remediation-runtime-contracts\\for_test\\fixtures\\ssp_interp_p.env",
+        "sha256": "9b29687665d5a51d812a7c8824c448020a40a28a9c06073b90d07ee2163fade1"
+      },
+      "S": {
+        "path": "E:\\my_project\\02_ookc_project\\OpenOcean-Krakenc\\.worktrees\\remediation-runtime-contracts\\for_test\\fixtures\\ssp_interp_s.env",
+        "sha256": "285fe7e24e3cbe3cd0008b80e55128517be865b1845a6baaefeadf803fe4d42b"
+      },
+      "lossy_gradient_interpolation": {
+        "path": "E:\\my_project\\02_ookc_project\\OpenOcean-Krakenc\\.worktrees\\remediation-runtime-contracts\\for_test\\fixtures\\lossy_gradient_interpolation.env",
+        "sha256": "553152aa3053aa4af7b8ff639890efa0a6e47998ee9932fa7a188e59afe5c3c6"
+      }
+    },
+    "krakenc": {
+      "path": "E:\\my_project\\02_ookc_project\\krakenFortran\\build-acceptance-mingw\\out\\krakenc.exe",
+      "sha256": "3ecdeb4404771f89c84bb9bae31ded71e15a68a91a74d4af89400e209b93682b"
+    },
+    "libMisc": {
+      "path": "E:\\my_project\\02_ookc_project\\krakenFortran\\build-acceptance-mingw\\out\\libMisc.a",
+      "sha256": "fd1923fe91706a350071cd5906e89d059e6a5bb583ce347d907b4fc99cf416e5"
+    },
+    "sources": {
+      "AttenMod.f90": {
+        "path": "E:\\my_project\\02_ookc_project\\krakenFortran\\misc\\AttenMod.f90",
+        "sha256": "1b2bb44a9ec9cb574206cd61a8a495f1f869f346307db63a1dd3c3ba7a4e1e64"
+      },
+      "pchipMod.f90": {
+        "path": "E:\\my_project\\02_ookc_project\\krakenFortran\\misc\\pchipMod.f90",
+        "sha256": "54cbdfda7bec32a28ef146964125e084aee2a669855436ccf29c9af66e431114"
+      },
+      "splinec.f90": {
+        "path": "E:\\my_project\\02_ookc_project\\krakenFortran\\misc\\splinec.f90",
+        "sha256": "1132c59ad8a8227c88741eb5590ec1830cb16f99221660937e48434b8706a050"
+      },
+      "sspMod.f90": {
+        "path": "E:\\my_project\\02_ookc_project\\krakenFortran\\misc\\sspMod.f90",
+        "sha256": "b7d83a1e45f5dfaa0d9a991e92ee234afb9b020f1748ff4ccc2e8437fe4bafb7"
+      }
+    }
+  },
+  "schema": "OpenOcean-Krakenc.ssp-interpolation-oracle",
+  "schema_version": 1
+}

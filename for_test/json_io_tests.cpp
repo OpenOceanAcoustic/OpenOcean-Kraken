@@ -1,10 +1,12 @@
 #include "OpenOceanKrakencInterface.h"
 #include "module/json_in_out.hpp"
+#include "module/ParameterAdapters.h"
 
 #include <cassert>
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
+#include <utility>
 
 using namespace OpenOceanKrakenc;
 
@@ -161,6 +163,21 @@ int main()
     assert(capabilityReencoded["AttenUnit"]["referenceFrequency"] == 40.0);
     assert(capabilityReencoded["sspInput"].front()["SSPType"] == "cPCHIP");
     assert(capabilityReencoded["sspInput"].front()["HSTop"]["BC"] == "grain");
+
+    for (const auto &supported :
+         {std::pair{"cPCHIP", AcousticInterpolation::Pchip},
+          std::pair{"cCubic", AcousticInterpolation::CubicSpline}})
+    {
+        OpenOcean_json interpolationDocument = document;
+        interpolationDocument["sspInput"].front()["SSPType"] =
+            supported.first;
+        OOKC_parameters interpolationRoundTrip;
+        from_json(interpolationDocument, interpolationRoundTrip);
+        const auto interpolationCases =
+            toAcousticCases(interpolationRoundTrip);
+        assert(interpolationCases.front().interpolation ==
+               supported.second);
+    }
 
     OpenOcean_json invalidMultiFrequency = multiFrequency;
     invalidMultiFrequency["sspInput"].front()["HSBot"]["rho"] = -1.0;

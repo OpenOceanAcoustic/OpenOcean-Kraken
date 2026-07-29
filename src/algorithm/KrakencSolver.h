@@ -18,6 +18,54 @@ struct SpectralMinimumPhaseSpeed
     bool elasticPresent = false;
 };
 
+struct RootUniquenessSpec
+{
+    double errorMultiplier = 4.0;
+    double maximumSpacingFraction = 0.25;
+    double ulpMultiplier = 64.0;
+};
+
+struct RootIdentity
+{
+    std::complex<double> eigenvalue{};
+    double absoluteError = 0.0;
+};
+
+bool sameEigenroot(const RootIdentity &candidate,
+                   const RootIdentity &accepted,
+                   double localSpectralSpacing,
+                   const RootUniquenessSpec &spec);
+
+enum class RootCandidateAction
+{
+    Accepted,
+    DuplicateAdvance,
+    DuplicateBudgetExhausted
+};
+
+int duplicateAdvanceBudget(std::size_t maxModes);
+
+class RootCandidateGate
+{
+public:
+    RootCandidateGate(RootUniquenessSpec spec,
+                      int maximumDuplicateAdvances);
+
+    RootCandidateAction submit(const RootIdentity &candidate);
+    const std::vector<RootIdentity> &accepted() const noexcept;
+    std::vector<std::complex<double>> acceptedEigenvalues() const;
+    int consecutiveDuplicateAdvances() const noexcept;
+
+private:
+    double localSpectralSpacing(
+        std::size_t acceptedIndex) const;
+
+    RootUniquenessSpec spec_;
+    int maximumDuplicateAdvances_ = 0;
+    int consecutiveDuplicateAdvances_ = 0;
+    std::vector<RootIdentity> accepted_;
+};
+
 struct ModeRoot
 {
     std::complex<double> eigenvalue{};
@@ -64,6 +112,11 @@ std::pair<double, double> deterministicRestartPoint(std::size_t index);
 std::complex<double> richardsonExtrapolate(
     const std::vector<int> &multipliers,
     const std::vector<std::complex<double>> &values);
+
+std::size_t krakencFinalModeCount(
+    const std::vector<ModeRoot> &modes,
+    double omega,
+    double cHigh);
 
 SpectralMinimumPhaseSpeed spectralMinimumPhaseSpeed(
     const AcousticCase &input);

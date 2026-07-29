@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 #include <stdexcept>
+#include <utility>
 
 using namespace OpenOceanKrakenc;
 
@@ -179,13 +180,51 @@ int main()
         expectFieldConversionRejected(candidate);
     }
 
-    for (SSP_Mode unsupported : {SSP_Mode::MODE_P_cPCHIP,
-                                 SSP_Mode::MODE_S_cCubic,
-                                 SSP_Mode::MODE_A_Analytic})
+    for (const auto &supported :
+         {std::pair{SSP_Mode::MODE_N_n2Linear,
+                    AcousticInterpolation::N2Linear},
+          std::pair{SSP_Mode::MODE_C_cLinear,
+                    AcousticInterpolation::CLinear},
+          std::pair{SSP_Mode::MODE_P_cPCHIP,
+                    AcousticInterpolation::Pchip},
+          std::pair{SSP_Mode::MODE_S_cCubic,
+                    AcousticInterpolation::CubicSpline}})
     {
         OOKC_parameters candidate = params;
-        candidate.sspInput.front().SSPType = unsupported;
+        for (auto &area : candidate.sspInput)
+        {
+            area.SSPType = supported.first;
+        }
+        validatePublicParameters(candidate, Run_Mode::MODE_M_Modes);
+        const auto supportedCases = toAcousticCases(candidate);
+        assert(supportedCases.front().interpolation == supported.second);
+        OOKC_parameters restored;
+        updatePublicParameters(supportedCases, restored);
+        for (const auto &area : restored.sspInput)
+        {
+            assert(area.SSPType == supported.first);
+        }
+    }
+    {
+        OOKC_parameters candidate = params;
+        candidate.sspInput.front().SSPType = SSP_Mode::MODE_A_Analytic;
         expectRejected(candidate, Run_Mode::MODE_M_Modes);
+    }
+    {
+        auto invalidCases = toAcousticCases(params);
+        invalidCases.front().interpolation =
+            static_cast<AcousticInterpolation>(-1);
+        bool rejected = false;
+        try
+        {
+            OOKC_parameters restored;
+            updatePublicParameters(invalidCases, restored);
+        }
+        catch (const std::invalid_argument &)
+        {
+            rejected = true;
+        }
+        assert(rejected);
     }
     {
         OOKC_parameters candidate = params;
@@ -227,6 +266,38 @@ int main()
         OOKC_parameters candidate = params;
         candidate.sspInput.front().layers.front().Material =
             Media_Mode::MODE_E_Elastic;
+        expectRejected(candidate, Run_Mode::MODE_M_Modes);
+    }
+    {
+        OOKC_parameters candidate = params;
+        candidate.sspInput.front().layers.front().Material =
+            static_cast<Media_Mode>(-1);
+        expectRejected(candidate, Run_Mode::MODE_M_Modes);
+    }
+    {
+        OOKC_parameters candidate = params;
+        auto &layer = candidate.sspInput.front().layers.front();
+        layer.betaR = Eigen::VectorXd::Constant(layer.npts, 700.0);
+        layer.Material = static_cast<Media_Mode>(-1);
+        expectRejected(candidate, Run_Mode::MODE_M_Modes);
+    }
+    {
+        OOKC_parameters candidate = params;
+        auto &layer = candidate.sspInput.front().layers.front();
+        layer.betaR = Eigen::VectorXd::Constant(layer.npts, 1.0e-13);
+        layer.Material = Media_Mode::MODE_E_Elastic;
+        validatePublicParameters(candidate, Run_Mode::MODE_M_Modes);
+        const auto elasticCases = toAcousticCases(candidate);
+        OOKC_parameters restored;
+        updatePublicParameters(elasticCases, restored);
+        assert(restored.sspInput.front().layers.front().Material ==
+               Media_Mode::MODE_E_Elastic);
+    }
+    {
+        OOKC_parameters candidate = params;
+        auto &layer = candidate.sspInput.front().layers.front();
+        layer.betaR[1] = 1.0e-13;
+        layer.Material = Media_Mode::MODE_E_Elastic;
         expectRejected(candidate, Run_Mode::MODE_M_Modes);
     }
     {

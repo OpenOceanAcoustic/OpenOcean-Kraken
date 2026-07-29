@@ -36,6 +36,7 @@ add_library(OpenOceanKrakenc_core STATIC
     src/algorithm/AcousticCase.cpp
     src/algorithm/ComplexDispersion.cpp
     src/algorithm/ComplexNumerics.cpp
+    src/algorithm/SspInterpolation.cpp
     src/algorithm/ComplexMatrixBuilder.cpp
     src/algorithm/ComplexRootFinder.cpp
     src/algorithm/KrakencSolver.cpp
@@ -59,6 +60,7 @@ target_include_directories(OpenOceanKrakenc_core
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/third_party/eigen>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/third_party/nlohmann-json>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/third_party>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
@@ -133,6 +135,14 @@ if(MINGW)
     target_link_options(OpenOceanKrakenc_acoustic_case_runner PRIVATE -static-libgcc -static-libstdc++)
 endif()
 
+add_executable(OpenOceanKrakenc_velocity_case_runner
+    for_test/krakenc_velocity_case_runner.cpp
+)
+target_link_libraries(OpenOceanKrakenc_velocity_case_runner PRIVATE OpenOceanKrakenc_core)
+if(MINGW)
+    target_link_options(OpenOceanKrakenc_velocity_case_runner PRIVATE -static-libgcc -static-libstdc++)
+endif()
+
 install(TARGETS OpenOceanKrakenc_core
     EXPORT OpenOceanKrakencTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -184,6 +194,120 @@ endif()
 include(CTest)
 find_package(Python3 COMPONENTS Interpreter)
 if(BUILD_TESTING)
+    add_executable(OpenOceanKrakenc_remediation_ssp_interpolation_tests
+        for_test/remediation_ssp_interpolation_tests.cpp
+    )
+    target_link_libraries(OpenOceanKrakenc_remediation_ssp_interpolation_tests
+        PRIVATE OpenOceanKrakenc_core
+    )
+    target_compile_definitions(OpenOceanKrakenc_remediation_ssp_interpolation_tests PRIVATE
+        OPENOCEANKRAKENC_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+    )
+    if(MINGW)
+        target_link_options(OpenOceanKrakenc_remediation_ssp_interpolation_tests PRIVATE
+            -static-libgcc -static-libstdc++
+        )
+    endif()
+    add_test(
+        NAME OpenOceanKrakenc_remediation_ssp_interpolation_alg_022
+        COMMAND OpenOceanKrakenc_remediation_ssp_interpolation_tests ALG-022
+    )
+    set_tests_properties(
+        OpenOceanKrakenc_remediation_ssp_interpolation_alg_022
+        PROPERTIES
+            LABELS "remediation;ssp-interpolation;ALG-022"
+            TIMEOUT 60
+    )
+
+    add_executable(OpenOceanKrakenc_remediation_runtime_tests
+        for_test/remediation_runtime_tests.cpp
+    )
+    target_link_libraries(OpenOceanKrakenc_remediation_runtime_tests
+        PRIVATE OpenOceanKrakenc_core
+    )
+    target_compile_definitions(OpenOceanKrakenc_remediation_runtime_tests PRIVATE
+        OPENOCEANKRAKENC_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+    )
+    add_test(
+        NAME OpenOceanKrakenc_remediation_runtime_alg_004
+        COMMAND OpenOceanKrakenc_remediation_runtime_tests ALG-004
+    )
+    set_tests_properties(OpenOceanKrakenc_remediation_runtime_alg_004 PROPERTIES
+        LABELS "remediation;runtime;ALG-004"
+        TIMEOUT 5
+    )
+    add_test(
+        NAME OpenOceanKrakenc_remediation_runtime_alg_007
+        COMMAND OpenOceanKrakenc_remediation_runtime_tests ALG-007
+    )
+    set_tests_properties(OpenOceanKrakenc_remediation_runtime_alg_007 PROPERTIES
+        LABELS "remediation;runtime;ALG-007"
+        TIMEOUT 5
+    )
+    foreach(OPENOCEANKRAKENC_ALG019_SCENARIO IN ITEMS
+            completion id timed)
+        add_test(
+            NAME OpenOceanKrakenc_remediation_runtime_alg_019_${OPENOCEANKRAKENC_ALG019_SCENARIO}
+            COMMAND OpenOceanKrakenc_remediation_runtime_tests
+                    ALG-019-${OPENOCEANKRAKENC_ALG019_SCENARIO}
+        )
+        set_tests_properties(
+            OpenOceanKrakenc_remediation_runtime_alg_019_${OPENOCEANKRAKENC_ALG019_SCENARIO}
+            PROPERTIES
+                LABELS "remediation;runtime;ALG-019"
+                TIMEOUT 1
+        )
+    endforeach()
+    if(MINGW)
+        target_link_options(OpenOceanKrakenc_remediation_runtime_tests PRIVATE
+            -static-libgcc -static-libstdc++
+        )
+    endif()
+
+    add_executable(OpenOceanKrakenc_remediation_root_mode_tests
+        for_test/remediation_root_mode_tests.cpp
+    )
+    target_link_libraries(OpenOceanKrakenc_remediation_root_mode_tests
+        PRIVATE OpenOceanKrakenc_core
+    )
+    add_test(
+        NAME OpenOceanKrakenc_remediation_root_mode_alg_001
+        COMMAND OpenOceanKrakenc_remediation_root_mode_tests ALG-001
+    )
+    set_tests_properties(
+        OpenOceanKrakenc_remediation_root_mode_alg_001
+        PROPERTIES LABELS "remediation;root-mode;ALG-001"
+    )
+    add_test(
+        NAME OpenOceanKrakenc_remediation_root_mode_alg_002
+        COMMAND OpenOceanKrakenc_remediation_root_mode_tests ALG-002
+    )
+    set_tests_properties(
+        OpenOceanKrakenc_remediation_root_mode_alg_002
+        PROPERTIES LABELS "remediation;root-mode;ALG-002"
+    )
+    add_test(
+        NAME OpenOceanKrakenc_remediation_root_mode_alg_006
+        COMMAND OpenOceanKrakenc_remediation_root_mode_tests ALG-006
+    )
+    set_tests_properties(
+        OpenOceanKrakenc_remediation_root_mode_alg_006
+        PROPERTIES LABELS "remediation;root-mode;ALG-006"
+    )
+    add_test(
+        NAME OpenOceanKrakenc_remediation_root_mode_alg_009
+        COMMAND OpenOceanKrakenc_remediation_root_mode_tests ALG-009
+    )
+    set_tests_properties(
+        OpenOceanKrakenc_remediation_root_mode_alg_009
+        PROPERTIES LABELS "remediation;root-mode;ALG-009"
+    )
+    if(MINGW)
+        target_link_options(OpenOceanKrakenc_remediation_root_mode_tests PRIVATE
+            -static-libgcc -static-libstdc++
+        )
+    endif()
+
     add_executable(OpenOceanKrakenc_api_compatibility_tests
         for_test/api_compatibility_tests.cpp
     )
@@ -312,6 +436,51 @@ if(BUILD_TESTING)
 endif()
 
 if(BUILD_TESTING AND Python3_Interpreter_FOUND)
+    add_test(
+        NAME OpenOceanKrakenc_ssp_interpolation_regression_tests
+        COMMAND ${Python3_EXECUTABLE}
+                -m unittest for_test.test_ssp_interpolation_regression -v
+    )
+    set_tests_properties(
+        OpenOceanKrakenc_ssp_interpolation_regression_tests
+        PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            LABELS "remediation;ssp-interpolation;ALG-022"
+            TIMEOUT 30
+    )
+
+    add_test(
+        NAME OpenOceanKrakenc_remediation_cli_tests
+        COMMAND ${Python3_EXECUTABLE}
+                -m unittest for_test/test_remediation_cli.py -v
+    )
+    set_tests_properties(OpenOceanKrakenc_remediation_cli_tests PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        ENVIRONMENT
+            "OPENOCEAN_KRAKENC_BINARY_DIR=$<TARGET_FILE_DIR:OpenOcean-Krakenc>"
+        LABELS "remediation;runtime;ALG-021"
+        TIMEOUT 30
+    )
+
+    add_test(
+        NAME OpenOceanKrakenc_numerical_consistency_tests
+        COMMAND ${Python3_EXECUTABLE} -m unittest for_test/test_numerical_consistency.py -v
+    )
+    set_tests_properties(OpenOceanKrakenc_numerical_consistency_tests PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        TIMEOUT 120
+    )
+
+    add_test(
+        NAME OpenOceanKrakenc_velocity_analysis_tests
+        COMMAND ${Python3_EXECUTABLE} -m unittest for_test/test_velocity_analysis.py -v
+    )
+    set_tests_properties(OpenOceanKrakenc_velocity_analysis_tests PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        ENVIRONMENT "OPENOCEAN_KRAKENC_VELOCITY_RUNNER=$<TARGET_FILE:OpenOceanKrakenc_velocity_case_runner>"
+        TIMEOUT 300
+    )
+
     add_test(
         NAME OpenOceanKrakenc_oracle_configuration_tests
         COMMAND ${Python3_EXECUTABLE} -m unittest for_test/oracle_configuration_tests.py -v

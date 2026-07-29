@@ -13,7 +13,9 @@ namespace OpenOceanKrakenc
 enum class AcousticInterpolation
 {
     N2Linear,
-    CLinear
+    CLinear,
+    Pchip,
+    CubicSpline
 };
 
 enum class AcousticBoundaryType

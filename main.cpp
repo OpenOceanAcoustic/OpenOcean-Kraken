@@ -19,6 +19,38 @@
 
 namespace
 {
+const char *loadErrorCodeName(
+    OpenOceanKrakenc::LoadErrorCode code) noexcept
+{
+    using OpenOceanKrakenc::LoadErrorCode;
+    switch (code)
+    {
+    case LoadErrorCode::MissingFile:
+        return "missing_file";
+    case LoadErrorCode::IoError:
+        return "io_error";
+    case LoadErrorCode::ParseError:
+        return "parse_error";
+    case LoadErrorCode::SchemaError:
+        return "schema_error";
+    case LoadErrorCode::InvalidField:
+        return "invalid_field";
+    case LoadErrorCode::UnsupportedCapability:
+        return "unsupported_capability";
+    case LoadErrorCode::None:
+        return "none";
+    }
+    return "unknown";
+}
+
+std::string formatLoadError(
+    const OpenOceanKrakenc::LoadError &error)
+{
+    return std::string("[") +
+           loadErrorCodeName(error.code) +
+           "] path='" + error.path + "': " + error.message;
+}
+
 std::vector<OpenOceanKrakenc::AcousticCase> loadAcousticCases(
     const std::filesystem::path &path)
 {
@@ -29,9 +61,14 @@ std::vector<OpenOceanKrakenc::AcousticCase> loadAcousticCases(
     if (path.extension() == ".json")
     {
         OpenOceanKrakenc::OOKC_parameters params;
-        if (!OpenOceanKrakenc::read_json_file(path.string(), params))
+        const OpenOceanKrakenc::LoadResult loaded =
+            OpenOceanKrakenc::read_json_file_result(
+                path.string(), params);
+        if (!loaded.ok)
         {
-            throw std::runtime_error("unable to read Krakenc JSON input: " + path.string());
+            throw std::runtime_error(
+                "unable to read Krakenc JSON input " +
+                formatLoadError(loaded.error));
         }
         return OpenOceanKrakenc::toAcousticCases(params);
     }

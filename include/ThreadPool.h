@@ -171,6 +171,7 @@ private:
     };
 
     inline static thread_local const ExecutorState *currentExecutor_ = nullptr;
+    inline static thread_local const std::string *currentTaskId_ = nullptr;
     std::shared_ptr<ExecutorControl> control_;
 };
 
@@ -290,7 +291,18 @@ inline void ThreadPool::ExecutorState::pushIdentified(
         }
         activeTasks.fetch_add(1, std::memory_order_relaxed);
         tasks.push([self = shared_from_this(), id, task = std::move(task)]() mutable {
-            task();
+            const std::string *previousTaskId = currentTaskId_;
+            currentTaskId_ = &id;
+            try
+            {
+                task();
+            }
+            catch (...)
+            {
+                currentTaskId_ = previousTaskId;
+                throw;
+            }
+            currentTaskId_ = previousTaskId;
             bool notify = false;
             {
                 std::lock_guard<std::mutex> idLock(self->idMapMutex);
@@ -360,6 +372,11 @@ inline void ThreadPool::ExecutorLease::wait_completion() const
     {
         throw std::runtime_error("external ThreadPool expired");
     }
+    if (ownsCurrentThread())
+    {
+        throw std::logic_error(
+            "ThreadPool current task cannot wait for executor completion");
+    }
     std::unique_lock<std::mutex> lock(control_->state->queueMutex);
     control_->state->condition.wait(lock, [&] {
         return control_->state->tasks.empty() &&
@@ -374,6 +391,10 @@ inline bool ThreadPool::ExecutorLease::wait_completion_for(
     {
         throw std::runtime_error("external ThreadPool expired");
     }
+    if (ownsCurrentThread())
+    {
+        return false;
+    }
     std::unique_lock<std::mutex> lock(control_->state->queueMutex);
     return control_->state->condition.wait_for(lock, timeout, [&] {
         return control_->state->tasks.empty() &&
@@ -386,6 +407,12 @@ inline void ThreadPool::ExecutorLease::wait_id(const std::string &id) const
     if (!control_)
     {
         throw std::runtime_error("external ThreadPool expired");
+    }
+    if (ownsCurrentThread() && currentTaskId_ &&
+        *currentTaskId_ == id)
+    {
+        throw std::logic_error(
+            "ThreadPool current task ID cannot wait for itself");
     }
     std::unique_lock<std::mutex> lock(control_->state->idMapMutex);
     control_->state->idCondition.wait(lock, [&] {
@@ -400,6 +427,11 @@ inline bool ThreadPool::ExecutorLease::wait_id_for(
     if (!control_)
     {
         throw std::runtime_error("external ThreadPool expired");
+    }
+    if (ownsCurrentThread() && currentTaskId_ &&
+        *currentTaskId_ == id)
+    {
+        return false;
     }
     std::unique_lock<std::mutex> lock(control_->state->idMapMutex);
     const bool complete = control_->state->idCondition.wait_for(lock, timeout, [&] {

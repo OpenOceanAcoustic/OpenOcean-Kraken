@@ -199,9 +199,10 @@ class BatchOrchestrationTests(unittest.TestCase):
         self.assertIn("--test-dir", completed.stdout)
 
     def test_discover_cases_finds_all_workspace_env_files(self):
-        cases = discover_cases(workspace_test_directory())
+        test_directory = workspace_test_directory()
+        cases = discover_cases(test_directory)
 
-        self.assertEqual(len(cases), 11)
+        self.assertEqual(len(cases), len(list(test_directory.rglob("*.env"))))
         self.assertEqual(sum(case.name == "MunkKleaky" for case in cases), 1)
         self.assertTrue(all(case.env.parent == case.root.parent for case in cases))
         self.assertEqual(

@@ -250,7 +250,6 @@ void from_json(const OpenOcean_json &in, OOKC_parameters &p)
     if(parsed.MLimit<1) throw std::runtime_error("MLimit must be positive");
     if(!std::isfinite(parsed.Rmax)||parsed.Rmax<0.0) throw std::runtime_error("Rmax must be finite and nonnegative");
     if((!parsed.sspInput.empty()||parsed.cLow!=0.0||parsed.cHigh!=0.0)&&(!std::isfinite(parsed.cLow)||!std::isfinite(parsed.cHigh)||parsed.cLow<=0.0||parsed.cHigh<=parsed.cLow)) throw std::runtime_error("phase speed interval is invalid");
-    for(const auto &area:parsed.sspInput) for(const auto &layer:area.layers) { const bool shear=(layer.betaR.array().abs()>1.0e-12).any(); if(shear!=(layer.Material==Media_Mode::MODE_E_Elastic)) throw std::runtime_error("SSP Material does not match shear speed"); }
     if(in.contains("paths")) { const auto &paths=in.at("paths"); parsed.envPath=paths.value("env",""); parsed.flpPath=paths.value("flp",""); parsed.modPath=paths.value("mod",""); parsed.shdPath=paths.value("shd",""); }
     if(!parsed.sspInput.empty())
     {

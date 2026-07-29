@@ -1,9 +1,8 @@
 #include "algorithm/ComplexMatrixBuilder.h"
 
-#include "algorithm/ComplexNumerics.h"
+#include "OpenOceanKrakencParams.h"
+#include "algorithm/SspInterpolation.h"
 
-#include <algorithm>
-#include <cmath>
 #include <stdexcept>
 
 namespace OpenOceanKrakenc
@@ -24,20 +23,17 @@ AcousticMatrix buildAcousticMatrix(const AcousticCase &input, int meshMultiplier
     matrix.omega2 = matrix.omega * matrix.omega;
     int offset = 0;
 
-    for (const AcousticLayer &layer : input.layers)
+    for (std::size_t mediumIndex = 0;
+         mediumIndex < input.layers.size(); ++mediumIndex)
     {
-        const bool elastic = layer.samples.front().cs > 0.0;
-        if (elastic && layer.roughnessRms != 0.0)
-        {
-            throw std::invalid_argument("Rough elastic interfaces are not allowed");
-        }
-        for (const AcousticSample &sample : layer.samples)
-        {
-            if ((sample.cs > 0.0) != elastic)
-            {
-                throw std::invalid_argument("a medium cannot mix acoustic and elastic samples");
-            }
-        }
+        const AcousticLayer &layer = input.layers[mediumIndex];
+        PreparedComplexSspLayer prepared(
+            layer, input.interpolation,
+            attenuationContext(
+                input, layer.attenuationPower,
+                layer.transitionFrequency),
+            mediumIndex + 1);
+        const bool elastic = prepared.elastic();
 
         const int count = static_cast<int>(
             layer.baseMesh * meshMultiplier * input.frequency / input.referenceFrequency);
@@ -51,8 +47,6 @@ AcousticMatrix buildAcousticMatrix(const AcousticCase &input, int meshMultiplier
         matrix.spacing.push_back(spacing);
         matrix.layerElastic.push_back(elastic);
 
-        std::size_t lowerIndex = 0;
-
         for (int local = 0; local <= count; ++local)
         {
             double depth = layer.topDepth + local * spacing;
@@ -60,53 +54,15 @@ AcousticMatrix buildAcousticMatrix(const AcousticCase &input, int meshMultiplier
             {
                 depth = layer.bottomDepth;
             }
-            while (lowerIndex + 1 < layer.samples.size() - 1 &&
-                   depth >= layer.samples[lowerIndex + 1].depth)
-            {
-                ++lowerIndex;
-            }
-            const AcousticSample &lower = layer.samples[lowerIndex];
-            const AcousticSample &upper = layer.samples[lowerIndex + 1];
-            const double fraction = (depth - lower.depth) / (upper.depth - lower.depth);
-
-            double cpReal = 0.0;
-            double csReal = 0.0;
-            if (input.interpolation == AcousticInterpolation::N2Linear)
-            {
-                const double n2 =
-                    (1.0 - fraction) / (lower.cp * lower.cp) +
-                    fraction / (upper.cp * upper.cp);
-                cpReal = 1.0 / std::sqrt(n2);
-                if (elastic)
-                {
-                    const double shearN2 =
-                        (1.0 - fraction) / (lower.cs * lower.cs) +
-                        fraction / (upper.cs * upper.cs);
-                    csReal = 1.0 / std::sqrt(shearN2);
-                }
-            }
-            else
-            {
-                cpReal = (1.0 - fraction) * lower.cp + fraction * upper.cp;
-                if (elastic)
-                {
-                    csReal = (1.0 - fraction) * lower.cs + fraction * upper.cs;
-                }
-            }
-            const double alphaP =
-                (1.0 - fraction) * lower.alphaP + fraction * upper.alphaP;
-            const double alphaS =
-                (1.0 - fraction) * lower.alphaS + fraction * upper.alphaS;
-            const AttenuationContext context = attenuationContext(
-                input, layer.attenuationPower, layer.transitionFrequency);
-            const std::complex<double> cp = complexSoundSpeed(
-                depth, cpReal, alphaP, context);
-            const std::complex<double> cs = elastic
-                                                ? complexSoundSpeed(
-                                                      depth, csReal, alphaS,
-                                                      context)
-                                                : std::complex<double>{};
-            const double rho = (1.0 - fraction) * lower.rho + fraction * upper.rho;
+            const InterpolatedMaterial material =
+                local == 0
+                    ? prepared.top()
+                    : (local == count
+                           ? prepared.bottom()
+                           : prepared.evaluate(depth));
+            const std::complex<double> cp = material.cp;
+            const std::complex<double> cs = material.cs;
+            const double rho = material.rho;
 
             matrix.depth.push_back(depth);
             matrix.cp.push_back(cp);

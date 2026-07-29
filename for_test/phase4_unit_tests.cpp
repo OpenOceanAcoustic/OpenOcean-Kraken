@@ -1,11 +1,19 @@
 #include "algorithm/FieldSolver.h"
 #include "algorithm/AcousticCase.h"
+#include "algorithm/ComplexMatrixBuilder.h"
 
+#include <array>
+#include <chrono>
 #include <cmath>
 #include <complex>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <iterator>
 #include <stdexcept>
+#include <string>
+#include <system_error>
+#include <utility>
 
 using namespace OpenOceanKrakenc;
 
@@ -18,6 +26,57 @@ void require(bool condition, const char *message)
         throw std::runtime_error(message);
     }
 }
+
+class ScopedTemporaryDirectory
+{
+public:
+    explicit ScopedTemporaryDirectory(const std::string &prefix)
+    {
+        const auto seed =
+            std::chrono::high_resolution_clock::now()
+                .time_since_epoch().count();
+        for (unsigned int attempt = 0; attempt < 256; ++attempt)
+        {
+            const std::filesystem::path candidate =
+                std::filesystem::temp_directory_path() /
+                (prefix + std::to_string(seed) + "-" +
+                 std::to_string(attempt));
+            std::error_code error;
+            if (std::filesystem::create_directory(candidate, error))
+            {
+                path_ = candidate;
+                return;
+            }
+            if (error &&
+                error != std::make_error_code(std::errc::file_exists))
+            {
+                throw std::filesystem::filesystem_error(
+                    "unable to create test temporary directory",
+                    candidate, error);
+            }
+        }
+        throw std::runtime_error(
+            "unable to create a unique test temporary directory");
+    }
+
+    ~ScopedTemporaryDirectory()
+    {
+        std::error_code ignored;
+        std::filesystem::remove_all(path_, ignored);
+    }
+
+    ScopedTemporaryDirectory(const ScopedTemporaryDirectory &) = delete;
+    ScopedTemporaryDirectory &operator=(
+        const ScopedTemporaryDirectory &) = delete;
+
+    const std::filesystem::path &path() const
+    {
+        return path_;
+    }
+
+private:
+    std::filesystem::path path_;
+};
 }
 
 int main()
@@ -45,6 +104,62 @@ int main()
             "stepK multi-profile ENV count mismatch");
     require(std::abs(soundSpeedAt(stepProfiles.front(), 18.0) - 1476.7) <= 1.0e-9,
             "stepK source sound-speed interpolation mismatch");
+
+    const std::array<std::pair<const char *, AcousticInterpolation>, 4>
+        interpolationFixtures = {{
+            {"ssp_interp_n.env", AcousticInterpolation::N2Linear},
+            {"ssp_interp_c.env", AcousticInterpolation::CLinear},
+            {"ssp_interp_p.env", AcousticInterpolation::Pchip},
+            {"ssp_interp_s.env", AcousticInterpolation::CubicSpline},
+        }};
+    for (const auto &fixture : interpolationFixtures)
+    {
+        const AcousticCase parsed = readAcousticEnv(
+            workspace / "OpenOcean-Krakenc" / "for_test" / "fixtures" /
+            fixture.first);
+        require(parsed.interpolation == fixture.second,
+                "ALG-022 ENV interpolation enum mismatch");
+        require(buildAcousticMatrix(parsed, 1).depth.size() == 202,
+                "ALG-022 ENV interpolation matrix chain mismatch");
+    }
+
+    {
+        const std::filesystem::path pFixture =
+            workspace / "OpenOcean-Krakenc" / "for_test" / "fixtures" /
+            "ssp_interp_p.env";
+        std::ifstream pFixtureStream(pFixture);
+        std::string analyticEnv{
+            std::istreambuf_iterator<char>(pFixtureStream),
+            std::istreambuf_iterator<char>()};
+        const std::size_t interpolationCode = analyticEnv.find("'PVW'");
+        require(interpolationCode != std::string::npos,
+                "ALG-022 P fixture interpolation code missing");
+        analyticEnv.replace(interpolationCode, 5, "'AVW'");
+
+        const ScopedTemporaryDirectory temporaryDirectory(
+            "openocean_krakenc_ssp_interp_a-");
+        const std::filesystem::path analyticFixture =
+            temporaryDirectory.path() / "ssp_interp_a.env";
+        {
+            std::ofstream analyticFixtureStream(analyticFixture);
+            analyticFixtureStream << analyticEnv;
+        }
+        bool rejectedAnalytic = false;
+        try
+        {
+            static_cast<void>(readAcousticEnv(analyticFixture));
+        }
+        catch (const std::runtime_error &error)
+        {
+            rejectedAnalytic =
+                std::string(error.what()) ==
+                "analytic SSP interpolation is not implemented";
+        }
+        require(
+            rejectedAnalytic,
+            "ALG-022 analytic ENV interpolation must be explicitly rejected");
+    }
+
     const std::vector<AcousticCase> wedgeProfiles = readAcousticEnvironments(
         workspace / "test" / "toolbox_env" / "wedge.env");
     require(wedgeProfiles.size() == 51,
