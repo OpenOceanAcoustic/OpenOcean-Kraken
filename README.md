@@ -26,24 +26,69 @@ ctest --test-dir build_final --output-on-failure
 
 ## CLI
 
-```text
-OpenOceanKraken <input.env|input.json> [options]
-  --output <root>  输出根路径（不含扩展名）
-  --threads <N>    正整数线程数
-  --velocity       输出压力、垂直速度、水平速度
-  --mod             额外输出 MOD
-  --mod-only        仅计算并输出 MOD
-  --json            输出规范化 JSON
-```
-
-示例：
+运行以下命令可以查看完整的中文帮助：
 
 ```powershell
+bin\OpenOceanKraken.exe -h
+bin\OpenOceanKraken.exe --help
+```
+
+基本调用格式：
+
+```text
+OpenOceanKraken.exe <文件名> [-t 线程数] [-v] [-j] [-out 输出目录] [-time]
+```
+
+参数说明：
+
+- `<文件名>`：输入配置文件，支持 `.env` 或 `.json`；省略后缀时默认使用 `.env`。
+- `-t <线程数>`：指定正整数线程数，等价于 `--threads <N>`；未指定时使用硬件线程数。
+- `-v`：启用压力、垂直振速和水平振速计算，等价于 `--velocity`。它是开关参数，后面不需要填写 `0` 或 `1`。
+- `-j`：运行前导出规范化 JSON 配置，等价于 `--json`。
+- `-out <输出目录>`：将结果写入指定目录，结果根名称沿用输入文件名。
+- `-time`、`--time`：打印本次计算耗时。
+- `--output <路径>`：直接指定不含扩展名的结果根路径，不能和 `-out` 同时使用。
+- `--mod`：在声场结果之外额外导出 MOD 文件。
+- `--mod-only`：只计算本征模态并导出 MOD 文件。
+- `-h`、`--help`：显示命令行帮助。
+
+常用示例：
+
+```powershell
+# 默认调用
+bin\OpenOceanKraken.exe ..\test\MunkK.env
+
+# 输入文件省略 .env 后缀
+bin\OpenOceanKraken.exe ..\test\MunkK
+
+# 使用 8 个线程
+bin\OpenOceanKraken.exe ..\test\MunkK.env -t 8
+
+# 启用压力和振速计算
+bin\OpenOceanKraken.exe ..\test\MunkK.env -v
+
+# 运行前导出 JSON
+bin\OpenOceanKraken.exe ..\test\MunkK.env -j
+
+# 将结果写入 output 目录
+bin\OpenOceanKraken.exe ..\test\MunkK.env -out output
+
+# 打印计算耗时
+bin\OpenOceanKraken.exe ..\test\MunkK.env -time
+
+# 组合使用
+bin\OpenOceanKraken.exe ..\test\MunkK.env -t 8 -v -j -out output -time
+
+# 使用完整长选项，并额外导出 MOD
 bin\OpenOceanKraken.exe ..\test\MunkK.env --output tmp\munk --threads 4 --mod
+
+# 从 JSON 加载参数
 bin\OpenOceanKraken.exe tmp\munk.json --output tmp\munk_json --threads 4
 ```
 
 普通压力结果为 `<root>.shd`；启用振速后为 `<root>_P.shd`、`<root>_V.shd`、`<root>_H.shd`；模态结果为 `<root>.mod`。
+
+OOB 的 `-M` 内存上限和 `-m` 内存报告依赖其专用内存管理模块。OOK 当前没有对应接口，使用这两个参数时会明确提示不支持。
 
 ## Biological 体积衰减
 
