@@ -15,6 +15,10 @@
 #include <chrono>
 #include <iostream>
 
+#if defined(OPENOCEAN_KRAKEN_FIELD_RUNTIME)
+#include <openocean/field/runtime.hpp>
+#endif
+
 /**
  * @brief 高性能线程池类，支持普通任务、带ID任务、等待完成、超时等功能
  */
@@ -22,6 +26,9 @@ class ThreadPool
 {
 public:
     explicit ThreadPool(size_t threads);
+#if defined(OPENOCEAN_KRAKEN_FIELD_RUNTIME)
+    explicit ThreadPool(OpenOcean::Field::FieldRuntime &runtime);
+#endif
 
     /**
      * @brief 提交一个任务到线程池
@@ -77,6 +84,9 @@ private:
     std::condition_variable condition;
     std::condition_variable id_condition;
     std::atomic<bool> stop{false};
+#if defined(OPENOCEAN_KRAKEN_FIELD_RUNTIME)
+    OpenOcean::Field::FieldRuntime *fieldRuntime = nullptr;
+#endif
 };
 
 // ==================== 实现 ====================
@@ -117,6 +127,15 @@ inline ThreadPool::ThreadPool(size_t threads)
     }
 }
 
+#if defined(OPENOCEAN_KRAKEN_FIELD_RUNTIME)
+inline ThreadPool::ThreadPool(
+    OpenOcean::Field::FieldRuntime &runtime)
+    : stop(false),
+      fieldRuntime(&runtime)
+{
+}
+#endif
+
 template <class F, class... Args>
 auto ThreadPool::enqueue(F &&f, Args &&...args)
     -> std::future<std::invoke_result_t<F, Args...>>
@@ -130,6 +149,17 @@ auto ThreadPool::enqueue(F &&f, Args &&...args)
         });
 
     std::future<return_type> res = bound_task->get_future();
+    std::function<void()> queued = [bound_task, this]()
+    {
+        (*bound_task)();
+        size_t prev =
+            active_tasks.fetch_sub(1, std::memory_order_acq_rel);
+        if (prev == 1)
+        {
+            condition.notify_all();
+        }
+    };
+    bool useFieldRuntime = false;
     {
         std::unique_lock<std::mutex> lock(queue_mutex);
         if (stop.load(std::memory_order_relaxed))
@@ -138,10 +168,39 @@ auto ThreadPool::enqueue(F &&f, Args &&...args)
         }
 
         active_tasks.fetch_add(1, std::memory_order_relaxed);
-        tasks.emplace([bound_task]()
-                      { (*bound_task)(); });
+#if defined(OPENOCEAN_KRAKEN_FIELD_RUNTIME)
+        if (fieldRuntime != nullptr)
+        {
+            useFieldRuntime = true;
+        }
+        else
+#endif
+        {
+            tasks.emplace([bound_task]()
+                          { (*bound_task)(); });
+        }
     }
-    condition.notify_one();
+#if defined(OPENOCEAN_KRAKEN_FIELD_RUNTIME)
+    if (useFieldRuntime)
+    {
+        try
+        {
+            fieldRuntime->submit(std::move(queued));
+        }
+        catch (...)
+        {
+            active_tasks.fetch_sub(1, std::memory_order_acq_rel);
+            condition.notify_all();
+            throw;
+        }
+    }
+#endif
+#if defined(OPENOCEAN_KRAKEN_FIELD_RUNTIME)
+    if (fieldRuntime == nullptr)
+#endif
+    {
+        condition.notify_one();
+    }
     return res;
 }
 
@@ -172,6 +231,8 @@ auto ThreadPool::enqueue_with_id(const std::string &id, F &&f, Args &&...args)
         });
 
     std::future<return_type> res = bound_task->get_future();
+    bool useFieldRuntime = false;
+    std::function<void()> identifiedTask;
     {
         std::unique_lock<std::mutex> lock(queue_mutex);
         if (stop.load(std::memory_order_relaxed))
@@ -186,8 +247,8 @@ auto ThreadPool::enqueue_with_id(const std::string &id, F &&f, Args &&...args)
             id_task_counts[id]++; // ✅ 现在是普通 size_t，由 mutex 保护
         }
 
-        tasks.emplace([bound_task, this, id]()
-                      {
+        identifiedTask = [bound_task, this, id]()
+        {
             (*bound_task)();
 
             // ✅ 安全 decrement global counter
@@ -210,9 +271,50 @@ auto ThreadPool::enqueue_with_id(const std::string &id, F &&f, Args &&...args)
             }
             if (should_notify) {
                 id_condition.notify_all();
-            } });
+            }
+        };
+#if defined(OPENOCEAN_KRAKEN_FIELD_RUNTIME)
+        if (fieldRuntime != nullptr)
+        {
+            useFieldRuntime = true;
+        }
+        else
+#endif
+        {
+            tasks.emplace(std::move(identifiedTask));
+        }
     }
-    condition.notify_one();
+#if defined(OPENOCEAN_KRAKEN_FIELD_RUNTIME)
+    if (useFieldRuntime)
+    {
+        try
+        {
+            fieldRuntime->submit(std::move(identifiedTask));
+        }
+        catch (...)
+        {
+            active_tasks.fetch_sub(1, std::memory_order_acq_rel);
+            {
+                std::unique_lock<std::mutex> id_lock(id_map_mutex);
+                auto match = id_task_counts.find(id);
+                if (match != id_task_counts.end() &&
+                    --match->second == 0)
+                {
+                    id_task_counts.erase(match);
+                }
+            }
+            condition.notify_all();
+            id_condition.notify_all();
+            throw;
+        }
+    }
+#endif
+#if defined(OPENOCEAN_KRAKEN_FIELD_RUNTIME)
+    if (fieldRuntime == nullptr)
+#endif
+    {
+        condition.notify_one();
+    }
     return res;
 }
 
@@ -259,6 +361,13 @@ inline void ThreadPool::cleanup_finished_ids()
 
 inline ThreadPool::~ThreadPool()
 {
+#if defined(OPENOCEAN_KRAKEN_FIELD_RUNTIME)
+    if (fieldRuntime != nullptr)
+    {
+        wait_completion();
+        return;
+    }
+#endif
     {
         std::lock_guard<std::mutex> lock(queue_mutex);
         stop.store(true, std::memory_order_relaxed);
