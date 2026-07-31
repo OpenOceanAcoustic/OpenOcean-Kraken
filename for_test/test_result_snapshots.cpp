@@ -1,4 +1,4 @@
-#include "OpenOceanKrakenInterface.h"
+#include "OpenOceanKrakenKernelInterface.h"
 #include "ThreadPool.h"
 
 #include <complex>
@@ -29,7 +29,7 @@ int main(int argc, char **argv)
     try
     {
         ThreadPool pool(1);
-        OpenOceanKraken::Interface interface(pool);
+        OpenOceanKraken::KernelInterface interface(pool);
         interface.setNumThreads(1);
         require(interface.from_env(argv[1]), "fixture must load");
         interface.set_Velocity_enable(true);

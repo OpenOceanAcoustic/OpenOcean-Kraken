@@ -1,4 +1,4 @@
-#include "OpenOceanKrakenInterface.h"
+#include "OpenOceanKrakenKernelInterface.h"
 #include "util.h"
 #include "input_SSP.hpp"
 #include "input_Sz_Rz_RR.hpp"
@@ -10,8 +10,11 @@
 #include "run.h"
 #include "EvaluateAD.h"
 #include "EvaluateCM.h"
+#if defined(OPENOCEAN_KRAKEN_LEGACY_JSON)
 #include "json_in_out.hpp"
+#endif
 #include "env_in_out.hpp"
+#include <array>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -54,7 +57,7 @@ namespace OpenOceanKraken
         }
     };
 
-    Interface::Interface()
+    KernelInterface::KernelInterface()
         : params(new OOK_parameters()),
           output(new OOK_output()),
           intm_TridMtx(nullptr),  // 初始化为 nullptr
@@ -66,7 +69,7 @@ namespace OpenOceanKraken
     {
         this->init(); // 初始化
     }
-    Interface::Interface(ThreadPool &pool)
+    KernelInterface::KernelInterface(ThreadPool &pool)
         : params(new OOK_parameters()),
           output(new OOK_output()),
           intm_TridMtx(nullptr),  // 初始化为 nullptr
@@ -79,13 +82,13 @@ namespace OpenOceanKraken
         this->init(); // 初始化
     }
 
-    Interface::~Interface()
+    KernelInterface::~KernelInterface()
     {
         // 释放params的各个成员变量的内存
         this->free(); // 释放内存
     }
 
-    void Interface::init()
+    void KernelInterface::init()
     {
         if (!this->params)
         {
@@ -118,7 +121,7 @@ namespace OpenOceanKraken
         
     }
 
-    void Interface::input_setup()
+    void KernelInterface::input_setup()
     {
         ensureAlive();
         auto &params = this->getParams(); // 获取参数
@@ -134,7 +137,7 @@ namespace OpenOceanKraken
         this->field_size = (size_t)params.Pos.NSz * (size_t)params.Pos.NRz_per_range * (size_t)params.Pos.NRr;
         std::cout << "OpenOcean-Kraken: input field size: " << this->field_size << std::endl;
     }
-    void Interface::intm_setup()
+    void KernelInterface::intm_setup()
     {
         ensureAlive();
         auto &params = this->getParams(); // 获取参数
@@ -153,7 +156,7 @@ namespace OpenOceanKraken
     }
 
     // 输出配置
-    void Interface::output_setup() // 设置输出参数
+    void KernelInterface::output_setup() // 设置输出参数
     {
         auto &params = this->getParams(); // 获取参数
         auto &output = this->getOutput(); // 获取输出
@@ -161,20 +164,20 @@ namespace OpenOceanKraken
         impl->OUTPUT_FIELD.Preprocess(params, output);
     }
 
-    void Interface::ensureAlive() const
+    void KernelInterface::ensureAlive() const
     {
         if (!this->params || !this->output)
         {
-            throw std::runtime_error("OpenOceanKraken::Interface has already been freed.");
+            throw std::runtime_error("OpenOceanKraken::KernelInterface has already been freed.");
         }
     }
 
-    void Interface::ensureThreadPool() const
+    void KernelInterface::ensureThreadPool() const
     {
         ensureAlive();
         if (!this->threadPool)
         {
-            throw std::runtime_error("ThreadPool is not set. Construct Interface with ThreadPool or call setThreadPool() before run().");
+            throw std::runtime_error("ThreadPool is not set. Construct KernelInterface with ThreadPool or call setThreadPool() before run().");
         }
         if (this->NumThreads <= 0)
         {
@@ -182,16 +185,16 @@ namespace OpenOceanKraken
         }
     }
 
-    void Interface::ensureSetup() const
+    void KernelInterface::ensureSetup() const
     {
         ensureAlive();
         if (!this->is_setup || !this->intm_TridMtx || !this->output->eigen || !this->output->u_AllSources)
         {
-            throw std::runtime_error("Interface output is not ready. Call run() before reading field output.");
+            throw std::runtime_error("KernelInterface output is not ready. Call run() before reading field output.");
         }
     }
 
-    void Interface::releaseFieldOutput()
+    void KernelInterface::releaseFieldOutput()
     {
         if (this->output)
         {
@@ -199,7 +202,7 @@ namespace OpenOceanKraken
         }
     }
 
-    void Interface::releaseEigenOutput()
+    void KernelInterface::releaseEigenOutput()
     {
         if (this->output)
         {
@@ -207,13 +210,13 @@ namespace OpenOceanKraken
         }
     }
 
-    void Interface::releaseIntermediate()
+    void KernelInterface::releaseIntermediate()
     {
         delete[] this->intm_TridMtx;
         this->intm_TridMtx = nullptr;
     }
 
-    void Interface::markDirty(DirtyKind kind)
+    void KernelInterface::markDirty(DirtyKind kind)
     {
         if (!this->output)
         {
@@ -244,7 +247,7 @@ namespace OpenOceanKraken
         this->field_size = 0;
     }
 
-    void Interface::validateSourceIndex(int srcIndex) const
+    void KernelInterface::validateSourceIndex(int srcIndex) const
     {
         ensureSetup();
         const auto &input = this->getParams_const();
@@ -257,7 +260,7 @@ namespace OpenOceanKraken
     }
 
     // 配置
-    void Interface::setup() // 设置参数
+    void KernelInterface::setup() // 设置参数
     {
         input_setup(); // 设置输入参数(外界输入参数，因此每次计算时候都重新计算一次环境)
         intm_setup();  // 设置中间矩阵参数
@@ -269,7 +272,7 @@ namespace OpenOceanKraken
         }
     }
 
-    void Interface::setNumThreads(int num_threads)
+    void KernelInterface::setNumThreads(int num_threads)
     {
         ensureAlive();
         if (num_threads <= 0)
@@ -282,24 +285,24 @@ namespace OpenOceanKraken
         }
         this->NumThreads = num_threads;
     }
-    void Interface::setThreadPool(ThreadPool &pool)
+    void KernelInterface::setThreadPool(ThreadPool &pool)
     {
         ensureAlive();
         this->threadPool = &pool;
     }
 
-    int Interface::getNumThreads() const
+    int KernelInterface::getNumThreads() const
     {
         ensureAlive();
         return this->NumThreads;
     }
 
-    int Interface::getHardwareThreads() const
+    int KernelInterface::getHardwareThreads() const
     {
         return std::thread::hardware_concurrency();
     }
 
-    void Interface::clearResults() // 清除结果
+    void KernelInterface::clearResults() // 清除结果
     {
         auto &output = this->getOutput(); // 获取输出
         auto &params = this->getParams(); // 获取参数
@@ -307,7 +310,7 @@ namespace OpenOceanKraken
         this->impl->OUTPUT_FIELD.ClearResults(params, output);
         this->impl->OUTPUT_EIGEN.ClearResults(params, output);
     }
-    void Interface::runField() // 运行声场
+    void KernelInterface::runField() // 运行声场
     {
         // FieldSolveWorker();
         ensureAlive();
@@ -350,7 +353,7 @@ namespace OpenOceanKraken
         }
     }
 
-    void Interface::runEigen() // 运行特征值
+    void KernelInterface::runEigen() // 运行特征值
     {
         auto &params = this->getParams(); // 获取参数
         auto &output = this->getOutput(); // 获取输出
@@ -366,7 +369,7 @@ namespace OpenOceanKraken
         }
     }
 
-    void Interface::run() // 运行
+    void KernelInterface::run() // 运行
     {
         print_header();                                                                                           // 打印头信息
         this->setup();                                                                                            // 配置
@@ -382,7 +385,7 @@ namespace OpenOceanKraken
         std::cout << "Field calculation time: " << duration.count() << " ms" << std::endl;                        // 打印时间差
     }
 
-    void Interface::free() // 释放内存
+    void KernelInterface::free() // 释放内存
     {
         // 释放output的各个成员变量的内存
         if (!this->params && !this->output && !this->intm_TridMtx)
@@ -402,144 +405,145 @@ namespace OpenOceanKraken
     }
 
     // 参数设置
-    void Interface::set_Title(std::string &title)
+    void KernelInterface::set_Title(std::string &title)
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_FREQ.set_title(params, title);
         markDirty(DirtyKind::All);
     }
-    void Interface::set_Freq(double freq)
+    void KernelInterface::set_Freq(double freq)
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_FREQ.set_freq(params, freq);
         markDirty(DirtyKind::All);
     }
-    void Interface::set_freqvec(Eigen::VectorXd freqvec) // 设置频率向量
+    void KernelInterface::set_freqvec(Eigen::VectorXd freqvec) // 设置频率向量
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_FREQ.set_freqvec(params, freqvec);
         markDirty(DirtyKind::All);
     }
-    void Interface::set_SSP(const std::vector<ssp::Range_Independent_Area> &sspInput) // 设置SSP
+    void KernelInterface::set_SSP(const std::vector<ssp::Range_Independent_Area> &sspInput) // 设置SSP
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SSP.set_SSP(params, sspInput);
         markDirty(DirtyKind::All);
     }
 
-    void Interface::set_AttenUnit(Atten_Mode mode) // 设置衰减单位
+    void KernelInterface::set_AttenUnit(Atten_Mode mode) // 设置衰减单位
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SSP.set_AttenUnit(params, mode);
         markDirty(DirtyKind::All);
     }
 
-    void Interface::set_Sz(const Eigen::VectorXd &Sz)
+    void KernelInterface::set_Sz(const Eigen::VectorXd &Sz)
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SZ_RZ_RR.set_Sz(params, Sz);
         markDirty(DirtyKind::All);
     }
-    void Interface::set_Sz(const double &start, const double &end, const int &NSz) // 设置声源深度（插值）
+    void KernelInterface::set_Sz(const double &start, const double &end, const int &NSz) // 设置声源深度（插值）
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SZ_RZ_RR.set_Sz(params, start, end, NSz);
         markDirty(DirtyKind::All);
     }
-    void Interface::set_Rr(const Eigen::VectorXd &Rr) // 设置水平接收
+    void KernelInterface::set_Rr(const Eigen::VectorXd &Rr) // 设置水平接收
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SZ_RZ_RR.set_Rr(params, Rr);
         markDirty(DirtyKind::All);
     }
-    void Interface::set_Rr(const double &start, const double &end, const int &NRr) // 设置水平接收（插值）
+    void KernelInterface::set_Rr(const double &start, const double &end, const int &NRr) // 设置水平接收（插值）
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SZ_RZ_RR.set_Rr(params, start, end, NRr);
         markDirty(DirtyKind::All);
     }
-    void Interface::set_Rz(const Eigen::VectorXd &Rz)
+    void KernelInterface::set_Rz(const Eigen::VectorXd &Rz)
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SZ_RZ_RR.set_Rz(params, Rz);
         markDirty(DirtyKind::All);
     }
-    void Interface::set_Rz(const double &start, const double &end, const int &NRz) // 设置接收深度（插值）
+    void KernelInterface::set_Rz(const double &start, const double &end, const int &NRz) // 设置接收深度（插值）
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SZ_RZ_RR.set_Rz(params, start, end, NRz);
         markDirty(DirtyKind::All);
     }
-    void Interface::set_Ro(const Eigen::VectorXd &Ro) // 设置阵列倾斜
+    void KernelInterface::set_Ro(const Eigen::VectorXd &Ro) // 设置阵列倾斜
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SZ_RZ_RR.set_Ro(params, Ro);
         markDirty(DirtyKind::All);
     }
-    void Interface::set_Ro(const double &start, const double &end, const int &NRo) // 设置阵列倾斜
+    void KernelInterface::set_Ro(const double &start, const double &end, const int &NRo) // 设置阵列倾斜
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SZ_RZ_RR.set_Ro(params, start, end, NRo);
         markDirty(DirtyKind::All);
     }
 
-    void Interface::set_cPhase(double cLow, double cHigh) // 设置最低频率
+    void KernelInterface::set_cPhase(double cLow, double cHigh) // 设置最低频率
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_FREQ.set_cPhase(params, cLow, cHigh);
         markDirty(DirtyKind::All);
     }
-    void Interface::set_GridType(Grid_Mode type) // 设置网格类型
+    void KernelInterface::set_GridType(Grid_Mode type) // 设置网格类型
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SZ_RZ_RR.set_GridType(params, type);
         markDirty(DirtyKind::All);
     }
 
-    void Interface::set_Rmax(double Rmax) // 设置最大计算距离，用于缩放error
+    void KernelInterface::set_Rmax(double Rmax) // 设置最大计算距离，用于缩放error
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SZ_RZ_RR.set_RMax(params, Rmax);
         markDirty(DirtyKind::All);
     }
-    void Interface::set_SourceType(Source_Mode type) // 设置源类型
+    void KernelInterface::set_SourceType(Source_Mode type) // 设置源类型
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_FREQ.set_SourceType(params, type);
         markDirty(DirtyKind::All);
     }
-    void Interface::set_RunMode(Run_Mode mode)
+    void KernelInterface::set_RunMode(Run_Mode mode)
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_FREQ.set_RunMode(params, mode);
         markDirty(DirtyKind::Field);
     } // 运行模式
-    void Interface::set_Velocity_enable(bool is_Velocity) // 设置是否计算振速
+    void KernelInterface::set_Velocity_enable(bool is_Velocity) // 设置是否计算振速
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_FREQ.set_Velocity_enable(params, is_Velocity);
         markDirty(DirtyKind::Field);
     }
-    void Interface::set_ReflCoef_Top(std::vector<ReflectionCoef> ReflCoef)
+    void KernelInterface::set_ReflCoef_Top(std::vector<ReflectionCoef> ReflCoef)
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_REFLCOEF.set_ReflCoef_Top(params, ReflCoef);
         markDirty(DirtyKind::All);
     } // 设置顶部反射系数
-    void Interface::set_ReflCoef_Bottom(std::vector<ReflectionCoef> ReflCoef)
+    void KernelInterface::set_ReflCoef_Bottom(std::vector<ReflectionCoef> ReflCoef)
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_REFLCOEF.set_ReflCoef_Bot(params, ReflCoef);
         markDirty(DirtyKind::All);
     } // 设置底部反射系数
-    void Interface::set_SBP(const Eigen::VectorXd &pat, const Eigen::VectorXd &theta) // 设置指向性
+    void KernelInterface::set_SBP(const Eigen::VectorXd &pat, const Eigen::VectorXd &theta) // 设置指向性
     {
         auto &params = this->getParams(); // 获取参数
         this->impl->INPUT_SBP.set_Pat(params, pat, theta);
         markDirty(DirtyKind::All);
     }
 
-    bool Interface::to_json(const std::string &jsonPath) const // 将参数写入json
+#if defined(OPENOCEAN_KRAKEN_LEGACY_JSON)
+    bool KernelInterface::to_json(const std::string &jsonPath) const
     {
         
         auto &params = this->getParams_const(); // 获取参数
@@ -556,7 +560,7 @@ namespace OpenOceanKraken
         return true;
 
     }
-    bool Interface::from_json(const std::string &jsonPath) // 从json读取参数
+    bool KernelInterface::from_json(const std::string &jsonPath)
     {
 
         std::ifstream ifs(jsonPath);
@@ -584,15 +588,16 @@ namespace OpenOceanKraken
     }
 
 
-    std::string Interface::to_json_string() const // 将参数写入json字符串
+    std::string KernelInterface::to_json_string() const
     {
         auto &params = this->getParams_const(); // 获取参数
         OpenOcean_json json;
         json = params;
         return json.dump(4);
     }
+#endif
 
-    bool Interface::from_env(const std::string &envPath)
+    bool KernelInterface::from_env(const std::string &envPath)
     {
         try
         {
@@ -616,7 +621,7 @@ namespace OpenOceanKraken
         }
     }
 
-    std::complex<float> *Interface::get_u(int srcIndex) // 获取某个声源复声压指针
+    std::complex<float> *KernelInterface::get_u(int srcIndex) // 获取某个声源复声压指针
     {
         auto &output = this->getOutput_const(); // 获取输出
         auto &input = this->getParams_const();  // 获取输入
@@ -628,7 +633,7 @@ namespace OpenOceanKraken
         return output.u_AllSources + srcIndex * input.Pos.NRr * input.Pos.NRz_per_range;
     }
 
-    std::complex<float> *Interface::get_v(int srcIndex) // 获取某个声源复垂直振速
+    std::complex<float> *KernelInterface::get_v(int srcIndex) // 获取某个声源复垂直振速
     {
         auto &output = this->getOutput_const(); // 获取输出
         auto &input = this->getParams_const();  // 获取输入
@@ -640,7 +645,7 @@ namespace OpenOceanKraken
         return output.v_AllSources + srcIndex * input.Pos.NRr * input.Pos.NRz_per_range;
     }
 
-    std::complex<float> *Interface::get_h(int srcIndex) // 获取某个声源水平振速
+    std::complex<float> *KernelInterface::get_h(int srcIndex) // 获取某个声源水平振速
     {
         auto &output = this->getOutput_const(); // 获取输出
         auto &input = this->getParams_const();  // 获取输入
@@ -652,7 +657,7 @@ namespace OpenOceanKraken
         return output.h_AllSources + srcIndex * input.Pos.NRr * input.Pos.NRz_per_range;
     }
 
-    std::complex<float> *Interface::get_u_AllSources() // 获取全部声源的复声压
+    std::complex<float> *KernelInterface::get_u_AllSources() // 获取全部声源的复声压
     {
         auto &output = this->getOutput_const(); // 获取输出
         ensureSetup();
@@ -663,7 +668,7 @@ namespace OpenOceanKraken
         return output.u_AllSources;
     }
 
-    std::complex<float> *Interface::get_v_AllSources() // 获取全部声源的垂直振速
+    std::complex<float> *KernelInterface::get_v_AllSources() // 获取全部声源的垂直振速
     {
         auto &output = this->getOutput_const(); // 获取输出
         ensureSetup();
@@ -674,7 +679,7 @@ namespace OpenOceanKraken
         return output.v_AllSources;
     }
 
-    std::complex<float> *Interface::get_h_AllSources() // 获取全部声源的水平振速
+    std::complex<float> *KernelInterface::get_h_AllSources() // 获取全部声源的水平振速
     {
         auto &output = this->getOutput_const(); // 获取输出
         ensureSetup();
@@ -685,7 +690,7 @@ namespace OpenOceanKraken
         return output.h_AllSources;
     }
 
-    void Interface::export_result(std::string filename) // 导出结果到文件
+    void KernelInterface::export_result(std::string filename) // 导出结果到文件
     {
         // std::cout << "开始导出结果..." << std::endl;
         auto &input = this->getParams_const(); // 获取输入
@@ -705,7 +710,7 @@ namespace OpenOceanKraken
         }
     }
 
-    void Interface::export_mod(std::string filename) // 导出模型到文件
+    void KernelInterface::export_mod(std::string filename) // 导出模型到文件
     {
         auto &input = this->getParams_const();
         auto &output = this->getOutput_const();
@@ -997,7 +1002,7 @@ namespace OpenOceanKraken
         MODFile.close();
     }
 
-    void Interface::export_shd(std::string filename, int dataType)
+    void KernelInterface::export_shd(std::string filename, int dataType)
     {
         // std::cout << "开始导出SHD文件: " << filename << ", 数据类型: " << dataType << std::endl;
         int LRecl;
@@ -1049,7 +1054,12 @@ namespace OpenOceanKraken
         SHDFile.write(reinterpret_cast<char *>(&LRecl), sizeof(int));
         SHDFile.write(input.Title.c_str(), input.Title.size());
         SHDFile.seekp(1 * 4 * LRecl, std::ios::beg);
-        SHDFile.write(plottype.c_str(), 80);
+        std::array<char, 80> plotTypeRecord{};
+        std::copy(
+            plottype.begin(),
+            plottype.end(),
+            plotTypeRecord.begin());
+        SHDFile.write(plotTypeRecord.data(), plotTypeRecord.size());
         SHDFile.seekp(2 * 4 * LRecl, std::ios::beg);
         SHDFile.write(reinterpret_cast<char *>(&Nfreq), sizeof(int));
         SHDFile.write(reinterpret_cast<char *>(&Ntheta), sizeof(int));
@@ -1118,44 +1128,44 @@ namespace OpenOceanKraken
         // std::cout << "SHD文件导出完成: " << filename << std::endl;
     }
 
-    OOK_parameters &Interface::getParams() const // 获取参数的引用
+    OOK_parameters &KernelInterface::getParams() const // 获取参数的引用
     {
         if (!this->params)
         {
-            throw std::runtime_error("OpenOceanKraken::Interface parameters have been freed.");
+            throw std::runtime_error("OpenOceanKraken::KernelInterface parameters have been freed.");
         }
         return *this->params;
     }
-    const OOK_parameters &Interface::getParams_const() const // 获取参数的副本
+    const OOK_parameters &KernelInterface::getParams_const() const // 获取参数的副本
     {
         if (!this->params)
         {
-            throw std::runtime_error("OpenOceanKraken::Interface parameters have been freed.");
+            throw std::runtime_error("OpenOceanKraken::KernelInterface parameters have been freed.");
         }
         return *this->params;
     }
-    OOK_output &Interface::getOutput() const // 获取输出的引用
+    OOK_output &KernelInterface::getOutput() const // 获取输出的引用
     {
         if (!this->output)
         {
-            throw std::runtime_error("OpenOceanKraken::Interface output has been freed.");
+            throw std::runtime_error("OpenOceanKraken::KernelInterface output has been freed.");
         }
         return *this->output;
     }
-    OOK_output Interface::getOutput_Copy() const // 获取输出的副本
+    OOK_output KernelInterface::getOutput_Copy() const // 获取输出的副本
     {
         throw std::runtime_error("getOutput_Copy() is disabled because OOK_output owns raw buffers. Use getOutput_const() or typed getters instead.");
     }
-    const OOK_output &Interface::getOutput_const() const // 获取输出的副本
+    const OOK_output &KernelInterface::getOutput_const() const // 获取输出的副本
     {
         if (!this->output)
         {
-            throw std::runtime_error("OpenOceanKraken::Interface output has been freed.");
+            throw std::runtime_error("OpenOceanKraken::KernelInterface output has been freed.");
         }
         return *this->output;
     }
 
-    void Interface::set_RProf(const Eigen::VectorXd &ranges)
+    void KernelInterface::set_RProf(const Eigen::VectorXd &ranges)
     {
         ensureAlive();
         if (ranges.size() <= 0)
@@ -1179,7 +1189,7 @@ namespace OpenOceanKraken
         markDirty(DirtyKind::All);
     }
 
-    void Interface::set_RProf(double start, double end, int count)
+    void KernelInterface::set_RProf(double start, double end, int count)
     {
         if (!std::isfinite(start) || !std::isfinite(end) || end < start)
         {
@@ -1192,7 +1202,7 @@ namespace OpenOceanKraken
         set_RProf(Eigen::VectorXd::LinSpaced(count, start, end));
     }
 
-    void Interface::set_MLimit(int limit)
+    void KernelInterface::set_MLimit(int limit)
     {
         ensureAlive();
         if (limit <= 0)
@@ -1203,18 +1213,44 @@ namespace OpenOceanKraken
         markDirty(DirtyKind::All);
     }
 
-    void Interface::set_CoherenceType(CoherenceType type)
+    void KernelInterface::set_CoherenceType(CoherenceType type)
     {
         ensureAlive();
         getParams().coherenceType = type;
         markDirty(DirtyKind::Field);
     }
 
-    void Interface::set_ModeType(ModeType type)
+    void KernelInterface::set_ModeType(ModeType type)
     {
         ensureAlive();
         getParams().modeType = type;
         markDirty(DirtyKind::Field);
+    }
+
+    void KernelInterface::set_ModeSampling(
+        const Eigen::VectorXd &sourceDepths,
+        const Eigen::VectorXd &receiverDepths)
+    {
+        ensureAlive();
+        if (sourceDepths.size() < 1 || receiverDepths.size() < 1 ||
+            !sourceDepths.allFinite() || !receiverDepths.allFinite())
+        {
+            throw std::invalid_argument(
+                "mode sampling depths must be nonempty and finite");
+        }
+        Position mode{};
+        mode.NSz = static_cast<int>(sourceDepths.size());
+        mode.NRz = static_cast<int>(receiverDepths.size());
+        mode.NRr = 0;
+        mode.NRo = 0;
+        mode.NRz_per_range = mode.NRz;
+        mode.Delta_r = 0.0;
+        mode.Sz = sourceDepths;
+        mode.Rz = receiverDepths;
+        mode.GridType = Grid_Mode::MODE_R_Rectangular;
+        getParams().ModePos = std::move(mode);
+        getParams().hasModePos = true;
+        markDirty(DirtyKind::All);
     }
 
     namespace
@@ -1244,25 +1280,25 @@ namespace OpenOceanKraken
         }
     }
 
-    FieldSnapshot Interface::getPressureCopy() const
+    FieldSnapshot KernelInterface::getPressureCopy() const
     {
         ensureSetup();
         return copy_field_snapshot(getParams_const(), getOutput_const().u_AllSources, "Pressure");
     }
 
-    FieldSnapshot Interface::getVerticalVelocityCopy() const
+    FieldSnapshot KernelInterface::getVerticalVelocityCopy() const
     {
         ensureSetup();
         return copy_field_snapshot(getParams_const(), getOutput_const().v_AllSources, "Vertical velocity");
     }
 
-    FieldSnapshot Interface::getHorizontalVelocityCopy() const
+    FieldSnapshot KernelInterface::getHorizontalVelocityCopy() const
     {
         ensureSetup();
         return copy_field_snapshot(getParams_const(), getOutput_const().h_AllSources, "Horizontal velocity");
     }
 
-    std::vector<ModeProfileSnapshot> Interface::getModesCopy() const
+    std::vector<ModeProfileSnapshot> KernelInterface::getModesCopy() const
     {
         ensureAlive();
         const auto &input = getParams_const();

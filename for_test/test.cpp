@@ -1,7 +1,7 @@
 #include "test.h"
 #include "AttenMod.h"
 #include "BCImpedanceMod.h"
-#include "OpenOceanKrakenInterface.h"
+#include "OpenOceanKrakenKernelInterface.h"
 #include "pchipMod.h"
 #include "RefCoef.h"
 #include "run.h"
@@ -58,7 +58,7 @@ using OpenOceanKraken::EvaluateAD;
 using OpenOceanKraken::EvaluateCM;
 using OpenOceanKraken::Grid_Mode;
 using OpenOceanKraken::HSInfo;
-using OpenOceanKraken::Interface;
+using OpenOceanKraken::KernelInterface;
 using OpenOceanKraken::InterpolateIRC;
 using OpenOceanKraken::InterpolateReflectionCoefficient;
 using OpenOceanKraken::InternalReflectionCoefInfo;
@@ -259,7 +259,7 @@ namespace
             write_text(env_path, biological_env_text(variant.option, variant.block));
             write_text(flp_path, single_profile_flp);
 
-            Interface iface;
+            KernelInterface iface;
             if (variant.expected)
             {
                 test.require(iface.from_env(env_path.string()),
@@ -370,7 +370,7 @@ namespace
         write_text(flp_path, single_profile_flp);
 
         ThreadPool pool(1);
-        Interface iface(pool);
+        KernelInterface iface(pool);
         iface.setNumThreads(1);
         test.require(
             iface.from_env(env_path.string()),
@@ -439,13 +439,13 @@ namespace
 
     void test_lifecycle_and_guards(ook_test::TestRunner &test)
     {
-        Interface iface;
-        test.require(iface.getNumThreads() == 1, "Default Interface must use one thread");
+        KernelInterface iface;
+        test.require(iface.getNumThreads() == 1, "Default KernelInterface must use one thread");
         test.requireThrows([&]() { iface.setNumThreads(0); }, "setNumThreads(0) must throw");
         test.requireThrows([&]() { iface.runEigen(); }, "runEigen without ThreadPool must throw");
         test.requireThrows([&]() { iface.getOutput_Copy(); }, "getOutput_Copy must be disabled");
 
-        Interface freed;
+        KernelInterface freed;
         freed.free();
         freed.free();
         test.requireThrows([&]() { freed.getParams(); }, "getParams after free must throw");
@@ -460,7 +460,7 @@ namespace
         }
 
         ThreadPool pool(1);
-        Interface iface(pool);
+        KernelInterface iface(pool);
         iface.setThreadPool(pool);
         iface.setNumThreads(1);
         test.require(iface.getHardwareThreads() >= 0, "hardware thread query must be available");
@@ -708,11 +708,11 @@ namespace
         const auto fluid_shear = CRCI(bio_z, fluid_shear_speed, bio_alpha, bio_freq, bio_freq0, biological, bio_beta, bio_ft);
         test.requireNear(std::abs(fluid_shear), 0.0, 0.0, "fluid cS zero must remain valid");
 
-        Interface biological_instance;
-        Interface default_instance;
+        KernelInterface biological_instance;
+        KernelInterface default_instance;
         biological_instance.set_AttenUnit(biological);
         test.require(biological_instance.getParams_const().AttenUnit.absModel == OceanAbsorptionModel::Biological, "first instance must retain Biological mode");
-        test.require(default_instance.getParams_const().AttenUnit.absModel == OceanAbsorptionModel::None && default_instance.getParams_const().AttenUnit.biologicalLayers.empty(), "Biological state must not leak between Interface instances");
+        test.require(default_instance.getParams_const().AttenUnit.absModel == OceanAbsorptionModel::None && default_instance.getParams_const().AttenUnit.biologicalLayers.empty(), "Biological state must not leak between KernelInterface instances");
 
         Eigen::Matrix<ReflectionCoef, 1, Eigen::Dynamic> table(3);
         table(0).theta = 0.0;
@@ -860,7 +860,7 @@ namespace
         candidate.absModel = OceanAbsorptionModel::Thorpe;
         require_invalid(candidate, "non-Biological model with layers");
 
-        Interface iface;
+        KernelInterface iface;
         Atten_Mode original;
         original.absModel = OceanAbsorptionModel::Thorpe;
         iface.set_AttenUnit(original);
@@ -1773,7 +1773,7 @@ namespace
             test.require(fs::exists(env_path), name + ": ENV file missing");
             test.require(fs::exists(flp_path), name + ": FLP file missing");
 
-            Interface iface;
+            KernelInterface iface;
             if (is_expected_env_failure(name))
             {
                 test.require(!iface.from_env((test_root / name).string()), name + ": ordinary KRAKEN should reject unsupported or missing reflection coefficient input");
@@ -1807,7 +1807,7 @@ namespace
                 continue;
             }
 
-            Interface iface;
+            KernelInterface iface;
             const auto env_path = entry.path();
             const auto name = env_path.filename().string();
             if (name == "option_default_chars.env")
@@ -1908,7 +1908,7 @@ namespace
 
             const fs::path json_path = fs::temp_directory_path() / ("ook_option_" + name + ".json");
             test.require(iface.to_json(json_path.string()), name + ": option fixture to_json must succeed");
-            Interface json_iface;
+            KernelInterface json_iface;
             test.require(json_iface.from_json(json_path.string()), name + ": option fixture from_json must succeed");
             fs::remove(json_path);
             ++parsed;
@@ -1922,7 +1922,7 @@ namespace
         const fs::path brc_env = test_root / "neggradK_brc.env";
         if (fs::exists(brc_env))
         {
-            Interface brc_iface;
+            KernelInterface brc_iface;
             test.require(!brc_iface.from_env(brc_env.string()), "KRAKEN bottom F/.brc must fail fast");
         }
 
@@ -1933,7 +1933,7 @@ namespace
             return;
         }
 
-        Interface missing_irc_iface;
+        KernelInterface missing_irc_iface;
         test.require(!missing_irc_iface.from_env(irc_env.string()), "KRAKEN bottom P must fail when .irc is missing");
 
         const fs::path root = fs::temp_directory_path() / "ook_irc_fixture";
@@ -1950,7 +1950,7 @@ namespace
             irc << "300.0 3.0 -0.5 6.0 0.5 2\n";
         }
 
-        Interface irc_iface;
+        KernelInterface irc_iface;
         test.require(irc_iface.from_env((root / "fixture.env").string()), "KRAKEN bottom P must load a valid .irc file");
         const auto &irc = irc_iface.getParams_const().ReflectionCoef.IRC;
         test.require(irc.isSet, "IRC table must be marked as set");
@@ -1976,7 +1976,7 @@ namespace
 
     void test_munk_exact_values(ook_test::TestRunner &test, const fs::path &test_root)
     {
-        Interface iface;
+        KernelInterface iface;
         test.require(iface.from_env((test_root / "MunkK.env").string()), "MunkK from_env must succeed");
         const auto &params = iface.getParams_const();
         test.requireNear(params.freqinfo.freq, 50.0, 1.0e-9, "MunkK freq mismatch");
@@ -1999,12 +1999,12 @@ namespace
 
     void test_json_roundtrip_from_env(ook_test::TestRunner &test, const fs::path &test_root)
     {
-        Interface env_iface;
+        KernelInterface env_iface;
         test.require(env_iface.from_env((test_root / "MunkK.env").string()), "MunkK from_env before JSON must succeed");
         const fs::path json_path = fs::temp_directory_path() / "ook_munk_roundtrip.json";
         test.require(env_iface.to_json(json_path.string()), "to_json must succeed for MunkK");
 
-        Interface json_iface;
+        KernelInterface json_iface;
         test.require(json_iface.from_json(json_path.string()), "from_json must load MunkK snapshot");
         const auto &params = json_iface.getParams_const();
         test.requireNear(params.freqinfo.freq, 50.0, 1.0e-9, "JSON MunkK freq mismatch");
@@ -2015,7 +2015,7 @@ namespace
 
     void test_json_roundtrip_from_params(ook_test::TestRunner &test)
     {
-        Interface params_iface;
+        KernelInterface params_iface;
         std::string title = "json params interface test";
         params_iface.set_Title(title);
         params_iface.set_Freq(77.0);
@@ -2052,7 +2052,7 @@ namespace
         const fs::path json_path = fs::temp_directory_path() / "ook_params_roundtrip.json";
         test.require(params_iface.to_json(json_path.string()), "params to_json must succeed");
 
-        Interface json_iface;
+        KernelInterface json_iface;
         test.require(json_iface.from_json(json_path.string()), "params from_json must succeed");
         const auto &params = json_iface.getParams_const();
         test.require(params.Title == title, "JSON params title mismatch");
@@ -2098,7 +2098,7 @@ namespace
         test.require(
             params_iface.to_json(biological_params_json.string()),
             "Biological params must export to JSON");
-        Interface biological_params_copy;
+        KernelInterface biological_params_copy;
         test.require(
             biological_params_copy.from_json(biological_params_json.string()),
             "Biological params JSON must reload");
@@ -2120,7 +2120,7 @@ namespace
         const fs::path empty_biological_path =
             fs::temp_directory_path() / "ook_empty_biological_roundtrip.json";
         write_text(empty_biological_path, empty_biological_json.dump(2));
-        Interface empty_biological_copy;
+        KernelInterface empty_biological_copy;
         test.require(
             empty_biological_copy.from_json(empty_biological_path.string()),
             "empty Biological layer array must reload");
@@ -2140,7 +2140,7 @@ namespace
             biological_env_text(
                 "CVWB", "1\n20 40 1000 5 0.04\n"));
         write_text(bio_roundtrip_root / "case.flp", single_profile_flp);
-        Interface env_source;
+        KernelInterface env_source;
         test.require(
             env_source.from_env(valid_bio_env.string()),
             "Biological ENV must load before JSON round-trip");
@@ -2149,7 +2149,7 @@ namespace
         test.require(
             env_source.to_json(env_json.string()),
             "Biological ENV must export to JSON");
-        Interface env_json_copy;
+        KernelInterface env_json_copy;
         test.require(
             env_json_copy.from_json(env_json.string()),
             "Biological ENV-derived JSON must reload");
@@ -2167,7 +2167,7 @@ namespace
                 std::ofstream bad_file(bad_path);
                 bad_file << bad.dump(2);
             }
-            Interface bad_iface;
+            KernelInterface bad_iface;
             Atten_Mode thorpe;
             thorpe.absModel = OceanAbsorptionModel::Thorpe;
             bad_iface.set_AttenUnit(thorpe);
@@ -2185,7 +2185,7 @@ namespace
         non_biological_empty["AttenUnit"]["BiologicalLayers"] =
             OpenOcean_json::array();
         write_text(non_biological_empty_path, non_biological_empty.dump(2));
-        Interface non_biological_empty_copy;
+        KernelInterface non_biological_empty_copy;
         test.require(
             non_biological_empty_copy.from_json(non_biological_empty_path.string()),
             "non-Biological JSON with empty BiologicalLayers must reload");
@@ -2267,13 +2267,13 @@ namespace
             const std::string name = path.filename().string();
             if (path.extension() == ".env")
             {
-                Interface iface;
+                KernelInterface iface;
                 test.require(!iface.from_env(path.string()), name + ": bad ENV fixture must fail from_env");
                 ++env_cases;
             }
             else if (path.extension() == ".json" && name != "_manifest.json")
             {
-                Interface iface;
+                KernelInterface iface;
                 test.require(!iface.from_json(path.string()), name + ": bad JSON fixture must fail from_json");
                 ++json_cases;
             }
@@ -2296,7 +2296,7 @@ namespace
         }
 
         ThreadPool pool(1);
-        Interface iface(pool);
+        KernelInterface iface(pool);
         iface.setNumThreads(1);
         test.require(iface.from_env(env_path.string()), "multi-profile field guard fixture must load");
         test.require(iface.getParams_const().SSP.size() > 1, "multi-profile field guard fixture must contain multiple SSP profiles");
@@ -2326,7 +2326,7 @@ namespace
             }
 
             ThreadPool pool(1);
-            Interface iface(pool);
+            KernelInterface iface(pool);
             iface.setNumThreads(1);
             test.require(iface.from_env(env_path.string()), case_name + ": multi-profile coupled fixture must load");
             test.require(iface.getParams_const().modeType == ModeType::Couple, case_name + ": coupled FLP mode mismatch");
@@ -2361,7 +2361,7 @@ namespace
         }
 
         ThreadPool pool(1);
-        Interface iface(pool);
+        KernelInterface iface(pool);
         iface.setNumThreads(1);
         test.require(iface.from_env(env_path.string()), "multi-profile adiabatic fixture must load");
         test.require(iface.getParams_const().modeType == ModeType::Adiabatic, "adiabatic FLP mode mismatch");
@@ -2388,7 +2388,7 @@ namespace
             return;
         }
 
-        Interface iface;
+        KernelInterface iface;
         test.require(iface.from_env(env_path.string()), "multi-profile FLP metadata fixture must load");
         const auto &params = iface.getParams_const();
         test.require(params.MLimit == 9999, "multi-profile FLP MLimit mismatch");
@@ -2403,7 +2403,7 @@ namespace
 
         const fs::path json_path = fs::temp_directory_path() / "ook_mult_profile_roundtrip.json";
         test.require(iface.to_json(json_path.string()), "multi-profile JSON export must succeed");
-        Interface roundtrip;
+        KernelInterface roundtrip;
         test.require(roundtrip.from_json(json_path.string()), "multi-profile JSON import must succeed");
         const auto &roundtrip_params = roundtrip.getParams_const();
         test.require(roundtrip_params.MLimit == 9999, "roundtrip MLimit mismatch");
@@ -2434,11 +2434,11 @@ namespace
         };
 
         write_flp(2, "0.0 0.0 /");
-        Interface non_increasing;
+        KernelInterface non_increasing;
         test.require(!non_increasing.from_env(env_path.string()), "non-increasing RProf must fail from_env");
 
         write_flp(3, "0.0 5.0 10.0 /");
-        Interface count_mismatch;
+        KernelInterface count_mismatch;
         test.require(!count_mismatch.from_env(env_path.string()), "NProf/ENV profile mismatch must fail from_env");
         fs::remove_all(root);
     }
@@ -2452,7 +2452,7 @@ namespace
         }
 
         ThreadPool pool(1);
-        Interface iface(pool);
+        KernelInterface iface(pool);
         iface.setNumThreads(1);
         test.require(iface.from_env(env_path.string()), "Normalize F/A regression fixture must load");
         iface.runEigen();
@@ -2480,7 +2480,7 @@ namespace
     void test_multilayer_elastic_stack_terminal_mode(ook_test::TestRunner &test, const fs::path &test_root)
     {
         ThreadPool pool(1);
-        Interface iface(pool);
+        KernelInterface iface(pool);
         iface.setNumThreads(1);
 
         const fs::path env_path = test_root / "multilayer_elastic_stack.env";
@@ -2500,7 +2500,7 @@ namespace
     void test_multilayer_mud_sand_lossy_wavenumbers(ook_test::TestRunner &test, const fs::path &test_root)
     {
         ThreadPool pool(1);
-        Interface iface(pool);
+        KernelInterface iface(pool);
         iface.setNumThreads(1);
 
         const fs::path env_path = test_root / "multilayer_mud_sand.env";
@@ -2530,7 +2530,7 @@ namespace
     void test_mod_export_header(ook_test::TestRunner &test, const fs::path &test_root)
     {
         ThreadPool pool(1);
-        Interface iface(pool);
+        KernelInterface iface(pool);
         iface.setNumThreads(1);
         test.require(iface.from_env((test_root / "MunkK.env").string()), "MunkK from_env before MOD export must succeed");
         iface.runEigen();

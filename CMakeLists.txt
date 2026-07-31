@@ -54,6 +54,8 @@ file(GLOB CORE_SOURCES
 
 add_library(OpenOceanKraken_core STATIC ${CORE_SOURCES})
 target_include_directories(OpenOceanKraken_core PUBLIC ${OOK_INCLUDE_DIRS})
+target_compile_definitions(OpenOceanKraken_core PUBLIC
+    OPENOCEAN_KRAKEN_LEGACY_JSON=1)
 set_target_properties(OpenOceanKraken_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(BUILD_AS_STATIC)
     set_target_properties(OpenOceanKraken_core PROPERTIES OUTPUT_NAME OpenOceanKraken_static)
@@ -70,6 +72,8 @@ endif()
 if(BUILD_AS_SHARED)
     add_library(OpenOceanKraken_shared SHARED ${CORE_SOURCES})
     target_include_directories(OpenOceanKraken_shared PUBLIC ${OOK_INCLUDE_DIRS})
+    target_compile_definitions(OpenOceanKraken_shared PUBLIC
+        OPENOCEAN_KRAKEN_LEGACY_JSON=1)
     set_target_properties(OpenOceanKraken_shared PROPERTIES OUTPUT_NAME OpenOceanKraken_shared)
 endif()
 
