@@ -1,4 +1,4 @@
-#include "OpenOceanKrakencInterface.h"
+#include "OpenOceanKrakencKernelInterface.h"
 #include "module/env_in_out.hpp"
 #include "algorithm/FieldSolver.h"
 
@@ -27,7 +27,7 @@ int main()
     const FieldParameters parsed = readFieldParameters(flp);
     require(parsed.profileRangesKm.size() == 2, "test FLP profile count mismatch");
 
-    Interface memory;
+    KernelInterface memory;
     require(memory.from_env(env.string()), "from_env failed for in-memory fixture");
     memory.set_Velocity_enable(true);
     require(read_flp_file(flp.string(), memory.getParams()), "read_flp_file failed for in-memory fixture");
@@ -55,7 +55,7 @@ int main()
         std::filesystem::temp_directory_path() /
         "openocean_krakenc_interface_equivalence.json";
     require(memory.to_json(jsonPath.string()), "in-memory JSON write failed");
-    Interface json;
+    KernelInterface json;
     require(json.from_json(jsonPath.string()), "in-memory JSON load failed");
     json.run();
     const OOKC_output &jsonOutput = json.getOutput_const();
@@ -78,7 +78,7 @@ int main()
         std::filesystem::temp_directory_path() /
         "openocean_krakenc_automatic_path_output.shd";
     memory.export_mod(modeRoot.string());
-    Interface modeFileInput;
+    KernelInterface modeFileInput;
     modeFileInput.getParams().modPath = modeRoot.string() + ".mod";
     modeFileInput.getParams().flpPath = flp.string();
     modeFileInput.getParams().shdPath = shadePath.string();
@@ -100,7 +100,7 @@ int main()
     assert(staleProfileRangeRejected);
     modeFileInput.getParams().RProf[0] = 0.0;
 
-    Interface legacy;
+    KernelInterface legacy;
     legacy.getParams().envPath = env.string();
     legacy.getParams().flpPath = flp.string();
     legacy.run();
@@ -110,7 +110,7 @@ int main()
     assert((legacyOutput.eigen.front().k - memoryOutput.eigen.front().k).norm() < 1.0e-12);
     assert(std::abs(legacyOutput.pressure.front() - memoryOutput.pressure.front()) < 1.0e-6f);
 
-    Interface emptyResults;
+    KernelInterface emptyResults;
     bool emptyAllSourcesRejected = false;
     try
     {
@@ -122,7 +122,7 @@ int main()
     }
     assert(emptyAllSourcesRejected);
 
-    Interface pressureOnly;
+    KernelInterface pressureOnly;
     require(pressureOnly.from_env(env.string()), "pressure-only from_env failed");
     pressureOnly.getParams().shdPath.clear();
     pressureOnly.runField();
@@ -145,7 +145,7 @@ int main()
     assert(pressureOnly.getOutput_const().eigen.size() == retainedEigenProfiles);
     assert(pressureOnly.getOutput_const().pressure.empty());
 
-    Interface belowSsp;
+    KernelInterface belowSsp;
     require(belowSsp.from_env(env.string()), "below-SSP from_env failed");
     belowSsp.set_Sz(Eigen::VectorXd::Constant(1, 150.0));
     belowSsp.set_Rz(Eigen::VectorXd::Constant(1, 150.0));
@@ -154,7 +154,7 @@ int main()
     assert(belowSsp.getOutput_const().eigen.front().PsiS.cwiseAbs().maxCoeff() == 0.0);
     assert(belowSsp.getOutput_const().eigen.front().PsiR.cwiseAbs().maxCoeff() == 0.0);
 
-    Interface stale;
+    KernelInterface stale;
     require(stale.from_env(env.string()), "stale-result from_env failed");
     stale.getParams().shdPath.clear();
     stale.run();
@@ -177,7 +177,7 @@ int main()
     assert(newWavenumbers.size() != oldWavenumbers.size() ||
            (newWavenumbers - oldWavenumbers).norm() > 1.0e-8);
 
-    Interface transactional;
+    KernelInterface transactional;
     require(transactional.from_env(env.string()), "transactional from_env failed");
     transactional.set_GridType(Grid_Mode::MODE_I_Irregular);
     bool rejected = false;

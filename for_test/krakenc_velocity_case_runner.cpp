@@ -1,4 +1,4 @@
-#include "OpenOceanKrakencInterface.h"
+#include "OpenOceanKrakencKernelInterface.h"
 
 #include <nlohmann/json.hpp>
 
@@ -52,7 +52,7 @@ int main(int argc, char **argv)
             std::filesystem::create_directories(outputRoot.parent_path());
         }
 
-        OpenOceanKrakenc::Interface api;
+        OpenOceanKrakenc::KernelInterface api;
         const OpenOceanKrakenc::LoadResult loaded = api.loadEnv(envPath.string());
         if (!loaded.ok)
         {

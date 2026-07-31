@@ -1,4 +1,4 @@
-#include "OpenOceanKrakencInterface.h"
+#include "OpenOceanKrakencKernelInterface.h"
 #include "module/json_in_out.hpp"
 #include "module/ParameterAdapters.h"
 
@@ -66,7 +66,7 @@ int main()
     const std::filesystem::path invalid =
         std::filesystem::temp_directory_path() / "openocean_krakenc_invalid.json";
 
-    Interface source;
+    KernelInterface source;
     assert(source.from_env(env.string()));
     source.set_Velocity_enable(true);
     const std::string encoded = source.to_json_string();
@@ -93,7 +93,7 @@ int main()
     assert(document.at("SBP").is_object() || document.at("SBP").is_null());
     assert(source.to_json(output.string()));
 
-    Interface restored;
+    KernelInterface restored;
     assert(restored.from_json(output.string()));
     const auto &a = source.getParams_const();
     const auto &b = restored.getParams_const();
@@ -109,7 +109,7 @@ int main()
     assert(a.SBP.NSBPPts == b.SBP.NSBPPts);
     assert(b.is_Velocity);
 
-    Interface setters;
+    KernelInterface setters;
     setters.set_Title("setter json");
     setters.set_Freq(75.0);
     setters.set_Sz(10.0, 30.0, 3);

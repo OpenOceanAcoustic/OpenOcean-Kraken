@@ -1,5 +1,5 @@
 #include "OpenOceanKrakencParams.h"
-#include "OpenOceanKrakencInterface.h"
+#include "OpenOceanKrakencKernelInterface.h"
 #include "ThreadPool.h"
 
 #include <algorithm>
@@ -57,7 +57,7 @@ int main()
     require(rejected, "zero modal capacity must be rejected");
 
     ThreadPool pool(2);
-    Interface api(pool);
+    KernelInterface api(pool);
     require(api.getNumThreads() >= 1, "default thread count must be positive");
     api.setNumThreads(2);
     require(api.getNumThreads() == 2, "thread count setter failed");
@@ -97,7 +97,7 @@ int main()
             "multi-profile interface eigen output is incomplete");
 
     ThreadPool singleWorkerPool(1);
-    Interface reentrant(singleWorkerPool);
+    KernelInterface reentrant(singleWorkerPool);
     reentrant.getParams().envPath =
         std::string(OPENOCEANKRAKENC_WORKSPACE_DIR) +
         "/OpenOcean-Krakenc/for_test/fixtures/two_profile_small.env";

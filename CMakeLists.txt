@@ -65,6 +65,8 @@ target_include_directories(OpenOceanKrakenc_core
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 target_link_libraries(OpenOceanKrakenc_core PUBLIC Threads::Threads)
+target_compile_definitions(OpenOceanKrakenc_core PUBLIC
+    OPENOCEAN_KRAKENC_LEGACY_JSON=1)
 set_target_properties(OpenOceanKrakenc_core PROPERTIES EXPORT_NAME core)
 if(OPENOCEANKRAKENC_ENABLE_ASAN OR OPENOCEANKRAKENC_ENABLE_UBSAN)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")

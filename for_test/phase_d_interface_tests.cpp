@@ -1,4 +1,4 @@
-#include "OpenOceanKrakencInterface.h"
+#include "OpenOceanKrakencKernelInterface.h"
 #include "ThreadPool.h"
 
 #include <chrono>
@@ -32,16 +32,16 @@ std::filesystem::path fixture(const char *name)
 
 int main()
 {
-    static_assert(std::is_constructible_v<Interface, std::shared_ptr<ThreadPool>>);
-    static_assert(std::is_same_v<decltype(std::declval<Interface &>().get_u_view(0)),
+    static_assert(std::is_constructible_v<KernelInterface, std::shared_ptr<ThreadPool>>);
+    static_assert(std::is_same_v<decltype(std::declval<KernelInterface &>().get_u_view(0)),
                                  ArrayView<const std::complex<float>>>);
-    static_assert(std::is_same_v<decltype(std::declval<Interface &>().loadJson("")),
+    static_assert(std::is_same_v<decltype(std::declval<KernelInterface &>().loadJson("")),
                                  LoadResult>);
 
     const std::filesystem::path env = fixture("two_profile_small.env");
 
     auto ownedPool = std::make_shared<ThreadPool>(2);
-    Interface owned(ownedPool);
+    KernelInterface owned(ownedPool);
     require(owned.loadEnv(env.string()).ok, "owning interface ENV load failed");
     ownedPool.reset();
     owned.runEigen();
@@ -50,13 +50,13 @@ int main()
 
     auto survivingPool = std::make_shared<ThreadPool>(1);
     {
-        Interface shorterLivedInterface(survivingPool);
+        KernelInterface shorterLivedInterface(survivingPool);
     }
     require(survivingPool->enqueue([] { return 23; }).get() == 23,
             "destroying an interface stopped the caller-owned ThreadPool");
 
     auto borrowedPool = std::make_unique<ThreadPool>(2);
-    Interface borrowed(*borrowedPool);
+    KernelInterface borrowed(*borrowedPool);
     require(borrowed.loadEnv(env.string()).ok, "borrowed interface ENV load failed");
     borrowedPool.reset();
     bool expiredRejected = false;
@@ -85,7 +85,7 @@ int main()
     require(lease.enqueue([] { return 17; }).get() == 17,
             "executor lease did not survive ThreadPool object destruction");
 
-    Interface safe;
+    KernelInterface safe;
     const LoadResult envLoad = safe.loadEnv(env.string());
     require(envLoad.ok, "structured ENV load failed");
     safe.set_Velocity_enable(true);
@@ -119,7 +119,7 @@ int main()
 
     ArrayView<const std::complex<float>> destroyedOwnerView;
     {
-        Interface temporary;
+        KernelInterface temporary;
         require(temporary.loadEnv(env.string()).ok,
                 "temporary interface ENV load failed");
         temporary.runField();
@@ -185,7 +185,7 @@ int main()
     }
     require(closedRejected, "closed interface accepted a run");
 
-    Interface legacyClose;
+    KernelInterface legacyClose;
     legacyClose.free();
     require(legacyClose.isClosed(), "legacy free did not forward to close");
 

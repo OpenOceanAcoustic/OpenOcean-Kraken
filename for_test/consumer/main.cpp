@@ -1,10 +1,10 @@
-#include <OpenOceanKrakencInterface.h>
+#include <OpenOceanKrakencKernelInterface.h>
 
 #include <iostream>
 
 int main()
 {
-    OpenOceanKrakenc::Interface interface;
+    OpenOceanKrakenc::KernelInterface interface;
     if (interface.isClosed() || interface.getHardwareThreads() < 1)
     {
         return 1;

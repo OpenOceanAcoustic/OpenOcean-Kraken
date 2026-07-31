@@ -1,4 +1,4 @@
-#include "OpenOceanKrakencInterface.h"
+#include "OpenOceanKrakencKernelInterface.h"
 #include "ThreadPool.h"
 #include "algorithm/AcousticCase.h"
 #include "algorithm/ComplexMatrixBuilder.h"
@@ -148,7 +148,7 @@ RmaxObservation observeJsonRmax(
 
 RmaxObservation observeApiRmax(double value)
 {
-    Interface api;
+    KernelInterface api;
     try
     {
         api.set_Rmax(value);
@@ -165,7 +165,7 @@ void testAlg004()
     const std::filesystem::path seedPath =
         std::filesystem::path(OPENOCEANKRAKENC_SOURCE_DIR) /
         "for_test/fixtures/two_profile_small.env";
-    Interface seed;
+    KernelInterface seed;
     const LoadResult seedLoaded = seed.loadEnv(seedPath.string());
     require(seedLoaded.ok,
             "ALG-004 checked-in ENV/FLP seed must load");

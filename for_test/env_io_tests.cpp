@@ -1,4 +1,4 @@
-#include "OpenOceanKrakencInterface.h"
+#include "OpenOceanKrakencKernelInterface.h"
 #include "module/env_in_out.hpp"
 
 #include <cassert>
@@ -40,7 +40,7 @@ int main()
     assert(params.freqinfo.freq == before.freqinfo.freq);
     assert(params.sspInput.size() == before.sspInput.size());
 
-    Interface api;
+    KernelInterface api;
     assert(api.from_env(env.string()));
     assert(api.getParams_const().Pos.NRr == 501);
 
@@ -48,7 +48,7 @@ int main()
         std::filesystem::temp_directory_path() / "openocean_krakenc_without_flp.env";
     std::filesystem::copy_file(env, isolatedEnv,
                                std::filesystem::copy_options::overwrite_existing);
-    Interface missingFlp;
+    KernelInterface missingFlp;
     missingFlp.set_Title("transaction sentinel");
     assert(!missingFlp.from_env(isolatedEnv.string()));
     assert(missingFlp.getParams_const().Title == "transaction sentinel");
