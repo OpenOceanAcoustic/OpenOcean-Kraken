@@ -12,37 +12,36 @@ using namespace OpenOceanKrakenc;
 
 int main()
 {
-    const std::filesystem::path workspace = OPENOCEANKRAKENC_WORKSPACE_DIR;
+    const std::filesystem::path source = OPENOCEANKRAKENC_SOURCE_DIR;
     const std::filesystem::path env =
-        workspace / "test" / "toolbox_env" / "MunkKleaky.env";
+        source / "for_test" / "fixtures" / "two_profile_small.env";
 
     OOKC_parameters params;
     assert(read_env_file(env.string(), params));
     assert(std::filesystem::equivalent(params.envPath, env));
-    assert(params.Title.find("Munk") != std::string::npos);
     assert(params.freqinfo.freq == 50.0);
-    assert(params.NProf == 1);
-    assert(params.sspInput.size() == 1);
+    assert(params.NProf == 2);
+    assert(params.sspInput.size() == 2);
     assert(params.Pos.NSz >= 1);
     assert(params.Pos.NRz >= 1);
 
     assert(read_flp_file(env.string(), params));
-    assert(params.Pos.NRr == 501);
-    assert(params.Pos.NSz == 2);
-    assert(params.Pos.NRz == 1001);
+    assert(params.Pos.NRr == 1);
+    assert(params.Pos.NSz == 1);
+    assert(params.Pos.NRz == 1);
     assert(params.SourceType == Source_Mode::MODE_R_Point);
     assert(params.modeType == ModeType::Adiabatic);
-    assert(params.SBP.isSet);
+    assert(!params.SBP.isSet);
 
     const OOKC_parameters before = params;
-    assert(!read_env_file((workspace / "missing.env").string(), params));
+    assert(!read_env_file((source / "missing.env").string(), params));
     assert(params.Title == before.Title);
     assert(params.freqinfo.freq == before.freqinfo.freq);
     assert(params.sspInput.size() == before.sspInput.size());
 
     KernelInterface api;
     assert(api.from_env(env.string()));
-    assert(api.getParams_const().Pos.NRr == 501);
+    assert(api.getParams_const().Pos.NRr == 1);
 
     const std::filesystem::path isolatedEnv =
         std::filesystem::temp_directory_path() / "openocean_krakenc_without_flp.env";

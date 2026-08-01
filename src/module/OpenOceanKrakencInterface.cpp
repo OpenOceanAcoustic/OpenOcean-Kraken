@@ -9,9 +9,7 @@
 #include "algorithm/KrakencSolver.h"
 #include "algorithm/ModeFileWriter.h"
 #include "module/env_in_out.hpp"
-#if defined(OPENOCEAN_KRAKENC_LEGACY_JSON)
 #include "module/json_in_out.hpp"
-#endif
 #include "module/ParameterAdapters.h"
 #include "module/ResultExport.h"
 #include "ThreadPool.h"
@@ -301,6 +299,55 @@ ModeFileData makeModeData(const std::vector<AcousticCase> &inputs,
     return result;
 }
 
+std::string normalizedFieldParameterSignature(const OOKC_parameters &source)
+{
+    OOKC_parameters normalized = source;
+    normalized.envPath.clear();
+    normalized.flpPath.clear();
+    normalized.modPath.clear();
+    normalized.shdPath.clear();
+    normalized.runMode = Run_Mode::MODE_B_Both;
+    std::ostringstream fieldProfiles;
+    fieldProfiles << "|field-profile-count=" << source.NProf << std::hexfloat;
+    for (double rangeKm : source.RProf)
+    {
+        fieldProfiles << ':' << rangeKm;
+    }
+    return parameters_to_json_string(normalized) + fieldProfiles.str();
+}
+
+std::string normalizedEigenParameterSignature(const OOKC_parameters &source)
+{
+    OOKC_parameters normalized = source;
+    normalized.envPath.clear();
+    normalized.flpPath.clear();
+    normalized.modPath.clear();
+    normalized.shdPath.clear();
+    normalized.runMode = Run_Mode::MODE_B_Both;
+    normalized.Pos.Rr.resize(0);
+    normalized.Pos.NRr = 0;
+    normalized.Pos.is_Linspace_Rr = false;
+    normalized.Pos.Ro.resize(0);
+    normalized.Pos.NRo = 0;
+    normalized.Pos.is_Linspace_Ro = false;
+    normalized.Pos.NRz_per_range = 0;
+    normalized.Pos.Delta_r = 0.0;
+    normalized.Pos.GridType = Grid_Mode::MODE_R_Rectangular;
+    normalized.MLimit = 1;
+    normalized.SourceType = Source_Mode::MODE_R_Point;
+    normalized.SBP = SrcBmPat{};
+    normalized.is_Velocity = false;
+    normalized.coherenceType = CoherenceType::Coherent;
+    normalized.modeType = ModeType::Adiabatic;
+    normalized.RProf = Eigen::VectorXd::Zero(
+        static_cast<Eigen::Index>(normalized.sspInput.size()));
+    for (ssp::Range_Independent_Area &profile : normalized.sspInput)
+    {
+        profile.Range = 0.0;
+    }
+    return parameters_to_json_string(normalized);
+}
+
 void clearFieldResults(OOKC_output &output)
 {
     output.pressure.clear();
@@ -322,8 +369,8 @@ public:
     bool hasBorrowedProfileExecutor = false;
     int fieldThreads = static_cast<int>(std::max(1u, std::thread::hardware_concurrency()));
     bool alive = true;
-    bool eigenDirty = true;
-    bool fieldDirty = true;
+    std::string eigenSignature;
+    std::string fieldSignature;
     std::shared_ptr<detail::ResultViewState> viewState =
         std::make_shared<detail::ResultViewState>();
 
@@ -387,8 +434,10 @@ void KernelInterface::ensureResultsFresh() const
     {
         return;
     }
-    if ((hasEigen && impl_->eigenDirty) ||
-        (hasField && impl_->fieldDirty))
+    if ((hasEigen && impl_->eigenSignature !=
+                         normalizedEigenParameterSignature(impl_->params)) ||
+        (hasField && impl_->fieldSignature !=
+                         normalizedFieldParameterSignature(impl_->params)))
     {
         throw std::logic_error(
             "OpenOcean-Krakenc parameters changed after the current result was computed");
@@ -514,8 +563,8 @@ void KernelInterface::runEigen()
     impl_->output.sourceCount = 0;
     impl_->output.receiverDepthCount = 0;
     impl_->output.rangeCount = 0;
-    impl_->eigenDirty = false;
-    impl_->fieldDirty = true;
+    impl_->eigenSignature = normalizedEigenParameterSignature(impl_->params);
+    impl_->fieldSignature.clear();
 }
 
 void KernelInterface::runField()
@@ -523,12 +572,12 @@ void KernelInterface::runField()
     ensureAlive();
     const OOKC_parameters previousParams = impl_->params;
     const OOKC_output previousOutput = impl_->output;
-    const bool previousEigenDirty = impl_->eigenDirty;
-    const bool previousFieldDirty = impl_->fieldDirty;
+    const std::string previousEigenSignature = impl_->eigenSignature;
+    const std::string previousFieldSignature = impl_->fieldSignature;
     try
     {
     const bool hasCurrentEigen = !impl_->output.eigen.empty() &&
-                                 !impl_->eigenDirty;
+        impl_->eigenSignature == normalizedEigenParameterSignature(impl_->params);
     bool useEigenResults = hasCurrentEigen;
     std::filesystem::path explicitModePath = impl_->params.modPath;
     const bool hasExplicitMode = !explicitModePath.empty() &&
@@ -619,16 +668,20 @@ void KernelInterface::runField()
     impl_->output.sourceCount = field.sourceDepths.size();
     impl_->output.receiverDepthCount = field.receiverDepths.size();
     impl_->output.rangeCount = field.rangesMetres.size();
+    const std::string completedEigenSignature =
+        normalizedEigenParameterSignature(impl_->params);
+    const std::string completedFieldSignature =
+        normalizedFieldParameterSignature(impl_->params);
     if (useEigenResults)
     {
-        impl_->eigenDirty = false;
+        impl_->eigenSignature = completedEigenSignature;
     }
     else
     {
         impl_->output.eigen.clear();
-        impl_->eigenDirty = true;
+        impl_->eigenSignature.clear();
     }
-    impl_->fieldDirty = false;
+    impl_->fieldSignature = completedFieldSignature;
     if (!impl_->params.shdPath.empty())
     {
         exportShadeResult(impl_->params, impl_->output,
@@ -639,8 +692,8 @@ void KernelInterface::runField()
     {
         impl_->params = previousParams;
         impl_->output = previousOutput;
-        impl_->eigenDirty = previousEigenDirty;
-        impl_->fieldDirty = previousFieldDirty;
+        impl_->eigenSignature = previousEigenSignature;
+        impl_->fieldSignature = previousFieldSignature;
         throw;
     }
 }
@@ -650,8 +703,8 @@ void KernelInterface::run()
     ensureAlive();
     const OOKC_parameters previousParams = impl_->params;
     const OOKC_output previousOutput = impl_->output;
-    const bool previousEigenDirty = impl_->eigenDirty;
-    const bool previousFieldDirty = impl_->fieldDirty;
+    const std::string previousEigenSignature = impl_->eigenSignature;
+    const std::string previousFieldSignature = impl_->fieldSignature;
     try
     {
         switch (impl_->params.runMode)
@@ -672,8 +725,8 @@ void KernelInterface::run()
     {
         impl_->params = previousParams;
         impl_->output = previousOutput;
-        impl_->eigenDirty = previousEigenDirty;
-        impl_->fieldDirty = previousFieldDirty;
+        impl_->eigenSignature = previousEigenSignature;
+        impl_->fieldSignature = previousFieldSignature;
         throw;
     }
 }
@@ -683,8 +736,8 @@ void KernelInterface::clearResults()
     ensureAlive();
     invalidateResultViews();
     impl_->output.clear();
-    impl_->eigenDirty = true;
-    impl_->fieldDirty = true;
+    impl_->eigenSignature.clear();
+    impl_->fieldSignature.clear();
 }
 
 void KernelInterface::close()
@@ -696,8 +749,8 @@ void KernelInterface::close()
 
     invalidateResultViews();
     impl_->output.clear();
-    impl_->eigenDirty = true;
-    impl_->fieldDirty = true;
+    impl_->eigenSignature.clear();
+    impl_->fieldSignature.clear();
     impl_->ownedProfileExecutor = {};
     impl_->borrowedProfileExecutor = {};
     impl_->hasBorrowedProfileExecutor = false;
@@ -871,9 +924,9 @@ void KernelInterface::set_SSP(const std::vector<ssp::Range_Independent_Area> &ss
 
 void KernelInterface::set_AttenUnit(Atten_Mode mode) { ensureAlive(); impl_->params.AttenUnit = mode; invalidateResultViews(); impl_->output.clear(); }
 void KernelInterface::set_Sz(const Eigen::VectorXd &v) { ensureAlive(); assignPosition(impl_->params.Pos.Sz, impl_->params.Pos.NSz, impl_->params.Pos.is_Linspace_Sz, v, "Sz"); invalidateResultViews(); impl_->output.clear(); }
-void KernelInterface::set_Rr(const Eigen::VectorXd &v) { ensureAlive(); assignPosition(impl_->params.Pos.Rr, impl_->params.Pos.NRr, impl_->params.Pos.is_Linspace_Rr, v, "Rr"); invalidateResultViews(); clearFieldResults(impl_->output); impl_->fieldDirty = true; }
+void KernelInterface::set_Rr(const Eigen::VectorXd &v) { ensureAlive(); assignPosition(impl_->params.Pos.Rr, impl_->params.Pos.NRr, impl_->params.Pos.is_Linspace_Rr, v, "Rr"); invalidateResultViews(); clearFieldResults(impl_->output); impl_->fieldSignature.clear(); }
 void KernelInterface::set_Rz(const Eigen::VectorXd &v) { ensureAlive(); assignPosition(impl_->params.Pos.Rz, impl_->params.Pos.NRz, impl_->params.Pos.is_Linspace_Rz, v, "Rz"); invalidateResultViews(); impl_->output.clear(); }
-void KernelInterface::set_Ro(const Eigen::VectorXd &v) { ensureAlive(); assignPosition(impl_->params.Pos.Ro, impl_->params.Pos.NRo, impl_->params.Pos.is_Linspace_Ro, v, "Ro"); invalidateResultViews(); clearFieldResults(impl_->output); impl_->fieldDirty = true; }
+void KernelInterface::set_Ro(const Eigen::VectorXd &v) { ensureAlive(); assignPosition(impl_->params.Pos.Ro, impl_->params.Pos.NRo, impl_->params.Pos.is_Linspace_Ro, v, "Ro"); invalidateResultViews(); clearFieldResults(impl_->output); impl_->fieldSignature.clear(); }
 void KernelInterface::set_Sz(double a, double b, int n) { set_Sz(makeLinspace(a, b, n, "Sz")); impl_->params.Pos.is_Linspace_Sz = true; }
 void KernelInterface::set_Rr(double a, double b, int n) { set_Rr(makeLinspace(a, b, n, "Rr")); impl_->params.Pos.is_Linspace_Rr = true; }
 void KernelInterface::set_Rz(double a, double b, int n) { set_Rz(makeLinspace(a, b, n, "Rz")); impl_->params.Pos.is_Linspace_Rz = true; }
@@ -893,9 +946,9 @@ void KernelInterface::set_cPhase(double cLow, double cHigh)
     impl_->output.clear();
 }
 
-void KernelInterface::set_GridType(Grid_Mode type) { ensureAlive(); impl_->params.Pos.GridType = type; invalidateResultViews(); clearFieldResults(impl_->output); impl_->fieldDirty = true; }
+void KernelInterface::set_GridType(Grid_Mode type) { ensureAlive(); impl_->params.Pos.GridType = type; invalidateResultViews(); clearFieldResults(impl_->output); impl_->fieldSignature.clear(); }
 void KernelInterface::set_Rmax(double rMax) { ensureAlive(); if (!std::isfinite(rMax) || rMax < 0.0) throw std::invalid_argument("Rmax must be finite and nonnegative"); impl_->params.Rmax = rMax; invalidateResultViews(); impl_->output.clear(); }
-void KernelInterface::set_SourceType(Source_Mode type) { ensureAlive(); impl_->params.SourceType = type; invalidateResultViews(); clearFieldResults(impl_->output); impl_->fieldDirty = true; }
+void KernelInterface::set_SourceType(Source_Mode type) { ensureAlive(); impl_->params.SourceType = type; invalidateResultViews(); clearFieldResults(impl_->output); impl_->fieldSignature.clear(); }
 void KernelInterface::set_MLimit(int limit)
 {
     ensureAlive();
@@ -906,8 +959,8 @@ void KernelInterface::set_MLimit(int limit)
     impl_->params.MLimit = limit;
     invalidateResultViews();
     impl_->output.clear();
-    impl_->eigenDirty = true;
-    impl_->fieldDirty = true;
+    impl_->eigenSignature.clear();
+    impl_->fieldSignature.clear();
 }
 void KernelInterface::set_CoherenceType(CoherenceType type)
 {
@@ -915,7 +968,7 @@ void KernelInterface::set_CoherenceType(CoherenceType type)
     impl_->params.coherenceType = type;
     invalidateResultViews();
     clearFieldResults(impl_->output);
-    impl_->fieldDirty = true;
+    impl_->fieldSignature.clear();
 }
 void KernelInterface::set_ModeType(ModeType type)
 {
@@ -923,7 +976,7 @@ void KernelInterface::set_ModeType(ModeType type)
     impl_->params.modeType = type;
     invalidateResultViews();
     clearFieldResults(impl_->output);
-    impl_->fieldDirty = true;
+    impl_->fieldSignature.clear();
 }
 void KernelInterface::set_ModeSampling(
     const Eigen::VectorXd &sourceDepths,
@@ -947,11 +1000,11 @@ void KernelInterface::set_ModeSampling(
     impl_->params.hasModePos = true;
     invalidateResultViews();
     impl_->output.clear();
-    impl_->eigenDirty = true;
-    impl_->fieldDirty = true;
+    impl_->eigenSignature.clear();
+    impl_->fieldSignature.clear();
 }
 void KernelInterface::set_RunMode(Run_Mode mode) { ensureAlive(); impl_->params.runMode = mode; }
-void KernelInterface::set_Velocity_enable(bool enabled) { ensureAlive(); impl_->params.is_Velocity = enabled; invalidateResultViews(); clearFieldResults(impl_->output); impl_->fieldDirty = true; }
+void KernelInterface::set_Velocity_enable(bool enabled) { ensureAlive(); impl_->params.is_Velocity = enabled; invalidateResultViews(); clearFieldResults(impl_->output); impl_->fieldSignature.clear(); }
 
 void KernelInterface::set_ReflCoef_Top(const std::vector<ReflectionCoef> &values)
 {
@@ -1010,7 +1063,7 @@ void KernelInterface::set_SBP(const Eigen::VectorXd &pattern, const Eigen::Vecto
     impl_->params.SBP.isSet = true;
     invalidateResultViews();
     clearFieldResults(impl_->output);
-    impl_->fieldDirty = true;
+    impl_->fieldSignature.clear();
 }
 
 std::complex<float> *KernelInterface::get_u(int i) { ensureResultsFresh(); return sourceView(impl_->output.pressure, impl_->output, i); }
@@ -1133,8 +1186,8 @@ LoadResult KernelInterface::loadEnv(const std::string &envPath)
     invalidateResultViews();
     impl_->params = std::move(candidate);
     impl_->output.clear();
-    impl_->eigenDirty = true;
-    impl_->fieldDirty = true;
+    impl_->eigenSignature.clear();
+    impl_->fieldSignature.clear();
     return LoadResult::success();
 }
 
@@ -1156,8 +1209,8 @@ LoadResult KernelInterface::loadJson(const std::string &jsonPath)
     invalidateResultViews();
     impl_->params = std::move(candidate);
     impl_->output.clear();
-    impl_->eigenDirty = true;
-    impl_->fieldDirty = true;
+    impl_->eigenSignature.clear();
+    impl_->fieldSignature.clear();
     return LoadResult::success();
 }
 
@@ -1173,8 +1226,6 @@ OOKC_parameters &KernelInterface::getParams()
 {
     ensureAlive();
     invalidateResultViews();
-    impl_->eigenDirty = true;
-    impl_->fieldDirty = true;
     return impl_->params;
 }
 

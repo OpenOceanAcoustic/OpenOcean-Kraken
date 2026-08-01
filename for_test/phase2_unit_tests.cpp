@@ -143,9 +143,7 @@ int main()
     require(!limited.converged && limited.failure == RootFailure::IterationLimit,
             "iteration limit must be reported structurally");
 
-    const std::filesystem::path workspace = OPENOCEANKRAKENC_WORKSPACE_DIR;
-    const AcousticCase munk = readAcousticEnv(
-        workspace / "test" / "toolbox_env" / "MunkKleaky.env");
+    const AcousticCase munk = readAcousticEnv(OPENOCEANKRAKENC_MUNK_ENV);
     require(munk.title == "Munk profile, leaky modes", "Munk title parse mismatch");
     require(std::abs(munk.frequency - 50.0) <= 1.0e-14, "Munk frequency parse mismatch");
     require(munk.layers.size() == 1, "Munk acoustic layer count mismatch");
@@ -165,7 +163,7 @@ int main()
             "Munk bottom attenuation mismatch");
 
     const std::vector<AcousticCase> solve3Profiles = readAcousticEnvironments(
-        workspace / "test" / "toolbox_env" / "solve3_mode_gain.env");
+        OPENOCEANKRAKENC_SOLVE3_ENV);
     require(solve3Profiles.size() == 2,
             "solve3 continuation ENV profile count mismatch");
     require(solve3Profiles[0].layers.size() == 1 &&

@@ -30,8 +30,9 @@ class EnvJsonEquivalenceTests(unittest.TestCase):
         cls.binary = binary_dir / "OpenOcean-Krakenc.exe"
         if not cls.binary.exists():
             cls.binary = binary_dir / "OpenOcean-Krakenc"
-        cls.workspace = Path(__file__).resolve().parents[2]
-        cls.fixtures = cls.workspace / "test"
+        cls.fixtures = Path(
+            os.environ["OPENOCEANKRAKENC_TEST_ROOT"]
+        ).resolve()
 
     def run_cli(self, *arguments):
         completed = subprocess.run(

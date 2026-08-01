@@ -66,10 +66,10 @@ int main()
     require(api.from_env((source / "for_test/fixtures/two_profile_small.env").string()),
             "export fixture ENV load failed");
     api.getParams().shdPath.clear();
-    api.set_Velocity_enable(true);
-    api.run();
     api.getParams().envPath.clear();
     api.getParams().flpPath.clear();
+    api.set_Velocity_enable(true);
+    api.run();
 
     const std::filesystem::path directory =
         std::filesystem::temp_directory_path() / "openocean_krakenc_export_test";
@@ -134,8 +134,7 @@ int main()
 
     KernelInterface elastic;
     const std::filesystem::path elasticEnv =
-        source.parent_path() / "test" / "multilayer_env" /
-        "elastic_fd_two_layer.env";
+        source / "for_test" / "fixtures" / "elastic_fd_two_layer.env";
     require(elastic.from_env(elasticEnv.string()), "elastic export ENV load failed");
     elastic.runEigen();
     const std::filesystem::path elasticRoot = directory / "elastic_mode";

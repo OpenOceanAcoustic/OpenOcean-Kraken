@@ -58,9 +58,9 @@ int main()
     roundTripEnum(Media_Mode::MODE_A_Acoustic);
     roundTripEnum(Media_Mode::MODE_E_Elastic);
 
-    const std::filesystem::path workspace = OPENOCEANKRAKENC_WORKSPACE_DIR;
+    const std::filesystem::path sourceRoot = OPENOCEANKRAKENC_SOURCE_DIR;
     const std::filesystem::path env =
-        workspace / "test" / "toolbox_env" / "MunkKleaky.env";
+        sourceRoot / "for_test" / "fixtures" / "two_profile_small.env";
     const std::filesystem::path output =
         std::filesystem::temp_directory_path() / "openocean_krakenc_roundtrip.json";
     const std::filesystem::path invalid =
@@ -180,7 +180,7 @@ int main()
     }
 
     OpenOcean_json invalidMultiFrequency = multiFrequency;
-    invalidMultiFrequency["sspInput"].front()["HSBot"]["rho"] = -1.0;
+    invalidMultiFrequency["sspInput"].front()["layers"].front()["rho"].front() = -1.0;
     bool rejectedInvalidMultiFrequency = false;
     try
     {

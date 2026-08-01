@@ -1,9 +1,18 @@
 """Locate named test cases in either flat or categorized fixture layouts."""
 
+import os
 from pathlib import Path
 
 
 def test_directory() -> Path:
+    configured = os.environ.get("OPENOCEANKRAKENC_TEST_ROOT")
+    if configured:
+        candidate = Path(configured).resolve()
+        if candidate.is_dir() and any(candidate.rglob("*.env")):
+            return candidate
+        raise FileNotFoundError(
+            "OPENOCEANKRAKENC_TEST_ROOT does not contain ENV fixtures"
+        )
     for ancestor in Path(__file__).resolve().parents:
         candidate = ancestor / "test"
         if candidate.is_dir() and any(candidate.rglob("*.env")):

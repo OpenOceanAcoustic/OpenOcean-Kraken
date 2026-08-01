@@ -11,7 +11,7 @@
 - Fortran direct-access 兼容 MOD 读写，支持一个文件内的多环境剖面。
 - `field.f90` 对应声场：距离无关、绝热模态（AD）和耦合模态（CM）。
 - 压力、水平振速、垂直振速；相干/非相干叠加；`R`、`X`、`S` 源类型；接收距离偏移和 SBP 波束图。
-- Fortran 兼容 SHD 输出、命令行入口和可嵌入 C++ `Interface`。
+- Fortran 兼容 SHD 输出、命令行入口和可嵌入 C++ `KernelInterface`。
 - 单线程与多线程 MOD/Field；多线程 MOD 输出经过 SHA-256 字节一致性验证。
 
 当前按一次调用一个频率工作。多频批处理可由调用方逐频执行；一个 MOD 内的原生多频记录尚未实现。
@@ -21,10 +21,17 @@
 ```powershell
 cmake -S . -B build-release -G Ninja `
   -DCMAKE_CXX_COMPILER=D:/program/mingw64/bin/g++.exe `
-  -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+  -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON `
+  -DOPENOCEANKRAKENC_EIGEN_INCLUDE=D:/deps/eigen `
+  -DOPENOCEANKRAKENC_JSON_INCLUDE=D:/deps/nlohmann-json/include
 cmake --build build-release --parallel
 ctest --test-dir build-release --output-on-failure
 ```
+
+仓库内置的契约、I/O 和小型数值夹具默认直接运行。完整参考数据套件通过
+`OPENOCEANKRAKENC_TEST_ROOT` 显式指定；目录缺少任一必需案例时，依赖外部
+数据的测试会标记为 disabled，而不会误报为数值回归。Fortran 对比另需设置
+`OPENOCEANKRAKENC_FORTRAN_ROOT`。
 
 Release 默认在编译器支持时启用 IPO/LTO。可用 `-DOPENOCEANKRAKENC_IPO=OFF` 关闭；`OPENOCEANKRAKENC_NATIVE_OPTIMIZATION` 默认关闭。
 
@@ -58,9 +65,9 @@ build-release\OpenOcean-Krakenc.exe --field ..\test\stepK_rd
 ## C++ 接口
 
 ```cpp
-#include "OpenOceanKrakencInterface.h"
+#include "OpenOceanKrakencKernelInterface.h"
 
-OpenOceanKrakenc::Interface solver;
+OpenOceanKrakenc::KernelInterface solver;
 solver.setNumThreads(4);
 auto &params = solver.getParams();
 params.envPath = R"(..\test\stepK_rd.env)";
@@ -75,7 +82,7 @@ const auto &vertical = solver.getOutput().verticalVelocity;
 ### ENV、JSON 与 setter 统一入口
 
 ```cpp
-OpenOceanKrakenc::Interface solver;
+OpenOceanKrakenc::KernelInterface solver;
 
 solver.from_env("case.env");       // ENV + 同名 FLP；按需读取 SBP/BRC/IRC/TRC
 solver.from_json("case.json");     // JSON schema v1
@@ -88,7 +95,7 @@ solver.export_result("result");
 
 三种入口最终都转换为同一个 `OOKC_parameters`，再进入同一套纯 C++ Krakenc + Field 数值核心。解析失败采用事务语义，不覆盖上一次有效参数。`get_u/get_v/get_h` 分别对应压力、垂直振速和水平振速，平铺顺序为 source → receiver-depth → range。
 
-`Interface::from_env()` 与 OpenOcean-Kraken 模板一致，面向完整 ENV + FLP 运行配置；同名 FLP 缺失时返回 `false` 且不修改原参数。仅求本征值时使用 CLI `--eigen case.env` 或底层 `read_env_file()`。纯 MOD + FLP 的 `runField()` 不要求 SSP，但仍会执行多频、吸收模型和网格能力检查。公共 `RProf`/剖面 `Range` 使用 km，接收距离 `Rr` 使用 m。
+`KernelInterface::from_env()` 与 OpenOcean-Kraken 模板一致，面向完整 ENV + FLP 运行配置；同名 FLP 缺失时返回 `false` 且不修改原参数。仅求本征值时使用 CLI `--eigen case.env` 或底层 `read_env_file()`。纯 MOD + FLP 的 `runField()` 不要求 SSP，但仍会执行多频、吸收模型和网格能力检查。公共 `RProf`/剖面 `Range` 使用 km，接收距离 `Rr` 使用 m。
 
 CLI 的本征、MOD 和 Field 均支持 ENV/JSON 双输入：
 
