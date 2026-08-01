@@ -265,4 +265,6 @@ PYBIND11_MODULE(OpenOceanKraken, module)
         .def("get_vertical_velocity_snapshot", &KernelInterface::getVerticalVelocityCopy)
         .def("get_horizontal_velocity_snapshot", &KernelInterface::getHorizontalVelocityCopy)
         .def("get_modes", &KernelInterface::getModesCopy);
+
+    module.attr("Interface") = module.attr("KernelInterface");
 }

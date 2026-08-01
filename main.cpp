@@ -212,7 +212,8 @@ namespace
             ? options.ook.threads
             : static_cast<int>(std::max(1u, hardware_threads));
 
-        ThreadPool thread_pool(static_cast<std::size_t>(threads));
+        OpenOceanKraken::ThreadPool thread_pool(
+            static_cast<std::size_t>(threads));
         OpenOceanKraken::KernelInterface interface(thread_pool);
         interface.setNumThreads(threads);
 

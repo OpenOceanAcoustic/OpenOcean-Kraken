@@ -124,7 +124,7 @@ Biological 层遵循以下语义：
 - Biological 附加项作用于 SSP 介质中的 P 波和 S 波衰减计算；顶部、底部半空间仍保留各自的材料衰减，但不应用 Biological 附加项。
 - Biological 的空 `BiologicalLayers` 数组可以导入、导出并保持为空；非 Biological 配置的 JSON 输出不会增加 `BiologicalLayers`。
 
-C++ 可通过 `Atten_Mode::biologicalLayers` 配置层，并由 `Interface::set_AttenUnit` 完成最终校验。此版本为公开 C++ 对象增加了布局成员，因而改变了二进制 ABI：核心库、CLI、共享库、Python `.pyd` 以及所有 C++ 二进制客户端必须从同一提交整体干净重编译，不能混用旧对象文件或旧动态库。`.mod`、`.shd` 的存储格式没有改变；变化只发生在内存对象布局和中间计算能力。格式不变不表示数值不变，启用 Biological 后输出的模态和声场数值会反映新增衰减。
+C++ 可通过 `Atten_Mode::biologicalLayers` 配置层，并由 `KernelInterface::set_AttenUnit` 完成最终校验。此版本为公开 C++ 对象增加了布局成员，因而改变了二进制 ABI：核心库、CLI、共享库、Python `.pyd` 以及所有 C++ 二进制客户端必须从同一提交整体干净重编译，不能混用旧对象文件或旧动态库。`.mod`、`.shd` 的存储格式没有改变；变化只发生在内存对象布局和中间计算能力。格式不变不表示数值不变，启用 Biological 后输出的模态和声场数值会反映新增衰减。
 
 ## Wrapper
 

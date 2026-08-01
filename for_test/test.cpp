@@ -33,6 +33,8 @@
 #include <limits>
 #include <sstream>
 #include <stdexcept>
+
+using OpenOceanKraken::ThreadPool;
 #include <utility>
 #include <vector>
 
