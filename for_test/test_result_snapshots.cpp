@@ -1,11 +1,17 @@
-#include "OpenOceanKrakenInterface.h"
+#include "OpenOceanKrakenKernelInterface.h"
 #include "ThreadPool.h"
 
+#include <algorithm>
+#include <array>
 #include <complex>
 #include <exception>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <string>
+
+using OpenOceanKraken::ThreadPool;
 
 namespace
 {
@@ -29,7 +35,7 @@ int main(int argc, char **argv)
     try
     {
         ThreadPool pool(1);
-        OpenOceanKraken::Interface interface(pool);
+        OpenOceanKraken::KernelInterface interface(pool);
         interface.setNumThreads(1);
         require(interface.from_env(argv[1]), "fixture must load");
         interface.set_Velocity_enable(true);
@@ -61,6 +67,36 @@ int main(int argc, char **argv)
         require(
             modes.front().mode_shapes.cols() == static_cast<Eigen::Index>(modes.front().depth.size()),
             "mode-shape depth count");
+
+        const std::filesystem::path shadeRoot =
+            std::filesystem::temp_directory_path() /
+            "openocean_kraken_snapshot";
+        interface.export_shd(shadeRoot.string(), 1);
+        std::ifstream shade(
+            shadeRoot.string() + ".shd",
+            std::ios::binary);
+        require(static_cast<bool>(shade), "SHD snapshot must open");
+        int recordWords = 0;
+        shade.read(
+            reinterpret_cast<char *>(&recordWords),
+            sizeof(recordWords));
+        require(recordWords >= 20, "SHD record length");
+        shade.seekg(
+            static_cast<std::streamoff>(recordWords) * 4,
+            std::ios::beg);
+        std::array<char, 80> plotType{};
+        shade.read(plotType.data(), plotType.size());
+        require(
+            std::string(plotType.data(), 10) == "rectilin  ",
+            "SHD plot-type prefix");
+        require(
+            std::all_of(
+                plotType.begin() + 10,
+                plotType.end(),
+                [](char value) { return value == '\0'; }),
+            "SHD plot-type record must use deterministic zero padding");
+        std::error_code ignored;
+        std::filesystem::remove(shadeRoot.string() + ".shd", ignored);
 
         const std::complex<float> saved = pressure.values.front();
         interface.clearResults();

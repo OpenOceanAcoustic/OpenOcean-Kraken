@@ -21,6 +21,7 @@ class NativeBindingTests(unittest.TestCase):
     def test_required_symbols_are_exported(self):
         for name in (
             "Interface",
+            "KernelInterface",
             "ThreadPool",
             "Run_Mode",
             "SSP_Mode",

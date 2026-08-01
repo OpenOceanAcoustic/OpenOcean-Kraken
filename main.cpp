@@ -1,4 +1,4 @@
-#include "OpenOceanKrakenInterface.h"
+#include "OpenOceanKrakenKernelInterface.h"
 #include "ThreadPool.h"
 #include "cli_options.hpp"
 
@@ -212,8 +212,9 @@ namespace
             ? options.ook.threads
             : static_cast<int>(std::max(1u, hardware_threads));
 
-        ThreadPool thread_pool(static_cast<std::size_t>(threads));
-        OpenOceanKraken::Interface interface(thread_pool);
+        OpenOceanKraken::ThreadPool thread_pool(
+            static_cast<std::size_t>(threads));
+        OpenOceanKraken::KernelInterface interface(thread_pool);
         interface.setNumThreads(threads);
 
         const bool loaded = extension == ".json"

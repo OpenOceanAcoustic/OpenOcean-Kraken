@@ -1,5 +1,5 @@
-#ifndef THREAD_POOL_H
-#define THREAD_POOL_H
+#ifndef OPENOCEAN_KRAKEN_THREAD_POOL_H
+#define OPENOCEAN_KRAKEN_THREAD_POOL_H
 
 #include <vector>
 #include <queue>
@@ -18,6 +18,8 @@
 #if defined(OPENOCEAN_KRAKEN_FIELD_RUNTIME)
 #include <openocean/field/runtime.hpp>
 #endif
+
+namespace OpenOceanKraken {
 
 /**
  * @brief 高性能线程池类，支持普通任务、带ID任务、等待完成、超时等功能
@@ -389,4 +391,6 @@ inline ThreadPool::~ThreadPool()
     cleanup_finished_ids();
 }
 
-#endif // THREAD_POOL_H
+} // namespace OpenOceanKraken
+
+#endif // OPENOCEAN_KRAKEN_THREAD_POOL_H

@@ -4,7 +4,7 @@
 #include "AttenMod.h"
 #include "json_eigen.hpp"
 #include "OpenOceanKrakenParams.h"
-#include "OpenOceanKrakenInterface.h"
+#include "OpenOceanKrakenKernelInterface.h"
 #include <cmath>
 #include <stdexcept>
 

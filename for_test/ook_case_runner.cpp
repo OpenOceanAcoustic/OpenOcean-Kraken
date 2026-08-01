@@ -1,4 +1,4 @@
-#include "OpenOceanKrakenInterface.h"
+#include "OpenOceanKrakenKernelInterface.h"
 #include "ThreadPool.h"
 
 #include <algorithm>
@@ -60,8 +60,9 @@ int main(int argc, char **argv)
             std::filesystem::remove(output_root + suffix);
         }
 
-        ThreadPool thread_pool(static_cast<size_t>(threads));
-        OpenOceanKraken::Interface kraken_interface(thread_pool);
+        OpenOceanKraken::ThreadPool thread_pool(
+            static_cast<size_t>(threads));
+        OpenOceanKraken::KernelInterface kraken_interface(thread_pool);
         kraken_interface.setNumThreads(threads);
 
         if (!kraken_interface.from_env(env_path))

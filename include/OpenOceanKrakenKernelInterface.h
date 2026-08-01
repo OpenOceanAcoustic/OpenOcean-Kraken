@@ -33,7 +33,7 @@ namespace OpenOceanKraken
 
     class OpenOceanKraken_PIMPL;
     // 只作为一个参数表，不涉及具体的计算过程
-    class Interface
+    class KernelInterface
     {
     public:
         void set_RProf(const Eigen::VectorXd &ranges);
@@ -41,14 +41,16 @@ namespace OpenOceanKraken
         void set_MLimit(int limit);
         void set_CoherenceType(CoherenceType type);
         void set_ModeType(ModeType type);
+        void set_ModeSampling(const Eigen::VectorXd &sourceDepths,
+                              const Eigen::VectorXd &receiverDepths);
         FieldSnapshot getPressureCopy() const;
         FieldSnapshot getVerticalVelocityCopy() const;
         FieldSnapshot getHorizontalVelocityCopy() const;
         std::vector<ModeProfileSnapshot> getModesCopy() const;
 
-        Interface();  // 构造函数
-        Interface(ThreadPool &pool); // 计算前需要传入一个线程池
-        ~Interface(); // 析构函数
+        KernelInterface();  // 构造函数
+        KernelInterface(ThreadPool &pool); // 计算前需要传入一个线程池
+        ~KernelInterface(); // 析构函数
         
         void setNumThreads(int num_threads); // 设置线程数
         void setThreadPool(ThreadPool &pool); // 设置线程池
@@ -119,9 +121,11 @@ namespace OpenOceanKraken
         OOK_output &getOutput() const;                   // 获取输出的引用
         OOK_output getOutput_Copy() const;               // 获取输出的副本
         const OOK_output &getOutput_const() const;       // 获取输出的副本
-        bool from_json(const std::string &jsonPath);     // 从json读取参数
-        bool to_json(const std::string &jsonPath) const; // 将参数写入json
-        std::string to_json_string() const;              // 将参数写入json字符串
+#if defined(OPENOCEAN_KRAKEN_LEGACY_JSON)
+        bool from_json(const std::string &jsonPath);
+        bool to_json(const std::string &jsonPath) const;
+        std::string to_json_string() const;
+#endif
         bool from_env(const std::string &envPath);        // 从env文件读取参数 
 
     private:
