@@ -1,5 +1,5 @@
-#ifndef THREAD_POOL_H
-#define THREAD_POOL_H
+#ifndef OPENOCEAN_KRAKENC_THREAD_POOL_H
+#define OPENOCEAN_KRAKENC_THREAD_POOL_H
 
 #include <atomic>
 #include <chrono>
@@ -18,6 +18,8 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
+namespace OpenOceanKrakenc {
 
 /**
  * A fixed-size executor.  ThreadPool itself is a handle; ExecutorLease keeps the
@@ -463,4 +465,6 @@ inline void ThreadPool::cleanup_finished_ids()
     }
 }
 
-#endif
+} // namespace OpenOceanKrakenc
+
+#endif // OPENOCEAN_KRAKENC_THREAD_POOL_H

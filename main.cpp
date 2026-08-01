@@ -2,7 +2,7 @@
 #include "algorithm/KrakencSolver.h"
 #include "algorithm/ModeFileWriter.h"
 #include "algorithm/FieldSolver.h"
-#include "OpenOceanKrakencInterface.h"
+#include "OpenOceanKrakencKernelInterface.h"
 #include "module/ParameterAdapters.h"
 #include "module/json_in_out.hpp"
 
@@ -108,7 +108,7 @@ int main(int argc, char **argv)
         }
         try
         {
-            OpenOceanKrakenc::Interface api;
+            OpenOceanKrakenc::KernelInterface api;
             const OpenOceanKrakenc::LoadResult loaded = api.loadEnv(argv[2]);
             if (!loaded.ok)
             {
@@ -233,7 +233,7 @@ int main(int argc, char **argv)
             const std::filesystem::path inputPath = argv[2];
             if (inputPath.extension() == ".env" || inputPath.extension() == ".json")
             {
-                OpenOceanKrakenc::Interface api;
+                OpenOceanKrakenc::KernelInterface api;
                 const OpenOceanKrakenc::LoadResult loaded =
                     inputPath.extension() == ".env"
                         ? api.loadEnv(inputPath.string())

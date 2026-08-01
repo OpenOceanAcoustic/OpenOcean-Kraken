@@ -1,4 +1,4 @@
-#include "OpenOceanKrakencInterface.h"
+#include "OpenOceanKrakencKernelInterface.h"
 
 #include <cassert>
 #include <complex>
@@ -48,44 +48,44 @@ int main()
     instantiate<ssp::Range_Independent_Area>();
     instantiate<ssp::FlattenedData>();
 
-    static_assert(std::is_same_v<decltype(&Interface::from_env),
-                                 bool (Interface::*)(const std::string &)>);
-    static_assert(std::is_same_v<decltype(&Interface::from_json),
-                                 bool (Interface::*)(const std::string &)>);
-    static_assert(std::is_same_v<decltype(&Interface::to_json),
-                                 bool (Interface::*)(const std::string &) const>);
-    static_assert(std::is_same_v<decltype(&Interface::to_json_string),
-                                 std::string (Interface::*)() const>);
-    static_assert(std::is_same_v<decltype(&Interface::getHardwareThreads),
-                                 int (Interface::*)() const>);
-    static_assert(std::is_same_v<decltype(&Interface::getOutput_Copy),
-                                 OOKC_output (Interface::*)() const>);
+    static_assert(std::is_same_v<decltype(&KernelInterface::from_env),
+                                 bool (KernelInterface::*)(const std::string &)>);
+    static_assert(std::is_same_v<decltype(&KernelInterface::from_json),
+                                 bool (KernelInterface::*)(const std::string &)>);
+    static_assert(std::is_same_v<decltype(&KernelInterface::to_json),
+                                 bool (KernelInterface::*)(const std::string &) const>);
+    static_assert(std::is_same_v<decltype(&KernelInterface::to_json_string),
+                                 std::string (KernelInterface::*)() const>);
+    static_assert(std::is_same_v<decltype(&KernelInterface::getHardwareThreads),
+                                 int (KernelInterface::*)() const>);
+    static_assert(std::is_same_v<decltype(&KernelInterface::getOutput_Copy),
+                                 OOKC_output (KernelInterface::*)() const>);
 
-    auto setTitle = &Interface::set_Title;
-    auto setFreq = &Interface::set_Freq;
-    auto setFreqVec = &Interface::set_freqvec;
-    auto setSsp = &Interface::set_SSP;
-    auto setAtten = &Interface::set_AttenUnit;
-    auto setPhase = &Interface::set_cPhase;
-    auto setGrid = &Interface::set_GridType;
-    auto setRange = &Interface::set_Rmax;
-    auto setSource = &Interface::set_SourceType;
-    auto setRun = &Interface::set_RunMode;
-    auto setVelocity = &Interface::set_Velocity_enable;
-    auto setTop = &Interface::set_ReflCoef_Top;
-    auto setBottom = &Interface::set_ReflCoef_Bottom;
-    auto setPattern = &Interface::set_SBP;
-    auto getU = &Interface::get_u;
-    auto getV = &Interface::get_v;
-    auto getH = &Interface::get_h;
-    auto getUAll = &Interface::get_u_AllSources;
-    auto getVAll = &Interface::get_v_AllSources;
-    auto getHAll = &Interface::get_h_AllSources;
-    auto exportResult = &Interface::export_result;
-    auto exportMod = &Interface::export_mod;
-    auto exportShd = &Interface::export_shd;
-    auto getParamsConst = &Interface::getParams_const;
-    auto getOutputConst = &Interface::getOutput_const;
+    auto setTitle = &KernelInterface::set_Title;
+    auto setFreq = &KernelInterface::set_Freq;
+    auto setFreqVec = &KernelInterface::set_freqvec;
+    auto setSsp = &KernelInterface::set_SSP;
+    auto setAtten = &KernelInterface::set_AttenUnit;
+    auto setPhase = &KernelInterface::set_cPhase;
+    auto setGrid = &KernelInterface::set_GridType;
+    auto setRange = &KernelInterface::set_Rmax;
+    auto setSource = &KernelInterface::set_SourceType;
+    auto setRun = &KernelInterface::set_RunMode;
+    auto setVelocity = &KernelInterface::set_Velocity_enable;
+    auto setTop = &KernelInterface::set_ReflCoef_Top;
+    auto setBottom = &KernelInterface::set_ReflCoef_Bottom;
+    auto setPattern = &KernelInterface::set_SBP;
+    auto getU = &KernelInterface::get_u;
+    auto getV = &KernelInterface::get_v;
+    auto getH = &KernelInterface::get_h;
+    auto getUAll = &KernelInterface::get_u_AllSources;
+    auto getVAll = &KernelInterface::get_v_AllSources;
+    auto getHAll = &KernelInterface::get_h_AllSources;
+    auto exportResult = &KernelInterface::export_result;
+    auto exportMod = &KernelInterface::export_mod;
+    auto exportShd = &KernelInterface::export_shd;
+    auto getParamsConst = &KernelInterface::getParams_const;
+    auto getOutputConst = &KernelInterface::getOutput_const;
     (void)setTitle; (void)setFreq; (void)setFreqVec; (void)setSsp; (void)setAtten;
     (void)setPhase; (void)setGrid; (void)setRange; (void)setSource; (void)setRun;
     (void)setVelocity; (void)setTop; (void)setBottom; (void)setPattern;
@@ -93,7 +93,7 @@ int main()
     (void)exportResult; (void)exportMod; (void)exportShd;
     (void)getParamsConst; (void)getOutputConst;
 
-    Interface api;
+    KernelInterface api;
     const Eigen::VectorXd values = Eigen::VectorXd::LinSpaced(3, 1.0, 3.0);
     api.set_Sz(values);
     api.set_Sz(10.0, 30.0, 3);

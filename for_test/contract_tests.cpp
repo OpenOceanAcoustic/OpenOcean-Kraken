@@ -1,5 +1,5 @@
 #include "OpenOceanKrakencParams.h"
-#include "OpenOceanKrakencInterface.h"
+#include "OpenOceanKrakencKernelInterface.h"
 #include "ThreadPool.h"
 
 #include <algorithm>
@@ -57,7 +57,7 @@ int main()
     require(rejected, "zero modal capacity must be rejected");
 
     ThreadPool pool(2);
-    Interface api(pool);
+    KernelInterface api(pool);
     require(api.getNumThreads() >= 1, "default thread count must be positive");
     api.setNumThreads(2);
     require(api.getNumThreads() == 2, "thread count setter failed");
@@ -75,8 +75,8 @@ int main()
     require(missingInput, "runEigen must reject a missing ENV path");
 
     api.getParams().envPath =
-        std::string(OPENOCEANKRAKENC_WORKSPACE_DIR) +
-        "/OpenOcean-Krakenc/for_test/fixtures/two_profile_small.env";
+        std::string(OPENOCEANKRAKENC_SOURCE_DIR) +
+        "/for_test/fixtures/two_profile_small.env";
     api.runEigen();
     require(api.getOutput().eigen.size() == 2,
             "multi-profile interface eigen output count mismatch");
@@ -97,10 +97,10 @@ int main()
             "multi-profile interface eigen output is incomplete");
 
     ThreadPool singleWorkerPool(1);
-    Interface reentrant(singleWorkerPool);
+    KernelInterface reentrant(singleWorkerPool);
     reentrant.getParams().envPath =
-        std::string(OPENOCEANKRAKENC_WORKSPACE_DIR) +
-        "/OpenOcean-Krakenc/for_test/fixtures/two_profile_small.env";
+        std::string(OPENOCEANKRAKENC_SOURCE_DIR) +
+        "/for_test/fixtures/two_profile_small.env";
     auto reentrantRun = singleWorkerPool.enqueue([&reentrant]() {
         reentrant.runEigen();
         return reentrant.getOutput().eigen.size();
@@ -119,6 +119,25 @@ int main()
             "identified thread-pool task did not clear its ID counter");
     require(identifiedPool.wait_completion_for(std::chrono::milliseconds(100)),
             "identified thread-pool task corrupted the global completion counter");
+
+    KernelInterface escapedReference;
+    OOKC_parameters &escapedParams = escapedReference.getParams();
+    escapedParams.envPath =
+        std::string(OPENOCEANKRAKENC_SOURCE_DIR) +
+        "/for_test/fixtures/two_profile_small.env";
+    escapedReference.runEigen();
+    escapedParams.freqinfo.freq += 1.0;
+    bool escapedMutationRejected = false;
+    try
+    {
+        static_cast<void>(escapedReference.getOutput_const());
+    }
+    catch (const std::logic_error &)
+    {
+        escapedMutationRejected = true;
+    }
+    require(escapedMutationRejected,
+            "escaped mutable parameters must invalidate computed results");
 
     api.clearResults();
     api.free();

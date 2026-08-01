@@ -1,0 +1,13 @@
+/,
+'RA'                               ! Range-independent field calculation
+9999                               ! Include all computed modes
+1                                  ! NPROF
+0.0 /                              ! Profile range (km)
+201                                ! NR
+0.0  10.0 /                        ! Receiver ranges (km)
+1                                  ! NSD
+50.0 /                             ! Source depth (m)
+101                                ! NRD
+0.0  100.0 /                       ! Receiver depths (m)
+101                                ! NRR
+0.0  0.0 /                         ! Receiver range offsets (m)

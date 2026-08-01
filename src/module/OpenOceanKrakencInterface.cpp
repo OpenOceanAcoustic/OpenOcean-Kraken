@@ -1,4 +1,4 @@
-#include "OpenOceanKrakencInterface.h"
+#include "OpenOceanKrakencKernelInterface.h"
 
 #include "algorithm/AcousticCase.h"
 #include "algorithm/ComplexMatrixBuilder.h"
@@ -359,7 +359,7 @@ void clearFieldResults(OOKC_output &output)
 }
 }
 
-class Interface::InterfaceImpl
+class KernelInterface::InterfaceImpl
 {
 public:
     OOKC_parameters params;
@@ -393,29 +393,29 @@ public:
     }
 };
 
-Interface::Interface()
+KernelInterface::KernelInterface()
     : impl_(std::make_unique<InterfaceImpl>())
 {
 }
 
-Interface::Interface(ThreadPool &threadPool)
-    : Interface()
+KernelInterface::KernelInterface(ThreadPool &threadPool)
+    : KernelInterface()
 {
     impl_->borrowedProfileExecutor = threadPool.borrowExecutor();
     impl_->hasBorrowedProfileExecutor = true;
 }
 
-Interface::Interface(std::shared_ptr<ThreadPool> threadPool)
-    : Interface()
+KernelInterface::KernelInterface(std::shared_ptr<ThreadPool> threadPool)
+    : KernelInterface()
 {
     setProfileExecutor(std::move(threadPool));
 }
 
-Interface::~Interface() = default;
-Interface::Interface(Interface &&) noexcept = default;
-Interface &Interface::operator=(Interface &&) noexcept = default;
+KernelInterface::~KernelInterface() = default;
+KernelInterface::KernelInterface(KernelInterface &&) noexcept = default;
+KernelInterface &KernelInterface::operator=(KernelInterface &&) noexcept = default;
 
-void Interface::ensureAlive() const
+void KernelInterface::ensureAlive() const
 {
     if (!impl_ || !impl_->alive)
     {
@@ -423,7 +423,7 @@ void Interface::ensureAlive() const
     }
 }
 
-void Interface::ensureResultsFresh() const
+void KernelInterface::ensureResultsFresh() const
 {
     ensureAlive();
     const bool hasEigen = !impl_->output.eigen.empty();
@@ -444,7 +444,7 @@ void Interface::ensureResultsFresh() const
     }
 }
 
-void Interface::invalidateResultViews() noexcept
+void KernelInterface::invalidateResultViews() noexcept
 {
     if (impl_ && impl_->viewState)
     {
@@ -452,7 +452,7 @@ void Interface::invalidateResultViews() noexcept
     }
 }
 
-void Interface::setFieldThreads(int numThreads)
+void KernelInterface::setFieldThreads(int numThreads)
 {
     ensureAlive();
     if (numThreads < 1)
@@ -462,22 +462,22 @@ void Interface::setFieldThreads(int numThreads)
     impl_->fieldThreads = numThreads;
 }
 
-int Interface::getFieldThreads() const
+int KernelInterface::getFieldThreads() const
 {
     ensureAlive();
     return impl_->fieldThreads;
 }
 
-void Interface::setNumThreads(int numThreads) { setFieldThreads(numThreads); }
-int Interface::getNumThreads() const { return getFieldThreads(); }
+void KernelInterface::setNumThreads(int numThreads) { setFieldThreads(numThreads); }
+int KernelInterface::getNumThreads() const { return getFieldThreads(); }
 
-int Interface::getHardwareThreads() const
+int KernelInterface::getHardwareThreads() const
 {
     ensureAlive();
     return static_cast<int>(std::max(1u, std::thread::hardware_concurrency()));
 }
 
-void Interface::setThreadPool(ThreadPool &threadPool)
+void KernelInterface::setThreadPool(ThreadPool &threadPool)
 {
     ensureAlive();
     impl_->ownedProfileExecutor = {};
@@ -485,7 +485,7 @@ void Interface::setThreadPool(ThreadPool &threadPool)
     impl_->hasBorrowedProfileExecutor = true;
 }
 
-void Interface::setProfileExecutor(std::shared_ptr<ThreadPool> threadPool)
+void KernelInterface::setProfileExecutor(std::shared_ptr<ThreadPool> threadPool)
 {
     ensureAlive();
     if (!threadPool)
@@ -497,12 +497,12 @@ void Interface::setProfileExecutor(std::shared_ptr<ThreadPool> threadPool)
     impl_->hasBorrowedProfileExecutor = false;
 }
 
-void Interface::setThreadPool(std::shared_ptr<ThreadPool> threadPool)
+void KernelInterface::setThreadPool(std::shared_ptr<ThreadPool> threadPool)
 {
     setProfileExecutor(std::move(threadPool));
 }
 
-void Interface::detachThreadPool()
+void KernelInterface::detachThreadPool()
 {
     ensureAlive();
     impl_->ownedProfileExecutor = {};
@@ -510,7 +510,7 @@ void Interface::detachThreadPool()
     impl_->hasBorrowedProfileExecutor = false;
 }
 
-void Interface::runEigen()
+void KernelInterface::runEigen()
 {
     ensureAlive();
     ThreadPool::ExecutorLease executor = impl_->acquireProfileExecutor();
@@ -567,7 +567,7 @@ void Interface::runEigen()
     impl_->fieldSignature.clear();
 }
 
-void Interface::runField()
+void KernelInterface::runField()
 {
     ensureAlive();
     const OOKC_parameters previousParams = impl_->params;
@@ -698,7 +698,7 @@ void Interface::runField()
     }
 }
 
-void Interface::run()
+void KernelInterface::run()
 {
     ensureAlive();
     const OOKC_parameters previousParams = impl_->params;
@@ -731,7 +731,7 @@ void Interface::run()
     }
 }
 
-void Interface::clearResults()
+void KernelInterface::clearResults()
 {
     ensureAlive();
     invalidateResultViews();
@@ -740,7 +740,7 @@ void Interface::clearResults()
     impl_->fieldSignature.clear();
 }
 
-void Interface::close()
+void KernelInterface::close()
 {
     if (!impl_ || !impl_->alive)
     {
@@ -757,12 +757,12 @@ void Interface::close()
     impl_->alive = false;
 }
 
-bool Interface::isClosed() const noexcept
+bool KernelInterface::isClosed() const noexcept
 {
     return !impl_ || !impl_->alive;
 }
 
-void Interface::free() { close(); }
+void KernelInterface::free() { close(); }
 
 namespace
 {
@@ -851,7 +851,7 @@ const std::complex<float> *allSourcesView(
 }
 }
 
-void Interface::set_Title(const std::string &title)
+void KernelInterface::set_Title(const std::string &title)
 {
     ensureAlive();
     impl_->params.Title = title;
@@ -859,7 +859,7 @@ void Interface::set_Title(const std::string &title)
     impl_->output.clear();
 }
 
-void Interface::set_Freq(double freq)
+void KernelInterface::set_Freq(double freq)
 {
     ensureAlive();
     if (!std::isfinite(freq) || !(freq > 0.0))
@@ -873,7 +873,7 @@ void Interface::set_Freq(double freq)
     impl_->output.clear();
 }
 
-void Interface::set_freqvec(const Eigen::VectorXd &freqvec)
+void KernelInterface::set_freqvec(const Eigen::VectorXd &freqvec)
 {
     ensureAlive();
     if (freqvec.size() < 1 || !freqvec.allFinite() ||
@@ -888,7 +888,7 @@ void Interface::set_freqvec(const Eigen::VectorXd &freqvec)
     impl_->output.clear();
 }
 
-void Interface::set_SSP(const std::vector<ssp::Range_Independent_Area> &sspInput)
+void KernelInterface::set_SSP(const std::vector<ssp::Range_Independent_Area> &sspInput)
 {
     ensureAlive();
     if (sspInput.empty())
@@ -922,21 +922,21 @@ void Interface::set_SSP(const std::vector<ssp::Range_Independent_Area> &sspInput
     impl_->output.clear();
 }
 
-void Interface::set_AttenUnit(Atten_Mode mode) { ensureAlive(); impl_->params.AttenUnit = mode; invalidateResultViews(); impl_->output.clear(); }
-void Interface::set_Sz(const Eigen::VectorXd &v) { ensureAlive(); assignPosition(impl_->params.Pos.Sz, impl_->params.Pos.NSz, impl_->params.Pos.is_Linspace_Sz, v, "Sz"); invalidateResultViews(); impl_->output.clear(); }
-void Interface::set_Rr(const Eigen::VectorXd &v) { ensureAlive(); assignPosition(impl_->params.Pos.Rr, impl_->params.Pos.NRr, impl_->params.Pos.is_Linspace_Rr, v, "Rr"); invalidateResultViews(); clearFieldResults(impl_->output); impl_->fieldSignature.clear(); }
-void Interface::set_Rz(const Eigen::VectorXd &v) { ensureAlive(); assignPosition(impl_->params.Pos.Rz, impl_->params.Pos.NRz, impl_->params.Pos.is_Linspace_Rz, v, "Rz"); invalidateResultViews(); impl_->output.clear(); }
-void Interface::set_Ro(const Eigen::VectorXd &v) { ensureAlive(); assignPosition(impl_->params.Pos.Ro, impl_->params.Pos.NRo, impl_->params.Pos.is_Linspace_Ro, v, "Ro"); invalidateResultViews(); clearFieldResults(impl_->output); impl_->fieldSignature.clear(); }
-void Interface::set_Sz(double a, double b, int n) { set_Sz(makeLinspace(a, b, n, "Sz")); impl_->params.Pos.is_Linspace_Sz = true; }
-void Interface::set_Rr(double a, double b, int n) { set_Rr(makeLinspace(a, b, n, "Rr")); impl_->params.Pos.is_Linspace_Rr = true; }
-void Interface::set_Rz(double a, double b, int n) { set_Rz(makeLinspace(a, b, n, "Rz")); impl_->params.Pos.is_Linspace_Rz = true; }
-void Interface::set_Ro(double a, double b, int n) { set_Ro(makeLinspace(a, b, n, "Ro")); impl_->params.Pos.is_Linspace_Ro = true; }
+void KernelInterface::set_AttenUnit(Atten_Mode mode) { ensureAlive(); impl_->params.AttenUnit = mode; invalidateResultViews(); impl_->output.clear(); }
+void KernelInterface::set_Sz(const Eigen::VectorXd &v) { ensureAlive(); assignPosition(impl_->params.Pos.Sz, impl_->params.Pos.NSz, impl_->params.Pos.is_Linspace_Sz, v, "Sz"); invalidateResultViews(); impl_->output.clear(); }
+void KernelInterface::set_Rr(const Eigen::VectorXd &v) { ensureAlive(); assignPosition(impl_->params.Pos.Rr, impl_->params.Pos.NRr, impl_->params.Pos.is_Linspace_Rr, v, "Rr"); invalidateResultViews(); clearFieldResults(impl_->output); impl_->fieldSignature.clear(); }
+void KernelInterface::set_Rz(const Eigen::VectorXd &v) { ensureAlive(); assignPosition(impl_->params.Pos.Rz, impl_->params.Pos.NRz, impl_->params.Pos.is_Linspace_Rz, v, "Rz"); invalidateResultViews(); impl_->output.clear(); }
+void KernelInterface::set_Ro(const Eigen::VectorXd &v) { ensureAlive(); assignPosition(impl_->params.Pos.Ro, impl_->params.Pos.NRo, impl_->params.Pos.is_Linspace_Ro, v, "Ro"); invalidateResultViews(); clearFieldResults(impl_->output); impl_->fieldSignature.clear(); }
+void KernelInterface::set_Sz(double a, double b, int n) { set_Sz(makeLinspace(a, b, n, "Sz")); impl_->params.Pos.is_Linspace_Sz = true; }
+void KernelInterface::set_Rr(double a, double b, int n) { set_Rr(makeLinspace(a, b, n, "Rr")); impl_->params.Pos.is_Linspace_Rr = true; }
+void KernelInterface::set_Rz(double a, double b, int n) { set_Rz(makeLinspace(a, b, n, "Rz")); impl_->params.Pos.is_Linspace_Rz = true; }
+void KernelInterface::set_Ro(double a, double b, int n) { set_Ro(makeLinspace(a, b, n, "Ro")); impl_->params.Pos.is_Linspace_Ro = true; }
 
-void Interface::set_cPhase(double cLow, double cHigh)
+void KernelInterface::set_cPhase(double cLow, double cHigh)
 {
     ensureAlive();
     if (!std::isfinite(cLow) || !std::isfinite(cHigh) ||
-        !(cLow > 0.0) || !(cHigh > cLow))
+        cLow < 0.0 || !(cHigh > cLow))
     {
         throw std::invalid_argument("OpenOcean-Krakenc phase speed limits are invalid");
     }
@@ -946,13 +946,67 @@ void Interface::set_cPhase(double cLow, double cHigh)
     impl_->output.clear();
 }
 
-void Interface::set_GridType(Grid_Mode type) { ensureAlive(); impl_->params.Pos.GridType = type; invalidateResultViews(); clearFieldResults(impl_->output); impl_->fieldSignature.clear(); }
-void Interface::set_Rmax(double rMax) { ensureAlive(); if (!std::isfinite(rMax) || rMax < 0.0) throw std::invalid_argument("Rmax must be finite and nonnegative"); impl_->params.Rmax = rMax; invalidateResultViews(); impl_->output.clear(); }
-void Interface::set_SourceType(Source_Mode type) { ensureAlive(); impl_->params.SourceType = type; invalidateResultViews(); clearFieldResults(impl_->output); impl_->fieldSignature.clear(); }
-void Interface::set_RunMode(Run_Mode mode) { ensureAlive(); impl_->params.runMode = mode; }
-void Interface::set_Velocity_enable(bool enabled) { ensureAlive(); impl_->params.is_Velocity = enabled; invalidateResultViews(); clearFieldResults(impl_->output); impl_->fieldSignature.clear(); }
+void KernelInterface::set_GridType(Grid_Mode type) { ensureAlive(); impl_->params.Pos.GridType = type; invalidateResultViews(); clearFieldResults(impl_->output); impl_->fieldSignature.clear(); }
+void KernelInterface::set_Rmax(double rMax) { ensureAlive(); if (!std::isfinite(rMax) || rMax < 0.0) throw std::invalid_argument("Rmax must be finite and nonnegative"); impl_->params.Rmax = rMax; invalidateResultViews(); impl_->output.clear(); }
+void KernelInterface::set_SourceType(Source_Mode type) { ensureAlive(); impl_->params.SourceType = type; invalidateResultViews(); clearFieldResults(impl_->output); impl_->fieldSignature.clear(); }
+void KernelInterface::set_MLimit(int limit)
+{
+    ensureAlive();
+    if (limit <= 0)
+    {
+        throw std::invalid_argument("mode limit must be positive");
+    }
+    impl_->params.MLimit = limit;
+    invalidateResultViews();
+    impl_->output.clear();
+    impl_->eigenSignature.clear();
+    impl_->fieldSignature.clear();
+}
+void KernelInterface::set_CoherenceType(CoherenceType type)
+{
+    ensureAlive();
+    impl_->params.coherenceType = type;
+    invalidateResultViews();
+    clearFieldResults(impl_->output);
+    impl_->fieldSignature.clear();
+}
+void KernelInterface::set_ModeType(ModeType type)
+{
+    ensureAlive();
+    impl_->params.modeType = type;
+    invalidateResultViews();
+    clearFieldResults(impl_->output);
+    impl_->fieldSignature.clear();
+}
+void KernelInterface::set_ModeSampling(
+    const Eigen::VectorXd &sourceDepths,
+    const Eigen::VectorXd &receiverDepths)
+{
+    ensureAlive();
+    if (sourceDepths.size() < 1 || receiverDepths.size() < 1 ||
+        !sourceDepths.allFinite() || !receiverDepths.allFinite())
+    {
+        throw std::invalid_argument(
+            "mode sampling depths must be nonempty and finite");
+    }
+    Position mode;
+    mode.NSz = static_cast<int>(sourceDepths.size());
+    mode.NRz = static_cast<int>(receiverDepths.size());
+    mode.NRz_per_range = mode.NRz;
+    mode.Sz = sourceDepths;
+    mode.Rz = receiverDepths;
+    mode.GridType = Grid_Mode::MODE_R_Rectangular;
+    impl_->params.ModePos = std::move(mode);
+    impl_->params.hasModePos = true;
+    invalidateResultViews();
+    impl_->output.clear();
+    impl_->eigenSignature.clear();
+    impl_->fieldSignature.clear();
+}
+void KernelInterface::set_RunMode(Run_Mode mode) { ensureAlive(); impl_->params.runMode = mode; }
+void KernelInterface::set_Velocity_enable(bool enabled) { ensureAlive(); impl_->params.is_Velocity = enabled; invalidateResultViews(); clearFieldResults(impl_->output); impl_->fieldSignature.clear(); }
 
-void Interface::set_ReflCoef_Top(const std::vector<ReflectionCoef> &values)
+void KernelInterface::set_ReflCoef_Top(const std::vector<ReflectionCoef> &values)
 {
     ensureAlive();
     for (std::size_t i = 0; i < values.size(); ++i)
@@ -972,7 +1026,7 @@ void Interface::set_ReflCoef_Top(const std::vector<ReflectionCoef> &values)
     impl_->output.clear();
 }
 
-void Interface::set_ReflCoef_Bottom(const std::vector<ReflectionCoef> &values)
+void KernelInterface::set_ReflCoef_Bottom(const std::vector<ReflectionCoef> &values)
 {
     ensureAlive();
     for (std::size_t i = 0; i < values.size(); ++i)
@@ -992,7 +1046,7 @@ void Interface::set_ReflCoef_Bottom(const std::vector<ReflectionCoef> &values)
     impl_->output.clear();
 }
 
-void Interface::set_SBP(const Eigen::VectorXd &pattern, const Eigen::VectorXd &anglesDegrees)
+void KernelInterface::set_SBP(const Eigen::VectorXd &pattern, const Eigen::VectorXd &anglesDegrees)
 {
     ensureAlive();
     if (pattern.size() < 2 || pattern.size() != anglesDegrees.size() ||
@@ -1012,14 +1066,14 @@ void Interface::set_SBP(const Eigen::VectorXd &pattern, const Eigen::VectorXd &a
     impl_->fieldSignature.clear();
 }
 
-std::complex<float> *Interface::get_u(int i) { ensureResultsFresh(); return sourceView(impl_->output.pressure, impl_->output, i); }
-std::complex<float> *Interface::get_v(int i) { ensureResultsFresh(); return sourceView(impl_->output.verticalVelocity, impl_->output, i); }
-std::complex<float> *Interface::get_h(int i) { ensureResultsFresh(); return sourceView(impl_->output.horizontalVelocity, impl_->output, i); }
-std::complex<float> *Interface::get_u_AllSources() { ensureResultsFresh(); return allSourcesView(impl_->output.pressure, impl_->output); }
-std::complex<float> *Interface::get_v_AllSources() { ensureResultsFresh(); return allSourcesView(impl_->output.verticalVelocity, impl_->output); }
-std::complex<float> *Interface::get_h_AllSources() { ensureResultsFresh(); return allSourcesView(impl_->output.horizontalVelocity, impl_->output); }
+std::complex<float> *KernelInterface::get_u(int i) { ensureResultsFresh(); return sourceView(impl_->output.pressure, impl_->output, i); }
+std::complex<float> *KernelInterface::get_v(int i) { ensureResultsFresh(); return sourceView(impl_->output.verticalVelocity, impl_->output, i); }
+std::complex<float> *KernelInterface::get_h(int i) { ensureResultsFresh(); return sourceView(impl_->output.horizontalVelocity, impl_->output, i); }
+std::complex<float> *KernelInterface::get_u_AllSources() { ensureResultsFresh(); return allSourcesView(impl_->output.pressure, impl_->output); }
+std::complex<float> *KernelInterface::get_v_AllSources() { ensureResultsFresh(); return allSourcesView(impl_->output.verticalVelocity, impl_->output); }
+std::complex<float> *KernelInterface::get_h_AllSources() { ensureResultsFresh(); return allSourcesView(impl_->output.horizontalVelocity, impl_->output); }
 
-ArrayView<const std::complex<float>> Interface::get_u_view(int i) const
+ArrayView<const std::complex<float>> KernelInterface::get_u_view(int i) const
 {
     ensureResultsFresh();
     const OOKC_output &output = impl_->output;
@@ -1029,7 +1083,7 @@ ArrayView<const std::complex<float>> Interface::get_u_view(int i) const
             impl_->viewState->generation.load(std::memory_order_acquire)};
 }
 
-ArrayView<const std::complex<float>> Interface::get_v_view(int i) const
+ArrayView<const std::complex<float>> KernelInterface::get_v_view(int i) const
 {
     ensureResultsFresh();
     const OOKC_output &output = impl_->output;
@@ -1039,7 +1093,7 @@ ArrayView<const std::complex<float>> Interface::get_v_view(int i) const
             impl_->viewState->generation.load(std::memory_order_acquire)};
 }
 
-ArrayView<const std::complex<float>> Interface::get_h_view(int i) const
+ArrayView<const std::complex<float>> KernelInterface::get_h_view(int i) const
 {
     ensureResultsFresh();
     const OOKC_output &output = impl_->output;
@@ -1049,7 +1103,7 @@ ArrayView<const std::complex<float>> Interface::get_h_view(int i) const
             impl_->viewState->generation.load(std::memory_order_acquire)};
 }
 
-ArrayView<const std::complex<float>> Interface::get_u_view_all_sources() const
+ArrayView<const std::complex<float>> KernelInterface::get_u_view_all_sources() const
 {
     ensureResultsFresh();
     const OOKC_output &output = impl_->output;
@@ -1058,7 +1112,7 @@ ArrayView<const std::complex<float>> Interface::get_u_view_all_sources() const
             impl_->viewState->generation.load(std::memory_order_acquire)};
 }
 
-ArrayView<const std::complex<float>> Interface::get_v_view_all_sources() const
+ArrayView<const std::complex<float>> KernelInterface::get_v_view_all_sources() const
 {
     ensureResultsFresh();
     const OOKC_output &output = impl_->output;
@@ -1067,7 +1121,7 @@ ArrayView<const std::complex<float>> Interface::get_v_view_all_sources() const
             impl_->viewState->generation.load(std::memory_order_acquire)};
 }
 
-ArrayView<const std::complex<float>> Interface::get_h_view_all_sources() const
+ArrayView<const std::complex<float>> KernelInterface::get_h_view_all_sources() const
 {
     ensureResultsFresh();
     const OOKC_output &output = impl_->output;
@@ -1076,7 +1130,7 @@ ArrayView<const std::complex<float>> Interface::get_h_view_all_sources() const
             impl_->viewState->generation.load(std::memory_order_acquire)};
 }
 
-void Interface::export_result(const std::string &root)
+void KernelInterface::export_result(const std::string &root)
 {
     ensureAlive();
     export_mod(root + "_P");
@@ -1087,12 +1141,12 @@ void Interface::export_result(const std::string &root)
         export_shd(root + "_H", 3);
     }
 }
-void Interface::export_mod(const std::string &root)
+void KernelInterface::export_mod(const std::string &root)
 {
     ensureResultsFresh();
     exportModeResult(impl_->params, impl_->output, resultPath(root, ".mod"));
 }
-void Interface::export_shd(const std::string &root, int dataType)
+void KernelInterface::export_shd(const std::string &root, int dataType)
 {
     ensureResultsFresh();
     ShadeDataType type;
@@ -1106,7 +1160,7 @@ void Interface::export_shd(const std::string &root, int dataType)
     exportShadeResult(impl_->params, impl_->output,
                       resultPath(root, ".shd"), type);
 }
-LoadResult Interface::loadEnv(const std::string &envPath)
+LoadResult KernelInterface::loadEnv(const std::string &envPath)
 {
     ensureAlive();
     OOKC_parameters candidate;
@@ -1137,12 +1191,13 @@ LoadResult Interface::loadEnv(const std::string &envPath)
     return LoadResult::success();
 }
 
-bool Interface::from_env(const std::string &envPath)
+bool KernelInterface::from_env(const std::string &envPath)
 {
     return loadEnv(envPath).ok;
 }
 
-LoadResult Interface::loadJson(const std::string &jsonPath)
+#if defined(OPENOCEAN_KRAKENC_LEGACY_JSON)
+LoadResult KernelInterface::loadJson(const std::string &jsonPath)
 {
     ensureAlive();
     OOKC_parameters candidate;
@@ -1159,41 +1214,42 @@ LoadResult Interface::loadJson(const std::string &jsonPath)
     return LoadResult::success();
 }
 
-bool Interface::from_json(const std::string &jsonPath)
+bool KernelInterface::from_json(const std::string &jsonPath)
 {
     return loadJson(jsonPath).ok;
 }
-bool Interface::to_json(const std::string &jsonPath) const { ensureAlive(); return write_json_file(jsonPath, impl_->params); }
-std::string Interface::to_json_string() const { ensureAlive(); return parameters_to_json_string(impl_->params); }
+bool KernelInterface::to_json(const std::string &jsonPath) const { ensureAlive(); return write_json_file(jsonPath, impl_->params); }
+std::string KernelInterface::to_json_string() const { ensureAlive(); return parameters_to_json_string(impl_->params); }
+#endif
 
-OOKC_parameters &Interface::getParams()
+OOKC_parameters &KernelInterface::getParams()
 {
     ensureAlive();
     invalidateResultViews();
     return impl_->params;
 }
 
-const OOKC_parameters &Interface::getParams() const
+const OOKC_parameters &KernelInterface::getParams() const
 {
     ensureAlive();
     return impl_->params;
 }
 
-const OOKC_parameters &Interface::getParams_const() const { return getParams(); }
+const OOKC_parameters &KernelInterface::getParams_const() const { return getParams(); }
 
-OOKC_output &Interface::getOutput()
+OOKC_output &KernelInterface::getOutput()
 {
     ensureResultsFresh();
     invalidateResultViews();
     return impl_->output;
 }
 
-const OOKC_output &Interface::getOutput() const
+const OOKC_output &KernelInterface::getOutput() const
 {
     ensureResultsFresh();
     return impl_->output;
 }
 
-const OOKC_output &Interface::getOutput_const() const { return getOutput(); }
-OOKC_output Interface::getOutput_Copy() const { return getOutput(); }
+const OOKC_output &KernelInterface::getOutput_const() const { return getOutput(); }
+OOKC_output KernelInterface::getOutput_Copy() const { return getOutput(); }
 }

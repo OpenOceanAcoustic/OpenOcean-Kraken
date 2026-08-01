@@ -7,6 +7,7 @@
 #include <nlohmann/json.hpp>
 
 #include <array>
+#include <cctype>
 #include <cmath>
 #include <complex>
 #include <filesystem>
@@ -1184,6 +1185,14 @@ void requireFiniteNumber(const OracleJson &object,
             location + "." + key + " must be finite");
 }
 
+bool isPortableAbsolutePath(const std::string &path)
+{
+    const bool windowsAbsolute =
+        path.size() >= 3 && std::isalpha(static_cast<unsigned char>(path[0])) &&
+        path[1] == ':' && (path[2] == '\\' || path[2] == '/');
+    return std::filesystem::path(path).is_absolute() || windowsAbsolute;
+}
+
 void requireProvenanceFile(const OracleJson &record,
                            const std::string &location)
 {
@@ -1191,8 +1200,8 @@ void requireProvenanceFile(const OracleJson &record,
     require(record.contains("path") && record.at("path").is_string() &&
                 !record.at("path").get<std::string>().empty(),
             location + ".path must be a non-empty string");
-    require(std::filesystem::path(
-                record.at("path").get<std::string>()).is_absolute(),
+    const std::string path = record.at("path").get<std::string>();
+    require(isPortableAbsolutePath(path),
             location + ".path must be absolute");
     require(record.contains("sha256") && isSha256(record.at("sha256")),
             location + ".sha256 must be 64 lowercase hexadecimal digits");
@@ -1216,8 +1225,8 @@ void requireCommandRecord(const OracleJson &record,
                 record.at("returncode").get<int>() == 0,
             location + ".returncode must be integer zero");
     require(record.contains("cwd") && record.at("cwd").is_string() &&
-                std::filesystem::path(
-                    record.at("cwd").get<std::string>()).is_absolute(),
+                isPortableAbsolutePath(
+                    record.at("cwd").get<std::string>()),
             location + ".cwd must be absolute");
 }
 
@@ -1265,8 +1274,8 @@ void validateOracleContract(const OracleJson &oracle)
                 driver.at("compile_returncode").get<int>() == 0,
             "provenance.driver.compile_returncode must be integer zero");
     require(driver.at("compile_cwd").is_string() &&
-                std::filesystem::path(
-                    driver.at("compile_cwd").get<std::string>()).is_absolute(),
+                isPortableAbsolutePath(
+                    driver.at("compile_cwd").get<std::string>()),
             "provenance.driver.compile_cwd must be absolute");
 
     const OracleJson &commands = oracle.at("commands");

@@ -1,4 +1,4 @@
-#include "OpenOceanKrakencInterface.h"
+#include "OpenOceanKrakencKernelInterface.h"
 #include "algorithm/FieldSolver.h"
 
 #include <cmath>
@@ -62,14 +62,14 @@ std::vector<std::complex<float>> readShade(const std::filesystem::path &path,
 int main()
 {
     const std::filesystem::path source = OPENOCEANKRAKENC_SOURCE_DIR;
-    Interface api;
+    KernelInterface api;
     require(api.from_env((source / "for_test/fixtures/two_profile_small.env").string()),
             "export fixture ENV load failed");
     api.getParams().shdPath.clear();
-    api.set_Velocity_enable(true);
-    api.run();
     api.getParams().envPath.clear();
     api.getParams().flpPath.clear();
+    api.set_Velocity_enable(true);
+    api.run();
 
     const std::filesystem::path directory =
         std::filesystem::temp_directory_path() / "openocean_krakenc_export_test";
@@ -120,7 +120,7 @@ int main()
     require(std::filesystem::exists(dotted.string() + "_H.shd"),
             "dotted combined horizontal SHD missing");
 
-    Interface pressureOnly;
+    KernelInterface pressureOnly;
     require(pressureOnly.from_env((source / "for_test/fixtures/two_profile_small.env").string()),
             "pressure-only export ENV load failed");
     pressureOnly.getParams().shdPath.clear();
@@ -132,10 +132,9 @@ int main()
     require(missingVelocityRejected,
             "velocity SHD export succeeded while velocity calculation was disabled");
 
-    Interface elastic;
+    KernelInterface elastic;
     const std::filesystem::path elasticEnv =
-        source.parent_path() / "test" / "multilayer_env" /
-        "elastic_fd_two_layer.env";
+        source / "for_test" / "fixtures" / "elastic_fd_two_layer.env";
     require(elastic.from_env(elasticEnv.string()), "elastic export ENV load failed");
     elastic.runEigen();
     const std::filesystem::path elasticRoot = directory / "elastic_mode";

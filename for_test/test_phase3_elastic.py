@@ -30,7 +30,8 @@ class Phase3ElasticTests(unittest.TestCase):
         cls.field = resolve_oracle_binary("field.exe")
 
     def case_root(self, case):
-        matches = list((self.workspace / "test").rglob(f"{case}.env"))
+        test_root = Path(os.environ["OPENOCEANKRAKENC_TEST_ROOT"])
+        matches = list(test_root.rglob(f"{case}.env"))
         self.assertEqual(len(matches), 1, f"expected one nested ENV for {case}")
         return matches[0].with_suffix("")
 

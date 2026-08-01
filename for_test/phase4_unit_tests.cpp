@@ -81,9 +81,9 @@ private:
 
 int main()
 {
-    const std::filesystem::path workspace = OPENOCEANKRAKENC_WORKSPACE_DIR;
+    const std::filesystem::path source = OPENOCEANKRAKENC_SOURCE_DIR;
     const FieldParameters munk = readFieldParameters(
-        workspace / "test" / "toolbox_env" / "MunkKleaky.flp");
+        OPENOCEANKRAKENC_MUNK_FLP);
     require(munk.sourceType == 'R' && munk.beamPattern && munk.coherent,
             "Munk FLP options parse mismatch");
     require(munk.rangesMetres.size() == 501 &&
@@ -93,13 +93,13 @@ int main()
                 munk.rangeOffsets.size() == munk.receiverDepths.size(),
             "Munk FLP depth/offset parse mismatch");
     const FieldParameters omni = readFieldParameters(
-        workspace / "OpenOcean-Krakenc" / "for_test" / "fixtures" /
+        source / "for_test" / "fixtures" /
         "omni_small.flp");
     require(omni.sourceType == 'R' && !omni.beamPattern,
             "legal FLP omni flag O was not accepted");
 
     const std::vector<AcousticCase> stepProfiles = readAcousticEnvironments(
-        workspace / "test" / "toolbox_env" / "stepK_rd.env");
+        OPENOCEANKRAKENC_STEP_ENV);
     require(stepProfiles.size() == 4,
             "stepK multi-profile ENV count mismatch");
     require(std::abs(soundSpeedAt(stepProfiles.front(), 18.0) - 1476.7) <= 1.0e-9,
@@ -115,7 +115,7 @@ int main()
     for (const auto &fixture : interpolationFixtures)
     {
         const AcousticCase parsed = readAcousticEnv(
-            workspace / "OpenOcean-Krakenc" / "for_test" / "fixtures" /
+            source / "for_test" / "fixtures" /
             fixture.first);
         require(parsed.interpolation == fixture.second,
                 "ALG-022 ENV interpolation enum mismatch");
@@ -125,7 +125,7 @@ int main()
 
     {
         const std::filesystem::path pFixture =
-            workspace / "OpenOcean-Krakenc" / "for_test" / "fixtures" /
+            source / "for_test" / "fixtures" /
             "ssp_interp_p.env";
         std::ifstream pFixtureStream(pFixture);
         std::string analyticEnv{
@@ -161,7 +161,7 @@ int main()
     }
 
     const std::vector<AcousticCase> wedgeProfiles = readAcousticEnvironments(
-        workspace / "test" / "toolbox_env" / "wedge.env");
+        OPENOCEANKRAKENC_WEDGE_ENV);
     require(wedgeProfiles.size() == 51,
             "wedge multi-profile ENV count mismatch");
 

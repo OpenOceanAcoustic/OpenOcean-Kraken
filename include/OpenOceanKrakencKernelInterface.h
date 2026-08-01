@@ -9,23 +9,23 @@
 #include <string>
 #include <vector>
 
-class ThreadPool;
-
 namespace OpenOceanKrakenc
 {
-class Interface
+class ThreadPool;
+
+class KernelInterface
 {
 public:
-    Interface();
-    explicit Interface(std::shared_ptr<ThreadPool> threadPool);
-    [[deprecated("use Interface(std::shared_ptr<ThreadPool>) or setProfileExecutor")]]
-    explicit Interface(ThreadPool &threadPool);
-    ~Interface();
+    KernelInterface();
+    explicit KernelInterface(std::shared_ptr<ThreadPool> threadPool);
+    [[deprecated("use KernelInterface(std::shared_ptr<ThreadPool>) or setProfileExecutor")]]
+    explicit KernelInterface(ThreadPool &threadPool);
+    ~KernelInterface();
 
-    Interface(const Interface &) = delete;
-    Interface &operator=(const Interface &) = delete;
-    Interface(Interface &&) noexcept;
-    Interface &operator=(Interface &&) noexcept;
+    KernelInterface(const KernelInterface &) = delete;
+    KernelInterface &operator=(const KernelInterface &) = delete;
+    KernelInterface(KernelInterface &&) noexcept;
+    KernelInterface &operator=(KernelInterface &&) noexcept;
 
     void setFieldThreads(int numThreads);
     int getFieldThreads() const;
@@ -65,6 +65,11 @@ public:
     void set_GridType(Grid_Mode type);
     void set_Rmax(double rMax);
     void set_SourceType(Source_Mode type);
+    void set_MLimit(int limit);
+    void set_CoherenceType(CoherenceType type);
+    void set_ModeType(ModeType type);
+    void set_ModeSampling(const Eigen::VectorXd &sourceDepths,
+                          const Eigen::VectorXd &receiverDepths);
     void set_RunMode(Run_Mode mode);
     void set_Velocity_enable(bool enabled);
     void set_ReflCoef_Top(const std::vector<ReflectionCoef> &values);
@@ -91,13 +96,17 @@ public:
     void export_shd(const std::string &root, int dataType);
 
     LoadResult loadEnv(const std::string &envPath);
+#if defined(OPENOCEAN_KRAKENC_LEGACY_JSON)
     LoadResult loadJson(const std::string &jsonPath);
+#endif
     [[deprecated("use loadEnv to retain error details")]]
     bool from_env(const std::string &envPath);
+#if defined(OPENOCEAN_KRAKENC_LEGACY_JSON)
     [[deprecated("use loadJson to retain error details")]]
     bool from_json(const std::string &jsonPath);
     bool to_json(const std::string &jsonPath) const;
     std::string to_json_string() const;
+#endif
 
     OOKC_parameters &getParams();
     const OOKC_parameters &getParams() const;
